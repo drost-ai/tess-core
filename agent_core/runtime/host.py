@@ -76,6 +76,7 @@ class Runtime:
         self._recoveries: list[dict[str, Any]] = []
         self._watchdog_stop: Any = None
         self._stopped = False
+        self._stop_summary: dict[str, Any] = {}
         self._stop_lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._unsubscribe: Any = None
@@ -115,31 +116,51 @@ class Runtime:
             self.lease = None
             raise
 
-    async def stop(self, grace: float = 0.0) -> None:
-        """Stop the runtime: its sessions (a running turn may finish within
-        ``grace`` seconds, then it is aborted), its watchdog, its daemon (exit
-        verified within a bound), and its lease. Idempotent."""
+    async def stop(self, grace: float = 0.0) -> dict[str, Any]:
+        """Stop the runtime, and say what that did. No new session or turn is
+        accepted from the first moment; running turns may finish within
+        ``grace`` seconds, then are aborted; every session closes
+        (``runtime_stopped``); the daemon's workers are stopped through its
+        own ladder with records that say ``runtime_stopped`` (never
+        resumed, effects of running tools uncertain); the daemon exits,
+        verified within a bound; the lease is released. Idempotent and safe
+        from a signal-driven shutdown. Stopping is not undoing."""
         async with self._stop_lock:
             if self._stopped:
-                return
+                return dict(self._stop_summary)
             self._stopped = True
+            self.sessions.stopping = True
+            summary: dict[str, Any] = {"sessions": None, "workers": None, "daemon": None}
             try:
                 if self._watchdog_stop is not None:
                     self._watchdog_stop()
                 await self.sessions.monitors.stop()
                 await self.sessions.idle.stop()
                 await self.sessions.pending.stop()
-                await self.sessions.close_all(reason="runtime_stopped", grace=grace)
+                summary["sessions"] = await self.sessions.close_all(reason="runtime_stopped", grace=grace)
                 if self.daemon_enabled:
-                    await self._stop_daemon()
+                    summary["workers"] = await self._stop_workers()
+                    summary["daemon"] = await self._stop_daemon()
             finally:
                 if self.lease is not None:
                     with contextlib.suppress(Exception):
                         await release_owner_lease(self.home, self.instance_id)
                     self.lease = None
+                self._stop_summary = summary
                 _clear_active(self)
+            return dict(summary)
 
-    async def _stop_daemon(self) -> None:
+    async def _stop_workers(self) -> dict[str, Any] | None:
+        with self._daemon_lock:
+            client = self.daemon
+        if client is None or not callable(client.get("stopWorkers")):
+            return None
+        try:
+            return await client["stopWorkers"]({"reason": "runtime_stopped"})
+        except Exception as error:
+            return {"error": str(error)[:256]}
+
+    async def _stop_daemon(self) -> dict[str, Any]:
         self._drop_subscription()
         with self._daemon_lock:
             client, self.daemon = self.daemon, None
@@ -155,6 +176,7 @@ class Runtime:
             if is_process_alive(pid):
                 raise RuntimeError(f"Daemon process {pid} of runtime {self.instance_id} did not exit within {DEFAULT_STOP_BOUND_SECONDS:.0f}s.")
         self._daemon_state = None
+        return {"pid": pid, "exited": True}
 
     # -- the daemon watchdog -------------------------------------------
 

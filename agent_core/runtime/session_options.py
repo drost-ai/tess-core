@@ -81,6 +81,10 @@ class SessionBusy(RuntimeError):
     """The session has a turn running or queued; close never cancels."""
 
 
+class RuntimeStopped(RuntimeError):
+    """The runtime is stopping or stopped: it takes no new sessions or turns."""
+
+
 class SessionEnded(RuntimeError):
     """The session was ended, the one explicit instruction: it never reopens
     and takes no more work."""

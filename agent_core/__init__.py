@@ -33,7 +33,7 @@ from .runtime.generation import RuntimeActivationContext, RuntimeSessionBinding,
 from .runtime.host import Runtime, start_runtime
 from .runtime.owner_lease import RuntimeOwnershipError
 from .runtime.session_manager import (
-    Session, SessionBusy, SessionEnded, SessionManager, SessionOptions, SessionUnavailableError, Unavailable, UnknownSessionError,
+    RuntimeStopped, Session, SessionBusy, SessionEnded, SessionManager, SessionOptions, SessionUnavailableError, Unavailable, UnknownSessionError,
 )
 from .runtime.state.store import create_initial_runtime_state, create_runtime_state_store
 from .runtime.wake import create_mailbox_wake_controller
@@ -128,6 +128,7 @@ __all__ = [
     "RuntimeActivationContext",
     "Runtime",
     "RuntimeOwnershipError",
+    "RuntimeStopped",
     "start_runtime",
     "Session",
     "SessionBusy",

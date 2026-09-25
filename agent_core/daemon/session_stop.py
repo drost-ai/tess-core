@@ -21,8 +21,42 @@ from ..storage import list_child_agents, list_task_records, mutate_child_agent, 
 from ..tasks.communication import append_task_event
 
 SESSION_ENDED = "session_ended"
+RUNTIME_STOPPED = "runtime_stopped"
 _LIVE_CHILD_STATUSES = {"starting", "queued", "running", "backgrounded", "awaiting_input"}
 _TERMINAL_TASK_STATUSES = {"completed", "failed", "stopped", "terminated", "cancelled", "truncated"}
+_WORKER_KINDS = {"background_command", "main_session", "subagent"}
+
+
+async def stop_all_workers(supervisor: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    """The runtime is stopping (or died): every worker the daemon owns is
+    stopped through the same ladder, its records saying ``runtime_stopped``,
+    never resumed. Stopping is not undoing: the record states that the
+    process ended and claims nothing about the effects of tools that were
+    running (their uncertainty metadata is kept), and never marks such work
+    safe to retry."""
+    reason = str(params.get("reason") or RUNTIME_STOPPED)
+    records = await list_task_records()
+    children = await list_child_agents()
+    stopped_tasks: list[str] = []
+    failures: list[dict[str, Any]] = []
+    live_children = [child for child in children if child.get("status") in _LIVE_CHILD_STATUSES]
+    for child in live_children:
+        await mutate_child_agent(child["agentId"], lambda record, reason=reason: _annotate(record, reason))
+    for task in records:
+        task_id = task.get("id")
+        if not isinstance(task_id, str) or task.get("kind") not in _WORKER_KINDS or task.get("status") in _TERMINAL_TASK_STATUSES:
+            continue
+        try:
+            await mutate_task_meta(task_id, lambda meta, reason=reason: _annotate(meta, reason))
+            await supervisor["stopTask"](task_id)
+            await mutate_task_meta(task_id, lambda meta, reason=reason: _annotate(meta, reason))
+            await append_task_event(task_id, {"type": "task.runtime_stopped", "reason": reason})
+            stopped_tasks.append(task_id)
+        except Exception as error:
+            failures.append({"taskId": task_id, "error": str(error)[:256]})
+    for child in live_children:
+        await mutate_child_agent(child["agentId"], lambda record, reason=reason: _settle_child(record, reason))
+    return {"reason": reason, "stoppedTasks": stopped_tasks, "stoppedChildren": [child["agentId"] for child in live_children], "failures": failures}
 
 
 async def stop_session(supervisor: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:

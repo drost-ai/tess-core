@@ -33,9 +33,11 @@ from .events.factory import create_runtime_event
 from .generation import create_runtime_session_binding
 from .session_components import prepare_runtime_session_components
 from .session_end import end_session, ended_marker
+from .session_handle import Session  # noqa: F401  (re-exported)
 from .session_idle import IdleSweeper
 from .session_monitors import MonitorIntake
 from .session_options import (  # noqa: F401  (re-exported: the package imports them from here)
+    RuntimeStopped,
     SessionBusy,
     SessionEnded,
     SessionOptions,
@@ -177,96 +179,6 @@ class _LiveSession:
                 await maybe_await(self.components["close"]())
 
 
-class Session:
-    """A stable handle: the session's id plus the manager. It stays valid
-    while the session is closed and unloaded."""
-
-    def __init__(self, manager: SessionManager, session_id: str) -> None:
-        self._manager = manager
-        self.id = session_id
-
-    @property
-    def is_open(self) -> bool:
-        return self.id in self._manager._live
-
-    def _live_session(self) -> _LiveSession:
-        live = self._manager._live.get(self.id)
-        if live is None:
-            raise RuntimeError(f"Session {self.id} is not open.")
-        return live
-
-    @property
-    def model(self) -> str:
-        live = self._live_session()
-        return str(live.record.get("model") or live.config.get("model") or "")
-
-    @property
-    def permission_mode(self) -> str:
-        live = self._live_session()
-        return str(live.record.get("permissionMode") or live.config.get("permissionMode") or "")
-
-    @property
-    def message_count(self) -> int:
-        return len(self._live_session().record.get("messages") or [])
-
-    @property
-    def tool_names(self) -> list[str]:
-        return [getattr(tool, "name", None) or tool.get("name") for tool in self._live_session().components["tools"]]
-
-    def subscribe(self, listener: Callable[[dict[str, Any]], Any]) -> Callable[[], None]:
-        """Receive this session's event envelopes, in addition to the runtime listener."""
-        live = self._live_session()
-        live.subscribers.append(listener)
-        return lambda: live.subscribers.remove(listener) if listener in live.subscribers else None
-
-    # -- turns -----------------------------------------------------------
-
-    async def run_turn(
-        self,
-        prompt: Any,
-        *,
-        limits: dict[str, int] | None = None,
-        turn_id: str | None = None,
-        provider_override: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Run one user turn after whatever is already queued for this
-        session, and return the engine's result. A handle whose session was
-        unloaded reopens it first. ``turn_id`` lets the caller name the turn
-        before its ``turn.started`` is announced."""
-        if self._manager.is_ended(self.id):
-            raise SessionEnded(self.id)
-        if not self.is_open:
-            await self._manager.open(self.id)
-        return await self._live_session().turns.run(
-            prompt, origin="user", limits=limits, provider_override=provider_override, turn_id=turn_id
-        )
-
-    async def end(self, reason: str = "deleted") -> dict[str, Any]:
-        """The one explicit instruction: see :meth:`SessionManager.end`."""
-        return await self._manager.end(self.id, reason=reason)
-
-    async def cancel_turn(self, turn_id: str) -> bool:
-        """Cancel exactly that turn. True if it was running or queued here."""
-        live = self._manager._live.get(self.id)
-        return bool(live is not None and live.turns.cancel(turn_id))
-
-    @property
-    def busy(self) -> bool:
-        live = self._manager._live.get(self.id)
-        return bool(live is not None and live.busy())
-
-    def turns(self) -> dict[str, Any]:
-        """The running turn and the queue, for a host's status."""
-        live = self._manager._live.get(self.id)
-        if live is None:
-            return {"running": None, "queued": []}
-        running = live.turns.running()
-        return {"running": running.describe() if running else None, "queued": [turn.describe() for turn in live.turns.queued()]}
-
-    async def close(self) -> None:
-        await self._manager.close(self.id)
-
-
 class SessionManager:
     def __init__(self, runtime: Any) -> None:
         self.runtime = runtime
@@ -274,6 +186,7 @@ class SessionManager:
         self._handles: dict[str, Session] = {}
         self._opening: dict[str, Any] = {}
         self._ended: set[str] = set()
+        self.stopping = False  # runtime.stop() began: no new session or turn
         self.idle = IdleSweeper(self)
         self.pending = PendingWork(self)
         self.monitors = MonitorIntake(self)
@@ -285,6 +198,8 @@ class SessionManager:
         is returned as is. Unknown ids are an error, never a new session."""
         if reason not in OPEN_REASONS:
             raise ValueError(f"unknown open reason: {reason}")
+        if self.stopping:
+            raise RuntimeStopped("The runtime is stopped; it opens no session.")
         if session_id and session_id in self._ended:
             raise SessionEnded(session_id)
         if session_id and session_id in self._live:
@@ -394,11 +309,19 @@ class SessionManager:
         finally:
             self._notify("on_session_closed", session_id, reason)
 
-    async def close_all(self, *, reason: str = "runtime_stopped", grace: float = 0.0) -> None:
+    async def close_all(self, *, reason: str = "runtime_stopped", grace: float = 0.0) -> dict[str, Any]:
         """Runtime stop: every session closes, busy or not. Running turns get
-        the grace to finish, then are aborted; queued turns never start."""
+        the grace to finish, then are aborted; queued turns never start.
+        Says what that did, including cleanup that could not be finished."""
+        summary = {"closed": 0, "runningTurns": 0, "queuedTurns": 0, "unfinishedCleanup": 0}
         for session_id in list(self._live):
-            await self.release(session_id, self._live.pop(session_id), reason, grace)
+            live = self._live.pop(session_id)
+            summary["closed"] += 1
+            summary["runningTurns"] += int(live.turns.running() is not None)
+            summary["queuedTurns"] += len(live.turns.queued())
+            await self.release(session_id, live, reason, grace)
+            summary["unfinishedCleanup"] += int(live.monitor_cleanup_pending)
+        return summary
 
     # -- what the runtime and the host can ask ---------------------------
 

@@ -211,7 +211,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str, owner_p
         rotation_task = asyncio.create_task(_rotate_daemon_events_periodically(instance_id, shutdown))
         if isinstance(owner_pid, int) and owner_pid > 0:
             owner_watch_task = asyncio.create_task(
-                _watch_owner_runtime(instance_id, owner_pid, daemon_epoch, shutdown, next_event_cursor)
+                _watch_owner_runtime(instance_id, owner_pid, daemon_epoch, shutdown, next_event_cursor, supervisor)
             )
         _inject_daemon_boot_fault("during_recovery", instance_id)
         await write_daemon_state("running")
@@ -287,6 +287,7 @@ async def _watch_owner_runtime(
     epoch: str,
     shutdown: asyncio.Event,
     next_cursor: Any,
+    supervisor: dict[str, Any] | None = None,
 ) -> None:
     """Direction-1 dead-man switch: the daemon dies with its owner runtime.
 
@@ -318,6 +319,14 @@ async def _watch_owner_runtime(
                 {"ownerPid": owner_pid, "epoch": epoch},
                 next_cursor,
             )
+        if supervisor is not None:
+            # The workers die with the runtime that owned them, and their
+            # records say so: runtime_stopped, never resumed (the shutdown's
+            # own escalation then finds nothing left to stop).
+            from .session_stop import stop_all_workers
+
+            with contextlib.suppress(Exception):
+                await stop_all_workers(supervisor, {"reason": "runtime_stopped"})
         shutdown.set()
         return
 
