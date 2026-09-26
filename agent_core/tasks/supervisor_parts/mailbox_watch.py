@@ -27,6 +27,11 @@ that entry is unconsumed it is announced the same way
 (``subagent.reconciliation``), so a closed parent is woken for its child's
 failure as it is for its child's result; the parent's next turn consumes it.
 
+AND WHEN IT STOPS: a child's stop (it finished, failed, or stopped itself
+after its idle time-to-live) is a ``task.subagent.*`` row in the same event
+log, forwarded once as ``subagent.stopped`` with its ``event_index`` and the
+reason, so a host learns a child's state changed without reading the home.
+
 A watch forwards a task's trace rows once, from a cursor it keeps in memory.
 The cursor is deliberately not shared on disk: while several daemons can
 sweep one runtime home, a shared cursor would let one daemon consume the
@@ -58,6 +63,12 @@ from ..communication import (
 
 _WATCHED_TASK_STATUSES = {"backgrounded", "running", "awaiting_input", "reconciling", "degraded"}
 _TERMINAL_TASK_STATUSES = {"completed", "failed", "stopped", "terminated", "cancelled", "truncated"}
+# A child's end as its task event log records it, and the reason announced.
+_STOP_REASONS = {
+    "task.subagent.completed": "completed",
+    "task.subagent.failed": "failed",
+    "task.subagent.idle_expired": "idle_expired",
+}
 # Re-announce a still-queued message every N sweeps: level-triggered without
 # flooding the daemon event log while a parent is legitimately away.
 _REANNOUNCE_SWEEPS = 4
@@ -111,6 +122,24 @@ def create_mailbox_watch_loop(
         parent_session_id = await _parent_session_id(task_id)
         forwarded = 0
         for event_index, event in enumerate(events[start:], start=start):
+            reason = _STOP_REASONS.get(str(event.get("type")))
+            if reason is not None:
+                await maybe_await(
+                    emit(
+                        "subagent.stopped",
+                        {
+                            "task_id": task_id,
+                            "event_index": event_index,
+                            "reason": reason,
+                            "agent_id": event.get("agentId"),
+                            "child_session_id": event.get("childSessionId"),
+                            "parent_session_id": parent_session_id,
+                        },
+                        parent_session_id,
+                    )
+                )
+                forwarded += 1
+                continue
             if event.get("type") != "trace":
                 continue
             await maybe_await(

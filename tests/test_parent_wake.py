@@ -238,6 +238,43 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_a_childs_stop_is_announced_once_with_its_reason(self):
+        """A host learns that a child stopped (here: its idle time-to-live ran
+        out) from the watch, not by re-reading the runtime home."""
+        from agent_core.tasks.communication import append_task_event
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                await self._subagent_task(workspace, "idle-child", "running")
+                events = []
+
+                async def emit(event, data, session_id=None):
+                    events.append((event, data, session_id))
+
+                sweep = create_mailbox_watch_loop(emit).sweep_once
+                await append_task_event("idle-child", {"type": "trace", "event": "message.assistant"})
+                self.assertEqual(await sweep(), 1)
+                await append_task_event("idle-child", {
+                    "type": "task.subagent.idle_expired", "agentId": "agent-1",
+                    "childSessionId": "idle-child-child", "idleTtlMs": 900000,
+                })
+                await self._set_status("idle-child", "stopped")
+                self.assertEqual(await sweep(), 1)
+                self.assertEqual(await sweep(), 0)  # announced once, ever
+
+                event, data, session_id = events[-1]
+                self.assertEqual(event, "subagent.stopped")
+                self.assertEqual(session_id, "idle-child-parent")  # routes on the PARENT session
+                self.assertEqual(data, {
+                    "task_id": "idle-child", "event_index": 1, "reason": "idle_expired",
+                    "agent_id": "agent-1", "child_session_id": "idle-child-child",
+                    "parent_session_id": "idle-child-parent",
+                })
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
     def test_child_that_lived_and_died_between_two_sweeps_is_still_forwarded(self):
         from datetime import datetime, timezone
 

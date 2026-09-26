@@ -127,6 +127,7 @@ RuntimeEventName = Literal[
     "subagent.question",
     "subagent.reconciliation",
     "subagent.trace",
+    "subagent.stopped",
     "subagent.capacity",
     "subagent.question.unanswered",
     "turn.stable_boundary_stopped",
