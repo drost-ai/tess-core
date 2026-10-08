@@ -204,7 +204,13 @@ class Package28McpProtocolTests(AgentCoreTestCase):
                 self.assertIn("mcp__fake__new", [tool.name for tool in runtime["tools"]])
                 await runtime["close"]()
 
-        run(exercise())
+        try:
+            run(exercise())
+        finally:
+            # resolve_config(runtimeHome=...) configured the process-wide home
+            # to a directory that is gone now; later tests must not resolve
+            # paths into it.
+            core.reset_configured_runtime_home()
 
 
 async def _protocol_ok(_input, _context):
