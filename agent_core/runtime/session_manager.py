@@ -113,7 +113,7 @@ class _LiveSession:
                 "config": self.config,
                 "emit": source.emit,
                 "factories": default_runtime_component_factories(),
-                "bootstrapArgs": {"runtimePaths": runtime.paths, "detectWorkspaceIntegrations": False},
+                "bootstrapArgs": {"runtimePaths": runtime.paths, "detectWorkspaceIntegrations": False, "scheduler": runtime.scheduler.running},
                 "hasSession": True,
             }
         )
@@ -250,6 +250,9 @@ class SessionManager:
         cwd = os.path.abspath(os.path.expanduser(options.cwd)) if options.cwd else runtime.cwd
         os.makedirs(cwd, exist_ok=True)
         config = await resolve_config(options.config_overrides(runtime.home), cwd)
+        if options.timezone:
+            # The owner's IANA zone: the scheduler tools' default.
+            config["ownerTimezone"] = options.timezone
         if callable(options.adjust_config):
             adjusted = await maybe_await(options.adjust_config(config))
             if isinstance(adjusted, dict):

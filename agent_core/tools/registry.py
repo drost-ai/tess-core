@@ -57,6 +57,12 @@ def create_builtin_tools(options: dict[str, Any] | None = None) -> list[ToolDefi
         _exit_worktree_tool(options.get("workspaceController")),
         _read_tool_artifact(),
     ]
+    if options.get("scheduler"):
+        # Only where a scheduler timer runs for this runtime: elsewhere
+        # nothing would ever fire.
+        from .schedule import schedule_tools
+
+        tools.extend(schedule_tools())
     return tools
 
 

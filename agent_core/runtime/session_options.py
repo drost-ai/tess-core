@@ -29,6 +29,9 @@ class SessionOptions:
     strict_mcp_config: bool = False
     system_prompt: str | None = None
     context_provider: Callable[[str], Awaitable[str | None] | str | None] | None = None
+    # The owner's IANA time zone (America/Los_Angeles): the zone the agent's
+    # scheduler tools use unless told otherwise.
+    timezone: str | None = None
     # A provider send override for every turn of this session, including the
     # background turns the runtime starts itself: the test seam, as
     # ``providerOverride`` is for ``run_agent_prompt``.
