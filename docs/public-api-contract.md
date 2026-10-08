@@ -384,7 +384,9 @@ Listener hooks:
   `skipped_late`), with the job's own words in `text`. Keep it once per
   `noticeId`.
 - `on_runtime_event("scheduler.job_changed", {job_id, session_id, kind, state,
-  next_fire_at, reason})` on create, update, cancel and fire; also
+  next_fire_at, reason})` on create, update, cancel and fire;
+  `scheduler.job_firing` {session_id, job_id, label, created_by, scheduled_for,
+  fired_at, late_seconds, timezone, turn_id} just before a turn job's turn; also
   `scheduler.scan_failed`, `scheduler.fire_failed`, `scheduler.notice_failed`,
   `scheduler.notice_unpublished`.
 

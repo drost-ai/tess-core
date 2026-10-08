@@ -72,6 +72,13 @@ async def fire_turn(scheduler: Any, job: dict[str, Any], fire: dict[str, Any]) -
     if live is None:
         return {"deferred": "session_closed"}
     turn_id = f"sched-{uuid.uuid4().hex[:16]}"
+    # Before the turn: the host can show the wake for what it is (the job,
+    # when it was due) rather than as a message from the user.
+    scheduler.report("scheduler.job_firing", {
+        "session_id": session_id, "job_id": job["id"], "label": job["label"], "created_by": job.get("createdBy"),
+        "scheduled_for": fire["scheduledFor"], "fired_at": fire["firedAt"], "late_seconds": fire.get("lateSeconds") or 0,
+        "timezone": job["timezone"], "turn_id": turn_id,
+    })
     failure: str | None = None
     try:
         result = await live.turns.run(scheduled_prompt(job, fire), origin="scheduled", limits=background_limits(), turn_id=turn_id)

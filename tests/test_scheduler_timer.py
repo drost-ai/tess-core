@@ -77,6 +77,8 @@ class SchedulerTimerTests(AgentCoreTestCase):
                     self.assertEqual((saved["state"], saved["lastFire"]["outcome"], saved["claim"]), ("done", "completed", None))
                     self.assertEqual(listener.notices, [])
                     self.assertIn("scheduler.job_changed", [event for event, _ in listener.runtime_events])
+                    (firing,) = [data for event, data in listener.runtime_events if event == "scheduler.job_firing"]
+                    self.assertEqual((firing["job_id"], firing["label"], firing["turn_id"]), (job["id"], "Call Kevin", start.get("turn_id")))
                 finally:
                     await runtime.stop()
 
