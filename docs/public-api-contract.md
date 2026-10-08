@@ -341,3 +341,55 @@ session or guess provider credentials. Legacy active monitors are adopted when
 next observed; historical terminal records are not replayed. Disk changes are
 additive under `MonitorRecord.delivery` and do not change event cardinality into
 assistant messages: only the host's receipt path publishes those messages.
+
+## Scheduler (2026-10-07 PT)
+
+A started runtime has `runtime.scheduler`: durable jobs under
+`<home>/scheduler/jobs`, and one timer per runtime whose listener can
+`publish` (a companion runtime on a shared home never fires). No new root
+names; everything is reached through the runtime.
+
+Host API (async unless noted):
+
+- `register(kind, handler)` (sync): the handler for a host job kind; it is
+  called as `handler(job, fire)` and may return `{"outcome", "detail",
+  "nextFireAt"}` (`nextFireAt`: ISO instant or aware datetime) to name its next
+  fire. Jobs of an unregistered kind wait.
+- `add(kind="turn"|<host kind>, rule=..., timezone=..., session_id=None,
+  label="", instructions="", payload=None, created_by="host"|"owner"|"agent",
+  job_id=None)` creates a job; `ensure(job_id, **same)` creates a standing job
+  when missing or finished and otherwise leaves it as it is.
+- `update(job_id, label=, instructions=, payload=, rule=, timezone=, state=)`,
+  `pause`, `resume`, `cancel`, `get`, `list(session_id=None,
+  include_finished=False)`; `view(job)` (sync) renders a job in its own zone.
+- `status()` (sync, also under `runtime.status()["scheduler"]`): running,
+  counts by state, next fire, jobs firing, registered host kinds, last error,
+  recent fires.
+
+Rules: `{"kind": "once", "at": "YYYY-MM-DDTHH:MM"}` (local) or `{"kind":
+"once", "atUtc": "...Z"}`; `{"kind": "calendar", "time": "HH:MM", "days":
+[...]}` or `"monthDays": [...]`; `{"kind": "interval", "everySeconds": N}`.
+Zones are IANA names. A one-time local time in a DST gap or overlap is refused
+(`scheduler.nonexistent_time`, `scheduler.ambiguous_time`); a recurring one
+fires where the zone maps it (after the gap; first of the overlap).
+
+A `turn` job fires as an agent turn in its session with origin `scheduled`
+(new in `TURN_ORIGINS`), reopening a closed session with open reason
+`scheduled` (new in `OPEN_REASONS`); `Unavailable(retry=True)` defers the
+fire, without retry skips it, an ended or unknown session cancels the job.
+Listener hooks:
+
+- `publish_schedule_notice(session_id, notice) -> receipt` (optional): a fire
+  that could not reach the agent (`reason`: `failed`, `interrupted`,
+  `skipped_late`), with the job's own words in `text`. Keep it once per
+  `noticeId`.
+- `on_runtime_event("scheduler.job_changed", {job_id, session_id, kind, state,
+  next_fire_at, reason})` on create, update, cancel and fire; also
+  `scheduler.scan_failed`, `scheduler.fire_failed`, `scheduler.notice_failed`,
+  `scheduler.notice_unpublished`.
+
+`SessionOptions.timezone` is the owner's IANA zone, the default for the agent's
+scheduler tools (`ScheduleCreate`, `ScheduleList`, `ScheduleUpdate`,
+`ScheduleCancel`), which exist only in sessions of a runtime whose timer runs.
+Knobs: `scheduler.clock_check_ms` (cadence, default 30000) and
+`scheduler.max_late_ms` (bound, unset = none).
