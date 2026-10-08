@@ -5,7 +5,7 @@ A session runs exactly one turn at a time; a second ``run_turn`` waits behind
 the first, and different sessions never wait for each other. Every turn is
 announced in its ``turn.started`` event with its id and its origin (``user``
 for a client's prompt; ``child_message`` and ``monitor`` for the turns the
-runtime starts itself), so a cancel can only hit the turn it names: a running
+runtime starts itself; ``scheduled`` for a scheduler's fire), so a cancel can only hit the turn it names: a running
 one is aborted through the engine's abort signal, a queued one is dropped
 before it starts, a finished or unknown one is a no-op.
 
@@ -43,7 +43,7 @@ from ..agent.prompt_content import normalize_agent_prompt
 from ..providers._core import AbortSignal
 from .agent_bindings import create_agent_runtime_bindings
 
-TURN_ORIGINS = ("user", "child_message", "monitor")
+TURN_ORIGINS = ("user", "child_message", "monitor", "scheduled")
 # After the grace, an aborted turn gets this long to unwind before the
 # session's components are closed under it.
 ABORT_BOUND_SECONDS = 5.0

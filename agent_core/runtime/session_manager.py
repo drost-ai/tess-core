@@ -50,7 +50,7 @@ from .session_wake import PendingWork
 from .state.store import create_initial_runtime_state, create_runtime_state_store
 from .support import StagedRuntimeSource, default_runtime_component_factories, runtime_path_graph_id
 
-OPEN_REASONS = ("client", "child_message", "monitor")
+OPEN_REASONS = ("client", "child_message", "monitor", "scheduled")
 CLOSE_REASONS = ("client", "idle", "runtime_stopped", "ended")
 
 

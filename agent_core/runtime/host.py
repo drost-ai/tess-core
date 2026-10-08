@@ -31,6 +31,7 @@ from .agent_bindings import is_task_supervisor_gateway
 from .owner_lease import RuntimeOwnershipError, acquire_owner_lease, release_owner_lease
 from .paths import get_active_runtime_paths, run_with_runtime_paths
 from .session_manager import SessionManager
+from ..scheduler.timer import Scheduler
 
 DEFAULT_STOP_BOUND_SECONDS = 10.0
 _GATEWAY_METHODS = (
@@ -82,6 +83,7 @@ class Runtime:
         self._unsubscribe: Any = None
         self._last_cursor: int | None = None
         self.sessions = SessionManager(self)
+        self.scheduler = Scheduler(self)
 
     # -- lifecycle -----------------------------------------------------
 
@@ -89,6 +91,7 @@ class Runtime:
         self._loop = asyncio.get_running_loop()
         self.sessions.idle.start()  # one idle timer for every session, daemon or not
         self.sessions.monitors.start()  # one monitor intake for every session, daemon or not
+        self.scheduler.start()  # one timer, only where something can be published
         if not self.daemon_enabled:
             return
         self.lease = await acquire_owner_lease(self.home, self.instance_id)
@@ -109,6 +112,7 @@ class Runtime:
             )
             self._watchdog_stop = stop.set
         except BaseException:
+            await self.scheduler.stop()
             await self.sessions.monitors.stop()
             await self.sessions.idle.stop()
             with contextlib.suppress(Exception):
@@ -134,6 +138,7 @@ class Runtime:
             try:
                 if self._watchdog_stop is not None:
                     self._watchdog_stop()
+                await self.scheduler.stop()
                 await self.sessions.monitors.stop()
                 await self.sessions.idle.stop()
                 await self.sessions.pending.stop()
@@ -324,6 +329,7 @@ class Runtime:
             "stopped": self._stopped,
             "daemon": daemon,
             "sessions": self.sessions.status(),
+            "scheduler": self.scheduler.status(),
         }
 
 

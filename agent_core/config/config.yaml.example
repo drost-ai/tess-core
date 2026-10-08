@@ -267,6 +267,11 @@ knobs:
   runtime:
     # Milliseconds runtime close waits for component cleanup before reporting the close as failed. [500..600000]
     close_failure_ms: 10000
+  scheduler:
+    # Longest the scheduler's timer sleeps before re-reading the wall clock and the job records: a machine that slept, a changed clock or a job written by another process is noticed within this. It sleeps less when a job is due sooner and wakes at once for jobs added through this process. [1000..3600000]
+    clock_check_ms: 30000
+    # How late a scheduled job may still fire after its time (the host was down or asleep); a later fire is skipped with a visible notice. Unset: no bound; it fires late and says by how much. [1000..]
+    max_late_ms: null
   sessions:
     # Provider calls a background turn the runtime starts itself (continuity for a child's message) may make before it is ended. Unset: no ceiling. [1..]
     background_max_provider_calls: null
