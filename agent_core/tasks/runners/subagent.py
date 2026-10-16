@@ -16,7 +16,7 @@ from ..communication import append_task_event, read_undelivered_task_messages, s
 from .resident_idle import ResidentIdleClock, expire_if_idle
 from ...subagents import finalize_background_subagent_failure_from_env, finalize_background_subagent_success_from_env
 from ...subagents.finalizers import _background_structured_result_fields
-from ...tools import create_builtin_tools
+from .subagent_components import prepare_subagent_components
 from ...runtime.generation import create_runtime_session_binding
 from ..._utils import now_iso
 
@@ -37,6 +37,8 @@ def _create_trace_emitter(task_id: str):
             record = {"tool": data.get("name"), "input_preview": _preview(data.get("input"), 160)}
         elif event == "tool.completed":
             record = {"tool": data.get("name"), "error": bool(data.get("error")), "output_chars": len(str(data.get("output") or ""))}
+        elif event == "mcp.delegation_excluded":
+            record = {"server": data.get("server"), "reason": data.get("reason")}
         elif event == "message.assistant":
             record = {"text_preview": _preview(data.get("text"), 200)}
         else:
@@ -56,7 +58,7 @@ def _preview(value: Any, limit: int) -> str:
     return text[:limit]
 
 
-async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Any]:
+async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Any, Any]:
     runtime_home = os.environ.get("AGENT_CORE_HOME")
     if runtime_home:
         configure_runtime_home(runtime_home)
@@ -71,22 +73,39 @@ async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[st
     config = await resolve_config(_session_config_options(session, runtime_home), session["cwd"])
     _apply_session_overrides(config, session)
     await enforce_session_agent_authority(session=session, config=config)
-    runtime = create_agent_runtime_bindings({
-        "emitEvent": _create_trace_emitter(args["taskId"]),
-        "tools": create_builtin_tools(),
-        "daemon": {"state": "unavailable", "reason": {"code": "subagent.daemon_unavailable", "message": "No task daemon is attached to this background subagent runner."}},
-        "refreshMcpToolRegistry": lambda: None,
-        "sessionBinding": create_runtime_session_binding(session["id"], 1, 1),
-        "questionPolicy": {"interactive": False, "askQuestion": lambda *_args: ""},
-    })
-    return session, config, runtime
+    binding = create_runtime_session_binding(session["id"], 1, 1)
+    emit = _create_trace_emitter(args["taskId"])
+    components = await prepare_subagent_components(
+        session=session, config=config, binding=binding, emit=emit,
+    )
+    try:
+        async def refresh_tools():
+            await components["refreshMcpTools"]()
+            return list(components["tools"])
+
+        runtime = create_agent_runtime_bindings({
+            "emitEvent": emit,
+            "tools": components["tools"],
+            "daemon": {"state": "unavailable", "reason": {"code": "subagent.daemon_unavailable", "message": "No task daemon is attached to this background subagent runner."}},
+            "refreshMcpToolRegistry": refresh_tools,
+            "sessionBinding": binding,
+            "questionPolicy": {"interactive": False, "askQuestion": lambda *_args: ""},
+        })
+    except BaseException:
+        await components["close"]()
+        raise
+    return session, config, runtime, components["close"]
+
 
 
 async def _execute_background_subagent(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    session, config, runtime = await _prepare_worker(args)
-    result = await run_agent_prompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
-    payload = {"ok": True, "session_id": session["id"], "agent_id": args["agentId"], "task_id": args["taskId"], "result": {"text": result.get("text"), "stopReason": result.get("stopReason"), "toolCount": result.get("toolCount"), "usage": result.get("usage")}}
-    return session, result, payload
+    session, config, runtime, close = await _prepare_worker(args)
+    try:
+        result = await run_agent_prompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
+        payload = {"ok": True, "session_id": session["id"], "agent_id": args["agentId"], "task_id": args["taskId"], "result": {"text": result.get("text"), "stopReason": result.get("stopReason"), "toolCount": result.get("toolCount"), "usage": result.get("usage")}}
+        return session, result, payload
+    finally:
+        await close()
 
 
 async def _run_resident_subagent(args: dict[str, Any]) -> None:
@@ -101,20 +120,35 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
     ``subagents.resident_idle_ttl_ms`` (see ``resident_idle``): it then stops
     for good, and is never reactivated.
     """
+    session, config, runtime, close = await _prepare_worker(args)
+    try:
+        await _run_resident_worker(args, session, config, runtime)
+    finally:
+        await close()
+
+
+async def _run_resident_worker(args, session, config, runtime) -> None:
     # Call-time import: the config package imports tasks at module load.
     from ...config._knobs import knob_value
 
-    session, config, runtime = await _prepare_worker(args)
     task_id, agent_id = args["taskId"], args["agentId"]
+    runtime = {**runtime, "monitorContinuationSupported": True}
     await _mark_resident_status(task_id, agent_id, "running", None)
     result = await run_agent_prompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
     await save_session(session)
     await _publish_resident_turn_result(task_id, agent_id, session, result, trigger_ids=[])
     turn_index = 1
     print(json.dumps({"ok": True, "resident": True, "turn": turn_index, "session_id": session["id"], "agent_id": agent_id, "task_id": task_id, "result": {"text": result.get("text"), "stopReason": result.get("stopReason")}}), flush=True)
+    from .resident_monitors import ResidentMonitorConsumer
+    monitors = ResidentMonitorConsumer(args, session, config, runtime)
     idle = ResidentIdleClock(int(knob_value("subagents.resident_idle_ttl_ms")))
     while True:
         await asyncio.sleep(int(knob_value("subagents.resident_poll_ms")) / 1000)
+        if await monitors.poll():
+            idle.restart()  # passive notifications do not prolong owner lifetime
+        if await monitors.stopped():
+            await monitors.retire()
+            return
         queued = [
             message
             for message in await read_undelivered_task_messages(task_id, session["id"])
@@ -122,6 +156,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
         ]
         if not queued:
             if idle.due() and await expire_if_idle(task_id, agent_id, session["id"], idle):
+                await monitors.retire()
                 print(json.dumps({"ok": True, "resident": True, "stopped": "idle_expired", "turns": turn_index}), flush=True)
                 return
             continue

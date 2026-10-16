@@ -273,6 +273,10 @@ class SessionManager:
             metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
             if not metadata.get("parentSessionId"):
                 record["permissionMode"] = options.permission_mode
+        if getattr(runtime, "shared_mcp_servers", ()) and not (record.get("metadata") or {}).get("parentSessionId"):
+            from .shared_mcp import prepare_host_shared_mcp
+
+            await prepare_host_shared_mcp(runtime, config, record)
         live = _LiveSession(self, record, config, options)
         await live.build()
         return live
@@ -431,6 +435,8 @@ class SessionManager:
             self._seen_tasks.add(task_id)
             self._note("spawned", event=event, sessionId=target, taskId=task_id, status=data.get("status"))
         elif event in ("task.stopped", "task.failed", "task.completed"):
+            if isinstance(task_id, str) and callable(getattr(self.runtime, "observe_shared_mcp_terminal", None)):
+                self.runtime.observe_shared_mcp_terminal(task_id)
             self._note("stopped", event=event, sessionId=target, taskId=task_id,
                        reason=data.get("detail_status") or data.get("detailStatus") or data.get("reason") or data.get("stop_reason"))
 

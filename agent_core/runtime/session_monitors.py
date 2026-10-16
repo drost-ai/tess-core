@@ -114,6 +114,18 @@ class MonitorIntake:
         publisher = getattr(runtime.listener, "publish", None)
         offered: list[dict[str, Any]] = []
         for item in entries:
+            # Subprocess children have a durable owner, not a host mapping.
+            # Their existing worker consumes this same outbox at turn boundaries;
+            # even stopped/orphaned owners must never be reopened by the host.
+            from ..tasks.runners.resident_monitors import subprocess_monitor_owner, fail_owner_delivery
+            owner = await subprocess_monitor_owner(item["sessionId"], runtime.home)
+            if owner is not None:
+                status["residentPending"] = status.get("residentPending", 0) + 1
+                if owner.get("status") in {"completed", "failed", "stopped", "terminated", "cancelled", "truncated", "owner_unavailable"}:
+                    status["error"] = "monitor.owner_unavailable"
+                    if owner.get("status") != "owner_unavailable" and item.get("error") != "monitor.owner_unavailable":
+                        await fail_owner_delivery(controller, item["monitorId"], item["sessionId"])
+                continue
             if item["muted"] or item["state"] == "failed" or item["availableAt"] > now or item["leaseUntil"] > now:
                 continue
             if item["mode"] == "continuation" and not runtime.monitor_continuation_enabled:

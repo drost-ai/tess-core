@@ -55,25 +55,32 @@ async def start_background_subagent(args: dict[str, Any] | None = None) -> dict[
         )
     _throw_if_subagent_cancelled(context)
     prepared = await prepare_subagent(args)
-    _throw_if_subagent_cancelled(context)
-    child_session = prepared["childSession"]
-    child_record = prepared["childRecord"]
-    agent_id = prepared["agentId"]
-    launched = await supervisor["startSubagentTask"](
-            {
-                "parentSessionId": context["session"]["id"],
-                "sessionId": child_session["id"],
-                "agentId": agent_id,
-                "cwd": child_session["cwd"],
-                "label": child_record.get("name") or child_record.get("agentType") or agent_id,
-                "parentTaskId": child_record.get("parentTaskId"),
-                "parentToolUseId": child_record.get("parentToolUseId"),
-                "parentTurnId": child_record.get("parentTurnId"),
-                "launchGroupId": child_record.get("launchGroupId"),
-                "runtimeContract": prepared.get("runtimeContract"),
-            }
-        )
+    try:
+        _throw_if_subagent_cancelled(context)
+        child_session = prepared["childSession"]
+        child_record = prepared["childRecord"]
+        agent_id = prepared["agentId"]
+        launched = await supervisor["startSubagentTask"](
+                {
+                    "parentSessionId": context["session"]["id"],
+                    "sessionId": child_session["id"],
+                    "agentId": agent_id,
+                    "cwd": child_session["cwd"],
+                    "label": child_record.get("name") or child_record.get("agentType") or agent_id,
+                    "parentTaskId": child_record.get("parentTaskId"),
+                    "parentToolUseId": child_record.get("parentToolUseId"),
+                    "parentTurnId": child_record.get("parentTurnId"),
+                    "launchGroupId": child_record.get("launchGroupId"),
+                    "runtimeContract": prepared.get("runtimeContract"),
+                }
+            )
+    except BaseException:
+        from ..runtime.shared_mcp import revoke_child_shared_mcp
+        await revoke_child_shared_mcp(prepared["childConfig"])
+        raise
     if isinstance(launched, dict) and launched.get("atCapacity"):
+        from ..runtime.shared_mcp import revoke_child_shared_mcp
+        await revoke_child_shared_mcp(prepared["childConfig"])
         # The supervisor refused the launch. Finalize the child record that
         # prepare_subagent already persisted - leaving it "queued" with no task
         # creates a phantom that no sweep, message, or stop can ever reach -
@@ -294,65 +301,75 @@ async def prepare_subagent(args: dict[str, Any]) -> dict[str, Any]:
             "sandbox": sandbox_config_for_agent_authority(child_authority),
         }
     )
-    parent_metadata["childSessionIds"] = _dedupe([*(parent_metadata.get("childSessionIds") or []), child_session["id"]])
-    parent_metadata["childAgentIds"] = _dedupe([*(parent_metadata.get("childAgentIds") or []), agent_id])
-    parent_metadata["subagentLaunchGroups"] = _dedupe([*(parent_metadata.get("subagentLaunchGroups") or []), launch_group_id])
-    append_launch_group_metadata(parent, launch_group_id, agent_id)
-    await _upsert_subagent_launch_group(
-        parent["id"],
-        {
-            "id": launch_group_id,
-            "label": team_name or child_name,
-            "childAgentIds": [agent_id],
-        },
-    )
-    if run_in_background:
-        parent_metadata["backgroundSessionIds"] = _dedupe([*(parent_metadata.get("backgroundSessionIds") or []), child_session["id"]])
-    await maybe_await(context.get("persist_session", lambda: None)())
-    await save_session(child_session)
-    now = now_iso()
-    child_record = {
-        "agentId": agent_id,
-        "sessionId": child_session["id"],
-        "parentSessionId": parent["id"],
-        "parentToolUseId": args.get("parentToolUseId"),
-        "parentTurnId": args.get("parentTurnId") or context.get("parentTurnId"),
-        "launchGroupId": launch_group_id,
-        "parentTaskId": args.get("parentTaskId"),
-        "name": child_name,
-        "agentType": agent_type,
-        "teamName": team_name,
-        "provider": child_provider,
-        "model": child_model,
-        "mode": child_mode,
-        "description": description,
-        "isolation": isolation,
-        "worktreePath": worktree_path,
-        "runInBackground": run_in_background,
-        "runtimeContract": runtime_contract,
-        "effectiveAgentAuthority": child_authority,
-        "status": "queued" if run_in_background else "running",
-        "startedAt": now,
-        "owner": "daemon" if run_in_background and context.get("daemon") else "client",
-        "attachableSessionId": child_session["id"],
-        "waitingReason": None,
-        "completionReason": None,
-        "resultSummary": None,
-        "latestResultAt": None,
-        "retryable": False,
-        "stoppable": run_in_background,
-        "recoveryState": None,
-        "lastUpdatedAt": now,
-        "lastSummary": "Queued for background execution." if run_in_background else "Starting foreground execution.",
-    }
-    await save_child_agent(child_record)
-    return {
-        "agentId": agent_id,
-        "childSession": child_session,
-        "childConfig": child_config,
-        "childRecord": child_record,
-        "runtimeContract": runtime_contract,
-        "runtimeContractSummary": runtime_contract_summary,
-        "worktreePath": worktree_path,
-        "launchGroupId": launch_group_id,
-    }
+    # Broker admission is a new scoped connection, not inheritance of the
+    # parent bearer. Pin its safe descriptor before either launch record saves.
+    from ..runtime.shared_mcp import delegate_child_shared_mcp
+
+    await delegate_child_shared_mcp(child_config, child_authority, child_session["id"])
+    try:
+        parent_metadata["childSessionIds"] = _dedupe([*(parent_metadata.get("childSessionIds") or []), child_session["id"]])
+        parent_metadata["childAgentIds"] = _dedupe([*(parent_metadata.get("childAgentIds") or []), agent_id])
+        parent_metadata["subagentLaunchGroups"] = _dedupe([*(parent_metadata.get("subagentLaunchGroups") or []), launch_group_id])
+        append_launch_group_metadata(parent, launch_group_id, agent_id)
+        await _upsert_subagent_launch_group(
+            parent["id"],
+            {
+                "id": launch_group_id,
+                "label": team_name or child_name,
+                "childAgentIds": [agent_id],
+            },
+        )
+        if run_in_background:
+            parent_metadata["backgroundSessionIds"] = _dedupe([*(parent_metadata.get("backgroundSessionIds") or []), child_session["id"]])
+        await maybe_await(context.get("persist_session", lambda: None)())
+        await save_session(child_session)
+        now = now_iso()
+        child_record = {
+            "agentId": agent_id,
+            "sessionId": child_session["id"],
+            "parentSessionId": parent["id"],
+            "parentToolUseId": args.get("parentToolUseId"),
+            "parentTurnId": args.get("parentTurnId") or context.get("parentTurnId"),
+            "launchGroupId": launch_group_id,
+            "parentTaskId": args.get("parentTaskId"),
+            "name": child_name,
+            "agentType": agent_type,
+            "teamName": team_name,
+            "provider": child_provider,
+            "model": child_model,
+            "mode": child_mode,
+            "description": description,
+            "isolation": isolation,
+            "worktreePath": worktree_path,
+            "runInBackground": run_in_background,
+            "runtimeContract": runtime_contract,
+            "effectiveAgentAuthority": child_authority,
+            "status": "queued" if run_in_background else "running",
+            "startedAt": now,
+            "owner": "daemon" if run_in_background and context.get("daemon") else "client",
+            "attachableSessionId": child_session["id"],
+            "waitingReason": None,
+            "completionReason": None,
+            "resultSummary": None,
+            "latestResultAt": None,
+            "retryable": False,
+            "stoppable": run_in_background,
+            "recoveryState": None,
+            "lastUpdatedAt": now,
+            "lastSummary": "Queued for background execution." if run_in_background else "Starting foreground execution.",
+        }
+        await save_child_agent(child_record)
+        return {
+            "agentId": agent_id,
+            "childSession": child_session,
+            "childConfig": child_config,
+            "childRecord": child_record,
+            "runtimeContract": runtime_contract,
+            "runtimeContractSummary": runtime_contract_summary,
+            "worktreePath": worktree_path,
+            "launchGroupId": launch_group_id,
+        }
+    except BaseException:
+        from ..runtime.shared_mcp import revoke_child_shared_mcp
+        await revoke_child_shared_mcp(child_config)
+        raise

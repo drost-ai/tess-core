@@ -46,7 +46,7 @@ class TraceEmitterTests(AgentCoreTestCase):
 
         async def fake_prepare(_args):
             calls.append(("prepare",))
-            return {"id": "s"}, {}, {}
+            return {"id": "s"}, {}, {}, mock.AsyncMock()
 
         async def fake_prompt(_values):
             calls.append(("prompt",))

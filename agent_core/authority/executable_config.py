@@ -227,6 +227,26 @@ def parse_mcp_server_config(value: Any, field: str = "mcp") -> dict[str, Any]:
     ):
         if value_value is not None:
             result[key] = value_value
+    if "delegation" in source:
+        delegation = _object(source["delegation"], f"{field}.delegation")
+        if set(delegation) - {"mode", "scope"}:
+            return _fail(f"{field}.delegation", "unknown delegation field")
+        if delegation.get("mode") not in ("allow", "deny"):
+            return _fail(f"{field}.delegation.mode", "expected allow or deny")
+        if delegation.get("scope", "shared") not in ("shared", "session"):
+            return _fail(f"{field}.delegation.scope", "expected shared or session")
+        result["delegation"] = copy.deepcopy(delegation)
+    if "sharing" in source:
+        if source["sharing"] != {"mode": "host"}:
+            return _fail(f"{field}.sharing", "expected host sharing policy")
+        result["sharing"] = {"mode": "host"}
+    if "sharedBroker" in source:
+        marker = source["sharedBroker"]
+        if (not isinstance(marker, dict) or set(marker) != {"version"}
+                or type(marker.get("version")) is not int or marker["version"] != 1
+                or transport != "http"):
+            return _fail(f"{field}.sharedBroker", "expected version 1 HTTP broker descriptor")
+        result["sharedBroker"] = {"version": 1}
     for key in _TIMEOUT_FIELDS:
         timeout = _timeout(source.get(key), f"{field}.{key}")
         if timeout is not None:

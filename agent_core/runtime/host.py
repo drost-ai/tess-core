@@ -57,6 +57,7 @@ class Runtime:
         session_options: Any,
         listener: Any,
         monitor_continuation: bool = True,
+        shared_mcp_servers: tuple[str, ...] = (),
     ) -> None:
         self.home = home
         self.cwd = cwd
@@ -64,6 +65,11 @@ class Runtime:
         self.daemon_enabled = daemon_enabled
         self.session_options = session_options
         self.listener = listener
+        self.shared_mcp_servers = tuple(shared_mcp_servers)
+        self._shared_mcp_broker: Any = None
+        self._shared_mcp_descriptors: dict[tuple[str, str, str], dict[str, Any]] = {}
+        self._shared_mcp_lock = asyncio.Lock()
+        self._shared_mcp_cleanup_tasks: dict[str, asyncio.Task[Any]] = {}
         # Off: no new continuation work is claimed, and existing continuation
         # deliveries wait, visibly; they are never turned into notifications.
         self.monitor_continuation_enabled = bool(monitor_continuation)
@@ -147,6 +153,18 @@ class Runtime:
                     summary["workers"] = await self._stop_workers()
                     summary["daemon"] = await self._stop_daemon()
             finally:
+                if self._shared_mcp_cleanup_tasks:
+                    for task in list(self._shared_mcp_cleanup_tasks.values()):
+                        task.cancel()
+                    await asyncio.gather(*list(self._shared_mcp_cleanup_tasks.values()), return_exceptions=True)
+                    self._shared_mcp_cleanup_tasks.clear()
+                if self._shared_mcp_broker is not None:
+                    try:
+                        await self._shared_mcp_broker.close()
+                    except Exception:
+                        summary["sharedMcpCloseFailed"] = True
+                    self._shared_mcp_broker = None
+                    self._shared_mcp_descriptors.clear()
                 if self.lease is not None:
                     with contextlib.suppress(Exception):
                         await release_owner_lease(self.home, self.instance_id)
@@ -154,6 +172,26 @@ class Runtime:
                 self._stop_summary = summary
                 _clear_active(self)
             return dict(summary)
+
+    def observe_shared_mcp_terminal(self, task_id: str) -> None:
+        """Use the existing daemon terminal stream, including lost workers.
+
+        Events are wakeups only: durable task AND child state authorize cleanup,
+        so an unrelated shell completion cannot revoke its parent session.
+        """
+        if self._shared_mcp_broker is None or task_id in self._shared_mcp_cleanup_tasks:
+            return
+
+        async def cleanup() -> None:
+            from .shared_mcp import revoke_terminal_child
+            try:
+                await revoke_terminal_child(self, task_id)
+            except Exception:
+                self._record_daemon_event("mcp.shared_cleanup_failed", {"taskId": task_id})
+            finally:
+                self._shared_mcp_cleanup_tasks.pop(task_id, None)
+
+        self._shared_mcp_cleanup_tasks[task_id] = asyncio.create_task(cleanup())
 
     async def _stop_workers(self) -> dict[str, Any] | None:
         with self._daemon_lock:
@@ -342,6 +380,7 @@ async def start_runtime(
     listener: Any = None,
     startup_timeout_seconds: float | None = None,
     monitor_continuation: bool = True,
+    shared_mcp_servers: tuple[str, ...] = (),
 ) -> Runtime:
     """Start the runtime for ``runtime_home`` (default: ``$AGENT_CORE_HOME`` or
     the engine's default home) in this process.
@@ -364,6 +403,7 @@ async def start_runtime(
         session_options=session_options,
         listener=listener,
         monitor_continuation=monitor_continuation,
+        shared_mcp_servers=shared_mcp_servers,
     )
     _reserve_active(runtime)
     try:

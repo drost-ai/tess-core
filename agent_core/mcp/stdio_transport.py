@@ -12,8 +12,9 @@ import contextlib
 import json
 import os
 import queue
-import signal
 import subprocess
+import sys
+from pathlib import Path
 import threading
 import time
 from typing import Any, Callable
@@ -44,6 +45,9 @@ class StdioMcpClient(JsonRpcClient):
         super().__init__(config, cwd, on_notification)
         self.policy = resolve_mcp_transport_policy(config)
         self.proc: subprocess.Popen[bytes] | None = None
+        self.owner_write_fd: int | None = None
+        self.status_read_fd: int | None = None
+        self.server_returncode: int | None = None
         self.pending: dict[int, queue.Queue[dict[str, Any] | BaseException]] = {}
         self.pending_lock = threading.Lock()
         self.decoder = McpStdioFrameDecoder()
@@ -95,6 +99,23 @@ class StdioMcpClient(JsonRpcClient):
             if isinstance(response, BaseException):
                 raise response
             return response
+        except asyncio.CancelledError:
+            # Wake the executor waiter before detaching its routing entry.
+            # Otherwise cancelled calls consume workers until requestTimeout.
+            try:
+                response_queue.put_nowait(asyncio.CancelledError())
+            except queue.Full:
+                pass
+            async def notify_cancelled() -> None:
+                try:
+                    await asyncio.to_thread(self._write_message, {
+                        "jsonrpc": "2.0", "method": "notifications/cancelled",
+                        "params": {"requestId": request_id, "reason": "Caller cancelled"},
+                    })
+                except Exception:
+                    pass  # Best effort only; never close a sibling's transport.
+            asyncio.create_task(notify_cancelled())
+            raise
         finally:
             with self.pending_lock:
                 if self.pending.get(request_id) is response_queue:
@@ -121,9 +142,21 @@ class StdioMcpClient(JsonRpcClient):
         if self.proc:
             return
         env = {**os.environ, **(self.config.get("env") or {})}
+        argv = [self.config["commandOrUrl"], *(self.config.get("args") or [])]
+        owner_read_fd: int | None = None
+        status_write_fd: int | None = None
+        spawn_options: dict[str, Any] = {}
         try:
+            if os.name != "nt":
+                # os.pipe descriptors are non-inheritable. Only the guardian
+                # receives the read end; no exec'ed server owns the write end.
+                owner_read_fd, self.owner_write_fd = os.pipe()
+                self.status_read_fd, status_write_fd = os.pipe()
+                spawn_options["pass_fds"] = (owner_read_fd, status_write_fd)
+                argv = [sys.executable, "-I", str(Path(__file__).with_name("stdio_guardian.py")),
+                        str(owner_read_fd), str(status_write_fd), str(int(_knob("mcp.close_grace_ms")) / 1000), *argv]
             self.proc = subprocess.Popen(
-                [self.config["commandOrUrl"], *(self.config.get("args") or [])],
+                argv,
                 cwd=self.cwd,
                 env=env,
                 stdin=subprocess.PIPE,
@@ -131,10 +164,19 @@ class StdioMcpClient(JsonRpcClient):
                 stderr=subprocess.PIPE,
                 start_new_session=os.name != "nt",
                 bufsize=0,
+                **spawn_options,
             )
         except Exception as error:
+            if self.status_read_fd is not None:
+                os.close(self.status_read_fd)
+                self.status_read_fd = None
             self._terminal_failure(error, background=False)
             raise
+        finally:
+            if owner_read_fd is not None:
+                os.close(owner_read_fd)
+            if status_write_fd is not None:
+                os.close(status_write_fd)
         self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
         self.stderr_thread = threading.Thread(target=self._stderr_loop, daemon=True)
         self.wait_thread = threading.Thread(target=self._wait_loop, daemon=True)
@@ -215,8 +257,18 @@ class StdioMcpClient(JsonRpcClient):
         proc = self.proc
         if not proc:
             return
-        with contextlib.suppress(Exception):
-            proc.wait()
+        if self.status_read_fd is not None:
+            fd = self.status_read_fd
+            try:
+                value = os.read(fd, 32)
+                if value:
+                    self.server_returncode = int(value)
+            finally:
+                os.close(fd)
+                self.status_read_fd = None
+        if self.server_returncode is None:
+            with contextlib.suppress(Exception):
+                proc.wait()
         self._terminal_failure(RuntimeError(self._format_exit()))
 
     def _handle_message(self, payload: str) -> None:
@@ -278,24 +330,34 @@ class StdioMcpClient(JsonRpcClient):
 
     def _close_process_sync(self) -> None:
         try:
+            if self.owner_write_fd is not None:
+                os.close(self.owner_write_fd)
+                self.owner_write_fd = None
             proc = self.proc
             if proc and proc.stdin:
                 with contextlib.suppress(Exception):
                     proc.stdin.close()
             if proc:
-                self._wait_parent(int(_knob("mcp.close_stdin_grace_ms")))
-                if self._owned_group_alive():
-                    self._signal_owned_group(signal.SIGTERM)
-                    if not self._wait_group(int(_knob("mcp.close_grace_ms"))):
-                        self._signal_owned_group(signal.SIGKILL)
-                        if not self._wait_group(int(_knob("mcp.close_kill_wait_ms"))):
-                            raise RuntimeError(
-                                f"MCP stdio process group survived SIGKILL: {self.config.get('name')}."
-                            )
-                if not self._wait_parent(int(_knob("mcp.close_kill_wait_ms"))):
-                    raise RuntimeError(
-                        f"MCP stdio child did not close after termination: {self.config.get('name')}."
-                    )
+                if os.name != "nt":
+                    # Only the guardian may signal its group. The wait thread
+                    # can already have reaped it, allowing numeric PGID reuse.
+                    # EOF above requests cleanup without referring to that PID.
+                    budget = sum(int(_knob(name)) for name in (
+                        "mcp.close_stdin_grace_ms", "mcp.close_grace_ms",
+                        "mcp.close_kill_wait_ms"))
+                    if not self._wait_parent(budget):
+                        raise RuntimeError(
+                            f"MCP stdio guardian did not close within cleanup deadline: {self.config.get('name')}."
+                        )
+                else:
+                    if not self._wait_parent(int(_knob("mcp.close_stdin_grace_ms"))):
+                        proc.terminate()
+                        if not self._wait_parent(int(_knob("mcp.close_grace_ms"))):
+                            proc.kill()
+                    if not self._wait_parent(int(_knob("mcp.close_kill_wait_ms"))):
+                        raise RuntimeError(
+                            f"MCP stdio child did not close after termination: {self.config.get('name')}."
+                        )
                 for stream in (proc.stdin, proc.stdout, proc.stderr):
                     if stream:
                         with contextlib.suppress(Exception):
@@ -311,40 +373,6 @@ class StdioMcpClient(JsonRpcClient):
                 self.state = "closed"
             self.close_done.set()
 
-    def _owned_group_alive(self) -> bool:
-        proc = self.proc
-        if not proc:
-            return False
-        if os.name == "nt":
-            return proc.poll() is None
-        try:
-            os.killpg(proc.pid, 0)
-            return True
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True
-
-    def _signal_owned_group(self, signum: int) -> None:
-        proc = self.proc
-        if not proc:
-            return
-        try:
-            if os.name == "nt":
-                proc.send_signal(signum)
-            else:
-                os.killpg(proc.pid, signum)
-        except ProcessLookupError:
-            pass
-
-    def _wait_group(self, timeout_ms: int) -> bool:
-        deadline = time.monotonic() + timeout_ms / 1000
-        while time.monotonic() < deadline:
-            if not self._owned_group_alive():
-                return True
-            time.sleep(0.01)
-        return not self._owned_group_alive()
-
     def _wait_parent(self, timeout_ms: int) -> bool:
         proc = self.proc
         if not proc or proc.poll() is not None:
@@ -357,7 +385,9 @@ class StdioMcpClient(JsonRpcClient):
 
     def _format_exit(self) -> str:
         proc = self.proc
-        code = proc.poll() if proc else None
+        code = self.server_returncode
+        if code is None:
+            code = proc.poll() if proc else None
         if proc and code is None:
             with contextlib.suppress(subprocess.TimeoutExpired):
                 code = proc.wait(timeout=0.1)

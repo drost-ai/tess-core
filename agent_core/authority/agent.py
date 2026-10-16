@@ -226,6 +226,7 @@ async def capture_agent_authority(
     hooks = await load_hooks(cwd=session["cwd"], sources=settings_sources)
     plugin_dirs = sorted({os.path.abspath(path) for path in config.get("pluginDirs") or []})
     executable_sources = {
+        "mcpDelegationVersion": 1,
         "settingsSources": settings_sources,
         **(
             {"inlineSettingsDigest": _digest(config["inlineSettings"])}
