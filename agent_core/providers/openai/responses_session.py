@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...runtime.execution_budget import budget_provider_payload, ExecutionBudgetExceeded
+
 import copy
 
 from ..openai_turn_session import (
@@ -55,7 +57,7 @@ async def start_responses_stream(
                 stream = await _race_openai_activity(
                     maybe_await(
                         websocket_create(
-                            websocket_response_create_params(prepared.wire_params)
+                            websocket_response_create_params(budget_provider_payload(prepared.wire_params, "responses"))
                         )
                     ),
                     timeout_ms=timeout_ms,
@@ -68,6 +70,8 @@ async def start_responses_stream(
                     turn_session=turn_session,
                 )
                 return stream, selected
+            except ExecutionBudgetExceeded:
+                raise
             except Exception as exc:
                 if turn_session is None or not websocket_fallback_safe(exc):
                     raise
@@ -95,7 +99,7 @@ async def start_responses_stream(
     if not callable(create):
         raise RuntimeError("OpenAI Responses create method is unavailable.")
     stream = await _race_openai_activity(
-        maybe_await(create(selected.wire_params)),
+        maybe_await(create(budget_provider_payload(selected.wire_params, "responses"))),
         timeout_ms=timeout_ms,
         provider_label=provider_label,
         phase="request_start",

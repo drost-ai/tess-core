@@ -113,7 +113,7 @@ class _LiveSession:
                 "config": self.config,
                 "emit": source.emit,
                 "factories": default_runtime_component_factories(),
-                "bootstrapArgs": {"runtimePaths": runtime.paths, "detectWorkspaceIntegrations": False, "scheduler": runtime.scheduler.running},
+                "bootstrapArgs": {"runtimePaths": runtime.paths, "detectWorkspaceIntegrations": False, "scheduler": runtime.scheduler.running, "hostTools": self.options.host_tools},
                 "hasSession": True,
             }
         )
@@ -122,13 +122,17 @@ class _LiveSession:
                 self.publish(event, data)
             components = self.components
 
+            def merged_tools() -> list[Any]:
+                return list(components["tools"])
+
             async def refresh_tools() -> list[Any] | None:
                 await maybe_await(components["refreshMcpTools"]())
-                return list(components["tools"])
+                return merged_tools()
 
             self.bindings = create_agent_runtime_bindings(
                 {
-                    "tools": components["tools"],
+                    "tools": merged_tools(),
+                    "executionBudget": self.options.execution_budget,
                     "emitEvent": self.publish,
                     "daemon": self.manager.daemon_binding(),
                     "refreshMcpToolRegistry": refresh_tools,

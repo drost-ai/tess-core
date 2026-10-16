@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...runtime.execution_budget import budget_provider_payload, ExecutionBudgetExceeded
+
 from .._knob_reader import provider_knob
 
 import copy
@@ -77,7 +79,7 @@ async def send_anthropic_messages_request(args: dict[str, Any] | None = None, **
                 {"provider": "anthropic", "provider_label": "Anthropic", "model": request["model"], "attempt": attempt},
             )
             emit_provider_activity(runtime, "request_started", attempt=attempt)
-            payload = envelope["payload"]
+            payload = budget_provider_payload(envelope["payload"], "anthropic")
             if stream:
                 activity_loop = asyncio.get_running_loop()
                 stream_activity_state = {
@@ -179,6 +181,8 @@ async def send_anthropic_messages_request(args: dict[str, Any] | None = None, **
                     "retryAfterMs": _retry_after_ms_from_headers(exc.headers),
                 }
             )
+        except ExecutionBudgetExceeded:
+            raise
         except Exception as exc:
             failure = normalize_unknown_provider_failure(
                 {

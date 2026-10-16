@@ -105,6 +105,18 @@ class Package44ArtifactReachabilityTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_transient_worker_can_recover_artifact_without_session_persistence(self):
+        from unittest.mock import patch
+        original = _codex_config
+
+        def transient_config(*args, **kwargs):
+            config = original(*args, **kwargs)
+            config['sessionPersistence'] = False
+            return config
+
+        with patch(__name__ + '._codex_config', side_effect=transient_config):
+            self.test_full_loop_page_bypasses_recursive_artifactization()
+
     def test_full_loop_page_bypasses_recursive_artifactization(self):
         root, home, workspace, previous = self.temp_context()
         try:

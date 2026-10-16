@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...runtime.execution_budget import ExecutionBudgetExceeded
+
 from .._knob_reader import provider_knob
 from ...contracts.providers import ProviderResponse
 from ..partial_output import PartialOutputDelivery
@@ -406,6 +408,8 @@ async def send_openai_responses_request(args: dict[str, Any] | None = None, **kw
                 partial_output_commit=state.partial_output_commit,
                 reconciliation=state.reconciliation,
             )
+        except ExecutionBudgetExceeded:
+            raise
         except Exception as exc:
             if turn_session is not None and state.active_stream is not None:
                 await turn_session.release_stream(state.active_stream)

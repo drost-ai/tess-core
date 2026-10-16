@@ -41,7 +41,7 @@ class ToolAgentTests(AgentCoreTestCase):
                 (child_session["messages"][0]["content"], child_session["messages"][0]["metadata"]["agentCoreOrigin"]["kind"]),
                 ("Find the issue", "subagent_task_prompt"),
             )
-            self.assertEqual(child_session["permissionMode"], "default")
+            self.assertEqual(child_session["permissionMode"], "acceptEdits")
             self.assertEqual(child_session["metadata"]["depth"], 1)
             self.assertEqual(child_session["metadata"]["parentSessionId"], parent["id"])
             self.assertNotIn("assistantName", child_session["metadata"])

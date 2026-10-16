@@ -7,6 +7,7 @@ internals live in the subsystem packages and may change freely.
 """
 from __future__ import annotations
 
+from .runtime.execution_budget import ExecutionBudget, ExecutionBudgetExceeded
 from .agent import readOpenChildQuestions
 from .agent.loop import run_agent_prompt
 from .config.prompts import build_system_prompt_for_agent, resolve_model_for_agent
@@ -58,6 +59,7 @@ from .tools.definitions import ToolDefinition
 from .tools.registry import create_builtin_tools
 
 __all__ = [
+    "ExecutionBudget", "ExecutionBudgetExceeded",
     "MonitorDeliveryController",
     "MonitorDeliveryError",
     "RuntimeSecretValue",

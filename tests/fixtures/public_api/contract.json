@@ -167,6 +167,8 @@
 {"concept": "SessionOptions", "ts": null, "py": "SessionOptions", "py_target": "SessionOptions", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
 {"concept": "SessionUnavailableError", "ts": null, "py": "SessionUnavailableError", "py_target": "SessionUnavailableError", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
 {"concept": "Unavailable", "ts": null, "py": "Unavailable", "py_target": "Unavailable", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
-{"concept": "UnknownSessionError", "ts": null, "py": "UnknownSessionError", "py_target": "UnknownSessionError", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]}
+{"concept": "UnknownSessionError", "ts": null, "py": "UnknownSessionError", "py_target": "UnknownSessionError", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "ExecutionBudget", "ts": null, "py": "ExecutionBudget", "py_target": "ExecutionBudget", "py_module": "agent_core.runtime.execution_budget", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "ExecutionBudgetExceeded", "ts": null, "py": "ExecutionBudgetExceeded", "py_target": "ExecutionBudgetExceeded", "py_module": "agent_core.runtime.execution_budget", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]}
 ]
 }

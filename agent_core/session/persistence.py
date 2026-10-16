@@ -354,7 +354,7 @@ async def _persist_session_transcript_log(
         entries.append({"type": "repair", "session_id": session["id"], "persisted_at": archived_at, "truncated_to_message_index": len(session.get("messages", [])), "previous_archived_message_count": previous, "removed_count": repair.get("removedCount") or previous - len(session.get("messages", [])), "missing_tool_use_ids": repair.get("missingToolUseIds") or []})
     for index in range(min(previous, len(session.get("messages", []))), len(session.get("messages", []))):
         message = session["messages"][index]
-        entries.append({"type": "message", "session_id": session["id"], "message_index": index, "persisted_at": archived_at, "role": message.get("role"), "content": message.get("content")})
+        entries.append({"type": "message", "session_id": session["id"], "message_index": index, "persisted_at": archived_at, "role": message.get("role"), "content": message.get("content"), **({"metadata": copy.deepcopy(message["metadata"])} if isinstance(message.get("metadata"), dict) else {})})
     path = await append_session_transcript_log_entries(session["id"], entries)
     appended = bool(entries)
     return (

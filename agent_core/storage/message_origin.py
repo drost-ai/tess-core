@@ -251,3 +251,16 @@ def _bounded_lineage(value: dict[str, Any]) -> dict[str, str]:
     return result
 
 
+
+
+def turn_request_message(content: Any, *, origin: str = "user", lineage: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Preserve trusted host turn authorship independently of execution authority."""
+    if origin == "user":
+        return user_request_message(content, lineage=lineage)
+    actors = {"worker": "host", "scheduled": "task", "child_message": "subagent", "monitor": "runtime"}
+    if origin not in actors:
+        raise ValueError(f"Unsupported turn origin: {origin}")
+    return message_with_origin(
+        {"role": "user", "content": copy.deepcopy(content)}, actor=actors[origin],
+        kind=f"{origin}_request", intentAuthority="none", synthetic=True, lineage=lineage,
+    )

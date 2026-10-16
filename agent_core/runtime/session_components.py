@@ -107,6 +107,14 @@ async def prepare_runtime_session_components(args: Mapping[str, Any]) -> dict[st
                 *(mcp_runtime["createToolDefinitions"]() if mcp_runtime else []),
                 *plugin_tools,
             ]
+            names = {_tool_name(tool) for tool in raw}
+            for tool in bootstrap_args.get("hostTools", ()):
+                if not getattr(tool, "name", None) or not callable(getattr(tool, "handler", None)):
+                    raise TypeError("host_tools must contain ToolDefinition instances")
+                if tool.name in names:
+                    raise ValueError(f"Host tool name collision: {tool.name}")
+                names.add(tool.name)
+                raw.append(tool)
             return factories["filterAuthorityTools"](_dedupe_tools(raw), authority)
 
         tools = compose_tools()

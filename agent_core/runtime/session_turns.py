@@ -43,7 +43,7 @@ from ..agent.prompt_content import normalize_agent_prompt
 from ..providers._core import AbortSignal
 from .agent_bindings import create_agent_runtime_bindings
 
-TURN_ORIGINS = ("user", "child_message", "monitor", "scheduled")
+TURN_ORIGINS = ("user", "child_message", "monitor", "scheduled", "worker")
 # After the grace, an aborted turn gets this long to unwind before the
 # session's components are closed under it.
 ABORT_BOUND_SECONDS = 5.0
@@ -281,6 +281,7 @@ class SessionTurns:
                 # tools when the caller named them).
                 "runtime": create_agent_runtime_bindings({**live.bindings, "abortSignal": turn.signal, **_narrowed_tools(live, turn.tool_names)}),
                 **extras,
+                "turnOrigin": turn.origin,
             }
             context = await self._context()
             if context:
@@ -350,7 +351,7 @@ def _narrowed_tools(live: Any, names: list[str] | None) -> dict[str, Any]:
     refresh = live.bindings["refreshMcpToolRegistry"]
 
     def keep(tools: Any) -> Any:
-        return [tool for tool in tools if (getattr(tool, "name", None) or tool.get("name")) in wanted] if isinstance(tools, list) else tools
+        return [tool for tool in tools if (getattr(tool, "name", None) or tool.get("name")) in wanted] if isinstance(tools, (list, tuple)) else tools
 
     async def refresh_narrowed() -> Any:
         return keep(await maybe_await(refresh()))

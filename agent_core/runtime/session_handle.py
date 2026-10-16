@@ -41,7 +41,7 @@ class Session:
 
     @property
     def tool_names(self) -> list[str]:
-        return [getattr(tool, "name", None) or tool.get("name") for tool in self._live_session().components["tools"]]
+        return [getattr(tool, "name", None) or tool.get("name") for tool in self._live_session().bindings["tools"]]
 
     def subscribe(self, listener: Callable[[dict[str, Any]], Any]) -> Callable[[], None]:
         """Receive this session's event envelopes, in addition to the runtime listener."""
@@ -88,6 +88,7 @@ class Session:
         turn_id: str | None = None,
         provider_override: dict[str, Any] | None = None,
         tools: list[str] | None = None,
+        origin: str = "user",
     ) -> dict[str, Any]:
         """Run one user turn after whatever is already queued for this
         session, and return the engine's result. A handle whose session was
@@ -101,7 +102,7 @@ class Session:
         if not self.is_open:
             await self._manager.open(self.id)
         return await self._live_session().turns.run(
-            prompt, origin="user", limits=limits, provider_override=provider_override, turn_id=turn_id, tool_names=tools
+            prompt, origin=origin, limits=limits, provider_override=provider_override, turn_id=turn_id, tool_names=tools
         )
 
     async def cancel_turn(self, turn_id: str) -> bool:

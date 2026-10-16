@@ -206,7 +206,10 @@ async def prepare_subagent(args: dict[str, Any]) -> dict[str, Any]:
     worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
     derived_authority = derive_child_agent_authority(
         parent=parent_authority,
-        requestedMode=requested_mode,
+        # Apply spawn inheritance before pinning; passing requested_mode here
+        # silently discarded it (notably default under a bypass parent).
+        # Derivation still intersects this mode with the parent's authority.
+        requestedMode=child_mode,
         contract=runtime_contract,
         permissionRuleProjectRoot=os.path.realpath(parent["cwd"]),
         grantedWorkspaceRoots=[worktree_path] if worktree_path else None,

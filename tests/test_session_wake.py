@@ -326,6 +326,9 @@ class SessionWakeTests(AgentCoreTestCase):
                     questions = await read_task_questions("task-orphan")
                     self.assertEqual(questions[-1]["status"], "answered")
                     self.assertEqual(questions[-1]["answer"], "unanswered:parent_unavailable:archived")
+                    # Answer persistence and its diagnostic event are separate
+                    # asynchronous observations; wait for both before asserting.
+                    await _wait(lambda: any(e == "subagent.question.unanswered" for e, _ in listener.runtime_events), label="the unanswered diagnostic event")
                     self.assertIn("subagent.question.unanswered", [e for e, _ in listener.runtime_events])
                     self.assertFalse(other.is_open)
                     self.assertEqual(len(provider.requests), calls_before)   # no turn ran for the archived parent

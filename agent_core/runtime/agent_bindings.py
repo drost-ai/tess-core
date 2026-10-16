@@ -61,6 +61,7 @@ _CONTRACT_FIELDS = frozenset({
 # Anything else in the bindings is a caller error: the versioned contract is
 # only meaningful if unknown keys fail loudly instead of passing through.
 _EXTENSION_FIELDS = frozenset({
+    "executionBudget",
     "monitorContinuationSupported",
     "openaiClientFactory",
     "partial_output_recovery_policy",

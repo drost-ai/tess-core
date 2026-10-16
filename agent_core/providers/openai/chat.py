@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...runtime.execution_budget import budget_provider_payload, ExecutionBudgetExceeded
+
 from .._knob_reader import provider_knob
 
 from ..activity import emit_provider_activity
@@ -138,7 +140,7 @@ async def send_openai_chat_completions_request(args: dict[str, Any] | None = Non
                 },
             )
             response = await _race_openai_activity(
-                maybe_await(get_value(completions, "create")(params)),
+                maybe_await(get_value(completions, "create")(budget_provider_payload(params, "chat"))),
                 timeout_ms=request_start_timeout_ms,
                 provider_label=provider_label,
                 phase=phase,
@@ -295,6 +297,8 @@ async def send_openai_chat_completions_request(args: dict[str, Any] | None = Non
             if attempt > 1:
                 _emit(runtime, "provider.recovered", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempts": attempt, "category": last_failure.record.get("category") if last_failure else None})
             return {"content": blocks, "usage": usage, "model": args["request"]["model"], "stopReason": stop_reason}
+        except ExecutionBudgetExceeded:
+            raise
         except Exception as exc:
             if turn_session is not None and active_stream is not None:
                 await turn_session.release_stream(active_stream)

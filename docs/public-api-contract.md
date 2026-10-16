@@ -395,3 +395,7 @@ scheduler tools (`ScheduleCreate`, `ScheduleList`, `ScheduleUpdate`,
 `ScheduleCancel`), which exist only in sessions of a runtime whose timer runs.
 Knobs: `scheduler.clock_check_ms` (cadence, default 30000) and
 `scheduler.max_late_ms` (bound, unset = none).
+
+## Host worker execution
+
+Python additionally exports `ExecutionBudget` and `ExecutionBudgetExceeded` from `agent_core.runtime.execution_budget`. `SessionOptions.host_tools` injects host-defined `ToolDefinition` instances; ordinary configured allow/deny and child authority still apply. `SessionOptions.execution_budget` shares admission accounting across tools and actual provider transport attempts, including retries. `Session.run_turn(origin="worker")` marks host-authored work as synthetic rather than a new human request. Budget context is ephemeral, never persisted as conversation text.

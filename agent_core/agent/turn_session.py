@@ -172,3 +172,13 @@ __all__ = [
     "run_in_provider_turn_session",
     "run_with_transient_execution_session",
 ]
+
+
+async def run_scoped_agent_turn(values, callback, is_cancelled):
+    from ..runtime.execution_budget import run_with_execution_budget
+    async def run_in_scope(scoped_args):
+        return await run_in_provider_turn_session(
+            resolve_effective_provider_turn_binding(scoped_args), callback,
+            is_cancelled=is_cancelled,
+        )
+    return await run_with_execution_budget(values, lambda: run_with_transient_execution_session(values, run_in_scope))

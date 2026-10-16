@@ -1,4 +1,8 @@
 from __future__ import annotations
+
+from ..runtime.execution_budget import admit_tool, ExecutionBudgetExceeded
+
+from ..storage.message_origin import turn_request_message as _turn_request_message
 import typing as _typing
 if _typing.TYPE_CHECKING:
     from ..contracts.context import ToolContext
@@ -47,11 +51,7 @@ from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from .tool_dispatch import invalid_tool_input_message as _invalid_tool_input_message
 from .tool_context import build_tool_context as _build_tool_context
 from .tool_result_budget import ToolResultBatchBudget as _ToolResultBatchBudget
-from .turn_session import (
-    resolve_effective_provider_turn_binding as _resolve_effective_provider_turn_binding,
-    run_in_provider_turn_session as _run_in_provider_turn_session,
-    run_with_transient_execution_session as _run_with_transient_execution_session,
-)
+from .turn_session import run_scoped_agent_turn
 from ..authority.agent import enforce_session_agent_authority, filter_tools_for_agent_authority
 from ..runtime.agent_bindings import assert_agent_runtime_bindings, materialize_agent_execution_runtime
 from ..authority.hooks import fire_tool_hooks as fire_tool_hooks
@@ -72,14 +72,7 @@ from ..payloads.attachments import (
     strip_in_memory_image_data as _strip_in_memory_image_data,
 )
 async def run_agent_prompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    values = {**(args or {}), **kwargs}
-    async def run_in_scope(scoped_args: dict[str, Any]) -> dict[str, Any]:
-        return await _run_in_provider_turn_session(
-            _resolve_effective_provider_turn_binding(scoped_args),
-            _run_agent_prompt_with_provider_session,
-            is_cancelled=_is_turn_cancelled,
-        )
-    return await _run_with_transient_execution_session(values, run_in_scope)
+    return await run_scoped_agent_turn({**(args or {}), **kwargs}, _run_agent_prompt_with_provider_session, _is_turn_cancelled)
 async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
@@ -170,7 +163,7 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
         state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
 
     if prompt_content is not None or monitor_message is not None:
-        message = monitor_message or _user_request_message(prompt_content, lineage={"logicalTurnId": parent_turn_id})
+        message = monitor_message or _turn_request_message(prompt_content, origin=args.get("turnOrigin", "user"), lineage={"logicalTurnId": parent_turn_id})
         session.setdefault("messages", []).append(message)
         await persist_session(session, config)
         if monitor_message is None:
@@ -223,6 +216,9 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
                 )
                 prepared_request, response = provider_result["preparedRequest"], provider_result["response"]
                 state.cost += float(provider_result.get("emptyResponseCostUsd") or 0)
+            except ExecutionBudgetExceeded:
+                await persist_session(session, config)
+                return state.result("execution_budget_exhausted")
             except _ImageBudgetError as error:
                 _restore_session_state(session, state.rollback_snapshot)
                 # cancel_turn's write-back contract: the restore may shorten.
@@ -351,6 +347,9 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
             )
             async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
                 _throw_if_turn_cancelled(runtime)
+                rejection = await admit_tool(runtime, tool_use, finish_tool_result)
+                if rejection is not None:
+                    return rejection
                 tool = tools_by_name.get(tool_use["name"])
                 dispatch_deny = await find_dispatch_deny_rule(
                     {

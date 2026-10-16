@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
+from ..tools.definitions import ToolDefinition
+from .execution_budget import ExecutionBudget
 from typing import Any, Awaitable, Callable
 
 
@@ -41,6 +43,8 @@ class SessionOptions:
     adjust_config: Callable[[dict[str, Any]], Awaitable[dict[str, Any]] | dict[str, Any]] | None = None
     # Raw provider stream events for the host (usage extraction); off by default.
     stream_provider_messages: bool = False
+    host_tools: tuple[ToolDefinition, ...] = ()
+    execution_budget: ExecutionBudget | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def config_overrides(self, runtime_home: str) -> dict[str, Any]:

@@ -36,7 +36,7 @@ def _parse_archived_messages(raw: str) -> list[dict[str, Any]]:
         if entry.get("type") == "message" and isinstance(entry.get("message_index"), int):
             role = entry.get("role")
             if role in ("user", "assistant") and "content" in entry:
-                indexed[entry["message_index"]] = {"role": role, "content": entry["content"]}
+                indexed[entry["message_index"]] = {"role": role, "content": entry["content"], **({"metadata": copy.deepcopy(entry["metadata"])} if isinstance(entry.get("metadata"), dict) else {})}
         elif entry.get("type") == "repair" and isinstance(
             entry.get("truncated_to_message_index"), int
         ):

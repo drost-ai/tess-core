@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..runtime.execution_budget import budget_provider_payload
+
 import copy
 import uuid
 from typing import Any
@@ -133,6 +135,8 @@ async def request_provider_response(args: dict[str, Any]) -> dict[str, Any]:
                         "request_started",
                         attempt=int(prepared.get("reactiveAttempt") or 0) + 1,
                     )
+                    if args.get("providerOverride") is not None:
+                        request = budget_provider_payload(request, "canonical")
                     response = await deadlines.race(maybe_await(provider["send"](request)))
                 await commit_provider_prompt_cache_observation(response, deadline_runtime)
                 return prepared, response
