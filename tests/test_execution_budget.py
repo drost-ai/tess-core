@@ -9,6 +9,28 @@ from agent_core.storage.message_origin import turn_request_message, get_message_
 
 
 class ExecutionBudgetTests(unittest.TestCase):
+    def test_time_only_budget_counts_without_call_ceiling(self):
+        with patch('agent_core.runtime.execution_budget.time.monotonic', return_value=100) as clock:
+            b = ExecutionBudget(max_provider_calls=None, max_tool_calls=None, max_seconds=100)
+            for _ in range(200):
+                b.consume_provider_call()
+                b.consume_tool_call()
+            self.assertEqual(b.snapshot()['phase'], 'work')
+            self.assertIsNone(b.snapshot()['remaining_provider_calls'])
+            self.assertIsNone(b.snapshot()['remaining_tool_calls'])
+            self.assertEqual(b.snapshot()['provider_calls'], 200)
+            clock.return_value = 181
+            self.assertEqual(b.snapshot()['phase'], 'wrapup')
+            clock.return_value = 200
+            with self.assertRaises(ExecutionBudgetExceeded):
+                b.consume_tool_call()
+
+    def test_one_optional_ceiling_preserves_other_limit(self):
+        b = ExecutionBudget(max_provider_calls=None, max_tool_calls=1)
+        b.consume_tool_call()
+        with self.assertRaises(ExecutionBudgetExceeded):
+            b.consume_provider_call()
+
     def test_sticky_wrapup(self):
         with patch('agent_core.runtime.execution_budget.time.monotonic',return_value=100) as clock:
             b=ExecutionBudget(max_seconds=100)

@@ -15,11 +15,11 @@ class ExecutionBudgetExceeded(RuntimeError):
 
 
 class ExecutionBudget:
-    def __init__(self, *, max_provider_calls: int = 128, max_tool_calls: int = 128,
+    def __init__(self, *, max_provider_calls: int | None = 128, max_tool_calls: int | None = 128,
                  max_seconds: float = 1800, wrapup_fraction: float = 0.8) -> None:
         for name, value in (("max_provider_calls", max_provider_calls), ("max_tool_calls", max_tool_calls)):
-            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-                raise ValueError(f"{name} must be a positive integer")
+            if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value <= 0):
+                raise ValueError(f"{name} must be a positive integer or None")
         if not math.isfinite(max_seconds) or max_seconds <= 0:
             raise ValueError("max_seconds must be finite and positive")
         if not math.isfinite(wrapup_fraction) or not 0 < wrapup_fraction < 1:
@@ -53,8 +53,8 @@ class ExecutionBudget:
             now = time.monotonic()
             elapsed = max(0.0, now - self._started)
             duration = max(0.0, self._deadline - self._started)
-            fraction = max(self._provider_calls / self.max_provider_calls,
-                           self._tool_calls / self.max_tool_calls,
+            fraction = max(self._provider_calls / self.max_provider_calls if self.max_provider_calls is not None else 0,
+                           self._tool_calls / self.max_tool_calls if self.max_tool_calls is not None else 0,
                            elapsed / duration if duration else 1.0)
             if fraction >= 1:
                 self._phase = "exhausted"
@@ -62,8 +62,8 @@ class ExecutionBudget:
                 self._phase = "wrapup"
             return {"phase": self._phase, "provider_calls": self._provider_calls,
                     "tool_calls": self._tool_calls, "elapsed_seconds": elapsed,
-                    "remaining_provider_calls": max(0, self.max_provider_calls - self._provider_calls),
-                    "remaining_tool_calls": max(0, self.max_tool_calls - self._tool_calls),
+                    "remaining_provider_calls": max(0, self.max_provider_calls - self._provider_calls) if self.max_provider_calls is not None else None,
+                    "remaining_tool_calls": max(0, self.max_tool_calls - self._tool_calls) if self.max_tool_calls is not None else None,
                     "remaining_seconds": max(0.0, self._deadline - max(now, self._started))}
 
     def _consume(self, field: str) -> None:
