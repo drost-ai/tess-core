@@ -21,6 +21,35 @@ def fires(rule, after, count, tz=LA):
 
 
 class RuleTests(unittest.TestCase):
+    def test_hourly_normalization_and_local_hour_boundaries(self):
+        rule = rules.normalize({"kind": "hourly"})
+        self.assertEqual(rule, {"kind": "hourly", "minute": 0})
+        for minute in (-1, 60, True, "0"):
+            with self.assertRaises(RuleError):
+                rules.normalize({"kind": "hourly", "minute": minute})
+        now = datetime(2026, 10, 16, 22, 40, tzinfo=UTC)
+        self.assertEqual(rules.first_fire(rule, LA, now), datetime(2026, 10, 16, 23, tzinfo=UTC))
+        self.assertEqual(rules.next_fire(rule, LA, now.replace(minute=0)), now.replace(hour=23, minute=0))
+        self.assertEqual(rules.first_fire(rule, "Asia/Kathmandu", now), now.replace(minute=15) + timedelta(hours=1))
+
+    def test_hourly_dst_skips_gap_and_fires_both_repeated_hours(self):
+        rule = rules.normalize({"kind": "hourly"})
+        self.assertEqual(fires(rule, datetime(2026, 3, 8, 9, 30, tzinfo=UTC), 2),
+                         ["Sun 8 Mar 2026, 3:00 AM PDT", "Sun 8 Mar 2026, 4:00 AM PDT"])
+        self.assertEqual(fires(rule, datetime(2026, 11, 1, 7, 30, tzinfo=UTC), 3),
+                         ["Sun 1 Nov 2026, 1:00 AM PDT", "Sun 1 Nov 2026, 1:00 AM PST", "Sun 1 Nov 2026, 2:00 AM PST"])
+
+    def test_interval_job_migrates_and_completion_or_failure_stays_on_hour(self):
+        now = datetime(2026, 10, 16, 22, 40, tzinfo=UTC)
+        job = jobs.build_job(job_id='tess.personal.extractor', kind='personal.extractor',
+                             rule={'kind': 'interval', 'everySeconds': 900}, timezone=LA, now=now)
+        job = jobs.edit_job(job, {'rule': {'kind': 'hourly', 'minute': 0}}, now)
+        self.assertEqual(rules.parse(job['nextFireAt']), datetime(2026, 10, 16, 23, tzinfo=UTC))
+        for outcome in ('completed', 'failed', 'busy', 'not_due'):
+            advanced = jobs.advance(job, fire={'outcome': outcome, 'scheduledFor': job['nextFireAt']},
+                                    now=datetime(2026, 10, 16, 23, 30, tzinfo=UTC))
+            self.assertEqual(rules.parse(advanced['nextFireAt']), datetime(2026, 10, 17, 0, tzinfo=UTC))
+
     def test_a_daily_time_keeps_its_wall_clock_across_both_dst_changes(self):
         spring = rules.normalize({"kind": "calendar", "time": "02:30"})
         self.assertEqual(

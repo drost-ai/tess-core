@@ -3,13 +3,14 @@
 A rule is what a person means ("11:00 tomorrow", "weekdays at 09:00",
 "every 30 minutes"), kept with its IANA zone; the next fire is computed from
 it in UTC, so a daylight-saving change moves the UTC instant and never the
-wall-clock time. Three kinds:
+wall-clock time. Four kinds:
 
 - ``once``: ``{"kind": "once", "at": "2026-10-08T11:00"}`` (local wall time),
   or ``{"kind": "once", "atUtc": "...Z"}`` for a host that already has an
   instant.
 - ``calendar``: ``{"kind": "calendar", "time": "09:00", "days": ["mon", ...]}``
   or with ``"monthDays": [1, 15]`` instead of ``days``; neither means daily.
+- ``hourly``: ``{"kind": "hourly", "minute": 0}``, every local hour.
 - ``interval``: ``{"kind": "interval", "everySeconds": 1800}``.
 
 A recurring rule's wall time that does not exist on one day (the spring
@@ -27,7 +28,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 UTC = timezone.utc
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-KINDS = ("once", "calendar", "interval")
+KINDS = ("once", "calendar", "interval", "hourly")
 # How far ahead a calendar rule is searched for its next date (a monthDays
 # rule naming only the 31st still finds one within a year).
 _SEARCH_DAYS = 400
@@ -59,6 +60,11 @@ def normalize(rule: Any) -> dict[str, Any]:
         if rule.get("atUtc"):
             return {"kind": "once", "atUtc": _iso(_parse_utc(rule["atUtc"]))}
         return {"kind": "once", "at": _wall(rule.get("at")).isoformat(timespec="minutes")}
+    if kind == "hourly":
+        minute = rule.get("minute", 0)
+        if type(minute) is not int or not 0 <= minute <= 59:
+            raise RuleError("scheduler.invalid_rule", "An hourly rule needs minute from 0 to 59.")
+        return {"kind": "hourly", "minute": minute}
     if kind == "interval":
         every = rule.get("everySeconds")
         if not isinstance(every, (int, float)) or isinstance(every, bool) or every < 1:
@@ -108,6 +114,16 @@ def next_fire(rule: dict[str, Any], tz: str, after: datetime, *, previous: datet
         periods = int((after - anchor) / step) + 1
         return anchor + periods * step
     zone_info = zone(tz)
+    if rule["kind"] == "hourly":
+        # Walk real instants, not local arithmetic: spring gaps are skipped
+        # and both occurrences of a repeated autumn hour fire. This also
+        # respects zones whose UTC offset is not a whole number of hours.
+        candidate = after.astimezone(UTC).replace(second=0, microsecond=0) + timedelta(minutes=1)
+        for _ in range(24 * 60):
+            if candidate.astimezone(zone_info).minute == rule.get("minute", 0):
+                return candidate
+            candidate += timedelta(minutes=1)
+        return None
     at = _clock(rule["time"])
     local_after = after.astimezone(zone_info)
     for offset in range(_SEARCH_DAYS):
