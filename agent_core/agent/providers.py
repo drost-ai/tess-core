@@ -82,8 +82,9 @@ def _create_provider(
 ) -> dict[str, Any]:
     metadata = session.get("metadata") if isinstance(session, dict) and isinstance(session.get("metadata"), dict) else {}
     timeout_policy = resolveProviderTimeoutPolicy({"config": config, "runtimeContract": metadata.get("subagentRuntimeContract")})
+    no_auth = ((config.get("providerProfile") or {}).get("auth") or {}).get("kind") == "none"
     if config.get("provider") == "openai":
-        if not config.get("openaiToken"):
+        if not config.get("openaiToken") and not no_auth:
             return {"send": lambda request: _missing_openai_credential_response(config, request)}
         state_store = _partial_output_state_store(config, runtime, session)
         provider_runtime = runtime
@@ -96,7 +97,7 @@ def _create_provider(
             await _heal_partial_output_commit(session, state_store)
             resolved = await resolve_provider_config_secrets(config)
             return await send_openai_request(
-                token=resolved["openaiToken"],
+                token=resolved.get("openaiToken"),
                 baseUrl=resolved.get("openaiBaseUrl"),
                 headers=resolved.get("customHeaders"),
                 mode=resolved.get("openaiApiMode"),
@@ -110,7 +111,7 @@ def _create_provider(
             )
 
         return {"send": send_openai}
-    if not config.get("apiKey") and not config.get("authToken"):
+    if not config.get("apiKey") and not config.get("authToken") and not no_auth:
         return {"send": lambda request: _missing_anthropic_credential_response(config, request)}
     async def send_anthropic(request: dict[str, Any]) -> dict[str, Any]:
         resolved = await resolve_provider_config_secrets(config)

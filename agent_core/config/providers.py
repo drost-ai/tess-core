@@ -399,6 +399,9 @@ def resolve_compaction_provider_profile_binding(args: dict[str, Any] | None = No
     profile_name = normalize_provider_profile_name(args.get("requestedProfileName"))
     if not profile_name:
         return None
+    registry = args.get("providerRegistry")
+    if registry is not None:
+        return {"profileName": profile_name, "profile": registry.resolve_profile(profile_name), **registry.resolve_auth(profile_name, codex_auth_path=args.get("providerAuthPath") if args.get("providerAuthProfile") == profile_name else None)}
     provider_profiles = args.get("providerProfiles") or {}
     record = provider_profiles.get(profile_name)
     if not record:

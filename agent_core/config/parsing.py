@@ -16,7 +16,17 @@ def _parse_setting_sources(raw: str | None) -> list[str]:
 
 async def _load_merged_settings(sources: list[str], cwd: str, inline_settings: str | None) -> dict[str, Any]:
     merged = await load_settings_by_sources(sources, cwd)  # type: ignore[arg-type]
-    direct = file_or_json(inline_settings) or {}
+    if inline_settings and str(inline_settings).lower().endswith((".yaml", ".yml")):
+        from pathlib import Path
+        from ._yaml import parse_yaml_subset
+        try:
+            direct = parse_yaml_subset(Path(inline_settings).expanduser().read_text(encoding="utf-8"), source="explicit engine settings") or {}
+        except (ValueError, OSError, UnicodeError):
+            raise ValueError("Cannot read or parse explicit engine settings YAML") from None
+        if not isinstance(direct, dict):
+            raise ValueError("Explicit engine settings must be a mapping")
+    else:
+        direct = file_or_json(inline_settings) or {}
     return {**merged, **direct, "providerProfiles": {**(merged.get("providerProfiles") or {}), **(direct.get("providerProfiles") or {})}}
 
 async def _resolve_api_key_from_helper(settings: dict[str, Any]) -> str | None:

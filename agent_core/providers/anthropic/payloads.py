@@ -109,7 +109,7 @@ def build_anthropic_headers(
         headers["authorization"] = f"Bearer {config['authToken']}"
     elif config.get("apiKey"):
         headers["x-api-key"] = config["apiKey"]
-    else:
+    elif ((config.get("providerProfile") or {}).get("auth") or {}).get("kind") != "none":
         raise RuntimeError("No Anthropic credential is configured.")
     return headers
 

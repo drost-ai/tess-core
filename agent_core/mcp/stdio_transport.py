@@ -141,7 +141,7 @@ class StdioMcpClient(JsonRpcClient):
         self._assert_open("initialize")
         if self.proc:
             return
-        env = {**os.environ, **(self.config.get("env") or {})}
+        env = {**(os.environ if self.config.get("inheritEnv") is not False else {}), **(self.config.get("env") or {})}
         argv = [self.config["commandOrUrl"], *(self.config.get("args") or [])]
         owner_read_fd: int | None = None
         status_write_fd: int | None = None
@@ -157,7 +157,7 @@ class StdioMcpClient(JsonRpcClient):
                         str(owner_read_fd), str(status_write_fd), str(int(_knob("mcp.close_grace_ms")) / 1000), *argv]
             self.proc = subprocess.Popen(
                 argv,
-                cwd=self.cwd,
+                cwd=self.config.get("cwd") or self.cwd,
                 env=env,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,

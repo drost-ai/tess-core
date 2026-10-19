@@ -12,6 +12,7 @@ from .agent import readOpenChildQuestions
 from .agent.loop import run_agent_prompt
 from .config.prompts import build_system_prompt_for_agent, resolve_model_for_agent
 from .config.providers import resolve_provider_profile, resolve_provider_profiles
+from .config.registry import ProviderRegistry, ProviderRegistryError, resolve_codex_auth, resolve_provider_secret
 from .config.resolution import resolve_config
 from .contracts.config import ResolvedConfig, RuntimeSecretRef
 from .contracts.context import AskQuestionDetail
@@ -59,6 +60,10 @@ from .tools.definitions import ToolDefinition
 from .tools.registry import create_builtin_tools
 
 __all__ = [
+    "resolve_codex_auth",
+    "resolve_provider_secret",
+    "ProviderRegistry",
+    "ProviderRegistryError",
     "ExecutionBudget", "ExecutionBudgetExceeded",
     "MonitorDeliveryController",
     "MonitorDeliveryError",

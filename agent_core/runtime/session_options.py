@@ -46,10 +46,14 @@ class SessionOptions:
     host_tools: tuple[ToolDefinition, ...] = ()
     execution_budget: ExecutionBudget | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+    provider_registry: Any = None
+    provider_auth_path: str | None = None
 
     def config_overrides(self, runtime_home: str) -> dict[str, Any]:
         overrides: dict[str, Any] = {"runtimeHome": runtime_home}
         for key, value in (
+            ("providerRegistry", self.provider_registry),
+            ("providerAuthPath", self.provider_auth_path),
             ("provider", self.provider),
             ("model", self.model),
             ("effort", self.effort),

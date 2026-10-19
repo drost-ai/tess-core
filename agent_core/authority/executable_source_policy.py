@@ -40,6 +40,8 @@ class ExecutableSourceTrustError(PermissionError):
 def parse_setting_sources(raw: str | list[str] | tuple[str, ...] | None) -> list[str]:
     if raw is None:
         return list(SETTING_SOURCES)
+    if raw == "" or raw == [] or raw == ():
+        return []
     parts = (
         [part.strip() for part in raw.split(",") if part.strip()]
         if isinstance(raw, str)

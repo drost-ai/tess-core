@@ -78,7 +78,7 @@ async def load_hooks(
     selected_sources = values.get("sources", sources)
     loaded: list[dict[str, Any]] = []
     for scope in _SETTINGS_SCOPES:
-        if selected_sources and scope not in selected_sources:
+        if selected_sources is not None and scope not in selected_sources:
             continue
         settings = await load_settings(scope, selected_cwd)
         hooks = settings.get("hooks") if isinstance(settings.get("hooks"), Mapping) else {}

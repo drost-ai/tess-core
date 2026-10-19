@@ -242,7 +242,7 @@ async def load_permission_rules(
     selected_cwd = str(values.get("cwd", cwd))
     selected_sources = values.get("sources", sources)
     selected_inline = values.get("inlineSettings", inlineSettings)
-    scopes = [scope for scope in _SETTINGS_SCOPES if not selected_sources or scope in selected_sources]
+    scopes = [scope for scope in _SETTINGS_SCOPES if selected_sources is None or scope in selected_sources]
     rules: list[dict[str, Any]] = []
     for scope in scopes:
         settings = await load_settings(scope, selected_cwd)
@@ -255,7 +255,8 @@ async def load_permission_rules(
         _collect_rules(settings, scope, approved, rules)
     if selected_inline:
         try:
-            inline = file_or_json(selected_inline)
+            from ..config.parsing import _load_merged_settings
+            inline = await _load_merged_settings([], selected_cwd, selected_inline)
             _collect_rules(inline, "inline", True, rules)
         except Exception:
             pass
@@ -268,7 +269,7 @@ def clear_permission_rules_cache() -> None:
 
 async def load_permission_rules_cached(args: Mapping[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
     values = {**(args or {}), **kwargs}
-    key = f"{values.get('cwd')}|{','.join(values.get('sources') or [])}|{values.get('inlineSettings') or ''}"
+    key = json.dumps([values.get("cwd"), values.get("sources"), values.get("inlineSettings")], sort_keys=True)
     cached = _rules_cache.get(key)
     if cached and cached["expiresAt"] > time.monotonic():
         return cached["rules"]

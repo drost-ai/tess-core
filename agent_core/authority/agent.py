@@ -217,7 +217,7 @@ async def capture_agent_authority(
             and (not allowed or name in allowed)
         }
     )
-    settings_sources = list(config.get("settingsSources") or ["user"])
+    settings_sources = list(config["settingsSources"] if config.get("settingsSources") is not None else ["user"])
     permission_rules = await load_permission_rules_cached(
         cwd=session["cwd"],
         sources=settings_sources,

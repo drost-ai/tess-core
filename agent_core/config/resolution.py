@@ -57,6 +57,7 @@ from .providers import (
     resolve_provider_profiles,
     resolve_selected_provider_profile_name,
 )
+from .registry import ProviderRegistry
 from .shared import (
     BUILTIN_AGENTS,
     BUILTIN_PROVIDER_PROFILES,
@@ -207,11 +208,17 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
     from ..providers.token_budget import configure_model_limit_rules
 
     configure_model_limit_rules(merged_settings.get("modelLimitRules"))
-    auth = await load_auth()
+    registry_input = options.get("providerRegistry")
+    registry = (registry_input if isinstance(registry_input, ProviderRegistry) else ProviderRegistry(registry_input)) if registry_input is not None else None
+    auth = None if registry else await load_auth()
     settings_env = merged_settings.get("env") or {}
-    helper_auth_value = await _resolve_api_key_from_helper(merged_settings)
-    provider_profiles = resolve_provider_profiles(merged_settings.get("providerProfiles"))
-    requested_provider_name, requested_model_input = _resolve_requested_model(options, merged_settings, provider_profiles)
+    helper_auth_value = None if registry else await _resolve_api_key_from_helper(merged_settings)
+    provider_profiles = registry.profiles if registry else resolve_provider_profiles(merged_settings.get("providerProfiles"))
+    if registry:
+        requested_provider_name, requested_model_input = options.get("provider"), options.get("model")
+        registry.resolve_profile(requested_provider_name)
+    else:
+        requested_provider_name, requested_model_input = _resolve_requested_model(options, merged_settings, provider_profiles)
 
     stored_anthropic_auth_token = _get_stored_anthropic_auth_token(auth)
     stored_anthropic_api_key = _get_stored_anthropic_api_key(auth)
@@ -227,7 +234,7 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
     )
     openai_env_token = os.environ.get("OPENAI_API_KEY") or settings_env.get("OPENAI_API_KEY")
     openai_stored_token = (auth or {}).get("openaiToken")
-    openai_codex_token = await load_codex_auth_token(openai_codex_auth_path)
+    openai_codex_token = None if registry else await load_codex_auth_token(openai_codex_auth_path)
     openai_base_url = os.environ.get("OPENAI_BASE_URL") or settings_env.get("OPENAI_BASE_URL") or merged_settings.get("openaiBaseUrl")
     requested_openai_api_mode = normalize_openai_api_mode_setting(
         options.get("openaiApiMode")
@@ -238,7 +245,12 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
         or merged_settings.get("openaiApiMode")
     )
 
-    selected_name = resolve_selected_provider_profile_name(
+    if registry:
+        explicit_api_key = explicit_auth_token = openai_env_token = None
+        openai_base_url = None
+        requested_openai_api_mode = None
+
+    selected_name = requested_provider_name if registry else resolve_selected_provider_profile_name(
         {
             "requestedName": requested_provider_name,
             "requestedModel": requested_model_input,
@@ -271,10 +283,27 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
     )
     openai_api_mode = selected_profile.get("apiMode") if resolved_provider == "openai" else DEFAULT_OPENAI_API_MODE
 
-    compaction = _resolve_compaction_selection(options, settings_env, merged_settings, "compaction")
-    verification = _resolve_compaction_selection(options, settings_env, merged_settings, "verification")
+    if registry:
+        def strict_binding(prefix: str) -> dict[str, Any]:
+            profile_name = options.get(f"{prefix}ProviderProfile") or merged_settings.get(f"{prefix}ProviderProfile")
+            requested_kind = options.get(f"{prefix}Provider") or merged_settings.get(f"{prefix}Provider")
+            if requested_kind and not profile_name:
+                profile_name = requested_kind
+            if profile_name:
+                registry.resolve_profile(profile_name)
+            return {
+                "profileName": profile_name,
+                "provider": registry.resolve_profile(profile_name)["kind"] if profile_name else None,
+                "model": options.get(f"{prefix}Model") or merged_settings.get(f"{prefix}Model"),
+                "effort": options.get(f"{prefix}Effort") or merged_settings.get(f"{prefix}Effort"),
+            }
+        compaction = strict_binding("compaction")
+        verification = strict_binding("compactionVerification")
+    else:
+        compaction = _resolve_compaction_selection(options, settings_env, merged_settings, "compaction")
+        verification = _resolve_compaction_selection(options, settings_env, merged_settings, "verification")
 
-    anthropic_headers = {
+    anthropic_headers = {} if registry else {
         **((auth or {}).get("customHeaders") or {}),
         **_parse_custom_headers(settings_env.get("ANTHROPIC_CUSTOM_HEADERS")),
         **_parse_custom_headers(os.environ.get("ANTHROPIC_CUSTOM_HEADERS")),
@@ -284,6 +313,9 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
         **(anthropic_headers if resolved_provider == "anthropic" else {}),
     }
     profile_binding_inputs = {
+        "providerRegistry": registry,
+        "providerAuthPath": options.get("providerAuthPath"),
+        "providerAuthProfile": selected_name,
         "providerProfiles": provider_profiles,
         "settings_env": settings_env,
         "openaiStoredToken": openai_stored_token,
@@ -326,6 +358,12 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
             "codexToken": openai_codex_token,
         }
     )
+    if registry:
+        strict_auth = registry.resolve_auth(selected_name, codex_auth_path=options.get("providerAuthPath"))
+        anthropic_creds = {"apiKey": strict_auth.get("apiKey"), "authToken": strict_auth.get("authToken")}
+        openai_token = strict_auth.get("openaiToken")
+        custom_headers = strict_auth["customHeaders"]
+
     normalized_api_key = await normalize_runtime_secret_value(
         value=anthropic_creds.get("apiKey"),
         purpose="provider_api_key",
@@ -385,6 +423,8 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
     return {
         "cwd": cwd,
         "runtimeHome": runtime_home,
+        "providerRegistry": registry,
+        "providerAuthPath": options.get("providerAuthPath") if registry else None,
         "allowedRoots": allowed_roots,
         "agent": options.get("agent"),
         "agents": agents,

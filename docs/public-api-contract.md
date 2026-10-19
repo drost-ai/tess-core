@@ -71,6 +71,10 @@ free to change without coordination.
 
 | Concept (TS name) | Kind | Python today | Python target (Epic M) | Python home | Status | Consumers |
 |---|---|---|---|---|---|---|
+| `ProviderRegistry` (Python extension) | type | `ProviderRegistry` | `ProviderRegistry` | `agent_core.config.registry` | active | tess-agent, agentic-memory |
+| `ProviderRegistryError` (Python extension) | type | `ProviderRegistryError` | `ProviderRegistryError` | `agent_core.config.registry` | active | tess-agent, agentic-memory |
+| `resolve_codex_auth` (Python extension) | function | `resolve_codex_auth` | `resolve_codex_auth` | `agent_core.config.registry` | active | tess-agent, agentic-memory |
+| `resolve_provider_secret` (Python extension) | function | `resolve_provider_secret` | `resolve_provider_secret` | `agent_core.config.registry` | active | tess-agent, agentic-memory |
 | `MonitorDeliveryController` (Python extension) | type | `MonitorDeliveryController` | `MonitorDeliveryController` | `agent_core.tasks.monitor_delivery` | active | tess-agent |
 | `MonitorDeliveryError` (Python extension) | type | `MonitorDeliveryError` | `MonitorDeliveryError` | `agent_core.tasks.monitor_delivery` | active | tess-agent |
 | `Runtime` (Python extension) | type | `Runtime` | `Runtime` | `agent_core.runtime.host` | active | tess-agent |
@@ -399,3 +403,67 @@ Knobs: `scheduler.clock_check_ms` (cadence, default 30000) and
 ## Host worker execution
 
 Python additionally exports `ExecutionBudget` and `ExecutionBudgetExceeded` from `agent_core.runtime.execution_budget`. `SessionOptions.host_tools` injects host-defined `ToolDefinition` instances; ordinary configured allow/deny and child authority still apply. `SessionOptions.execution_budget` shares admission accounting across tools and actual provider transport attempts, including retries. `Session.run_turn(origin="worker")` marks host-authored work as synthetic rather than a new human request. Budget context is ephemeral, never persisted as conversation text.
+
+
+## Explicit provider registries (Python)
+
+`ProviderRegistry(path)` loads only the explicitly named YAML file (or explicit
+`.json` compatibility file). Optional `schema_version` must be 1. Use
+`providerProfiles:` (or `profiles:`) as a nonempty mapping of lowercase profile
+names to engine profile records (`kind`, `defaultModel`, optional `apiMode`,
+`baseUrl`, headers/capabilities/limits). Each profile requires explicit `auth`:
+`kind` and `envVar`. Supported transports are `anthropic_api_key`,
+`anthropic_auth_token`, OpenAI `openai_api_key` / `openai_api_key_or_codex`,
+`custom_bearer`, and `none` (no envVar needed; sends no credential headers).
+Explicit no-auth OpenAI profiles use the wire transport; SDK no-auth is rejected
+to prevent SDK ambient credential discovery. Codex tokens in strict profiles
+come from the declared envVar, never an implicitly discovered auth file.
+
+- `registry.resolve_profile(name, *, model=None)` returns an independent resolved
+  engine profile. Missing/unknown names fail with `ProviderRegistryError`.
+- `registry.resolve_auth(name, *, environment=None, codex_auth_path=None)` returns transport config
+  fields: `apiKey`, `authToken`, or `openaiToken`, plus `customHeaders`. An explicit
+  environment mapping (even `{}`) replaces process-environment lookup. Only the
+  profile's declared envVar is consulted. An explicit `codex_auth_path` takes
+  precedence over environment credentials for OpenAI and fails closed if unreadable.
+  Never log the returned credentials.
+- `start_runtime(provider_registry=registry_or_path)` pins the registry for all
+  sessions. `SessionOptions(provider_registry=..., provider="profile")` supports
+  session-local use when the runtime has no pinned registry.
+  `SessionOptions(provider_auth_path=...)` (low-level `providerAuthPath`) pins an
+  explicit Codex file before auth resolution, without requiring an environment
+  token. `openai_api_key_or_codex` may omit envVar when this pin is supplied.
+  Low-level
+  `resolve_config` uses the dictionary key `providerRegistry`. No registry means
+  the existing legacy resolution behavior is retained.
+- In strict mode profile names are explicit: no built-ins, provider aliases,
+  model-based provider inference, stored credentials, Codex discovery, credential
+  helpers, ambient endpoint or provider/model selection. Compaction and verification
+  accept explicit `compactionProviderProfile` / `compactionVerificationProviderProfile`
+  settings; absent bindings retain the session provider. Registry paths are persisted
+  in session metadata for isolated task-runner reconstruction.
+- Engine `settings` may explicitly name a JSON or YAML file. `settingSources=""`
+  disables settings discovery while retaining explicit settings (including
+  `durableMemory.enabled`, compaction and other engine policy keys).
+- `await resolve_codex_auth(path)` reads only the explicitly named Codex JSON file
+  and returns its API key/access token. It performs no discovery or refresh.
+- `await resolve_provider_secret(value, *, purpose="provider_api_key",
+  idempotency_scope="provider-auth")` normalizes a supplied string/reference in the
+  scoped runtime secret store. OAuth purpose accepts OAuth/setup-token refs without
+  losing their purpose/account pinning. It does not discover credentials.
+
+Registry records must not embed credentials: `auth` accepts only `kind` and
+`envVar`; literal credential fields and Authorization/API-key/cookie headers are
+rejected recursively, while non-secret headers such as `anthropic-beta` remain
+supported. Registry read, parse, profile and missing-credential errors are redacted. No
+provider network calls are made by these interfaces.
+
+## Isolated MCP stdio children (Python)
+
+A stdio server descriptor may specify `inheritEnv: false` to replace the parent's
+process environment with its explicit `env` mapping. Default/true retains legacy
+inheritance plus overrides. `cwd` selects that server's working directory; absent
+it, the connection's workspace is used. These options are validated and rejected
+on HTTP/SSE descriptors. Hosts sanitizing memory subprocesses should use an
+absolute executable, an explicit environment (including any required PATH),
+`inheritEnv: false`, and an explicit `cwd`. Neither option changes other servers.

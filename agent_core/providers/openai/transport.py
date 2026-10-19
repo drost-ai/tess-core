@@ -29,6 +29,8 @@ def _create_openai_client(args: dict[str, Any], base_url: str | None) -> Any:
     if factory:
         return factory(options)
     if _openai_transport_preference(args) == "sdk":
+        if args.get("token") is None and (((args.get("config") or {}).get("providerProfile") or {}).get("auth") or {}).get("kind") == "none":
+            raise RuntimeError("Explicit no-auth providers require the wire transport, not ambient SDK authentication")
         return _create_openai_sdk_client(options)
     return _create_openai_wire_client(options)
 
@@ -58,7 +60,10 @@ def _assert_openai_transport_secrets(args: dict[str, Any]) -> None:
 
     token = args.get("token")
     headers = args.get("headers") or {}
-    if not isinstance(token, str) or any(not isinstance(value, str) for value in headers.values()):
+    config = args.get("config") or {}
+    profile = config.get("providerProfile") or {}
+    no_auth = (profile.get("auth") or {}).get("kind") == "none"
+    if (not isinstance(token, str) and not (token is None and no_auth)) or any(not isinstance(value, str) for value in headers.values()):
         raise RuntimeSecretError(
             "secret_store_invalid",
             "provider credential reached a transport before resolution",

@@ -207,6 +207,14 @@ def parse_mcp_server_config(value: Any, field: str = "mcp") -> dict[str, Any]:
         return _fail(field, "stdio records cannot define HTTP headers or OAuth")
     if transport != "stdio" and (args is not None or env is not None):
         return _fail(field, "HTTP/SSE records cannot define stdio args or env")
+    inherit_env = source.get("inheritEnv")
+    child_cwd = source.get("cwd")
+    if inherit_env is not None and not isinstance(inherit_env, bool):
+        return _fail(f"{field}.inheritEnv", "expected boolean")
+    if child_cwd is not None:
+        child_cwd = _required_string(child_cwd, f"{field}.cwd")
+    if transport != "stdio" and (inherit_env is not None or child_cwd is not None):
+        return _fail(field, "HTTP/SSE records cannot define stdio inheritEnv or cwd")
     scope = source.get("scope")
     if scope is not None and scope not in {"user", "project", "local"}:
         return _fail(f"{field}.scope", "expected user, project, or local")
@@ -220,6 +228,8 @@ def parse_mcp_server_config(value: Any, field: str = "mcp") -> dict[str, Any]:
     for key, value_value in (
         ("args", args),
         ("env", env),
+        ("inheritEnv", inherit_env),
+        ("cwd", child_cwd),
         ("headers", headers),
         ("scope", scope),
         ("json", json_value),

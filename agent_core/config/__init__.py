@@ -50,6 +50,7 @@ from .providers import (
     resolve_provider_profiles,
     resolve_selected_provider_profile_name,
 )
+from .registry import ProviderRegistry, ProviderRegistryError, resolve_codex_auth, resolve_provider_secret
 from .resolution import resolve_config
 from .shared import (
     BUILTIN_AGENTS,
@@ -75,6 +76,10 @@ from .shared import (
 )
 
 __all__ = [
+    "resolve_codex_auth",
+    "resolve_provider_secret",
+    "ProviderRegistry",
+    "ProviderRegistryError",
     "BUILTIN_AGENTS",
     "BUILTIN_PROVIDER_PROFILES",
     "DEFAULT_ASSISTANT_DESCRIPTION",

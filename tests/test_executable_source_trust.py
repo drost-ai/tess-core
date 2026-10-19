@@ -21,8 +21,10 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
         self.assertEqual(core.parse_setting_sources("local,user,local"), ["local", "user"])
         with self.assertRaisesRegex(ValueError, "Unknown setting source"):
             core.parse_setting_sources("user,unknown")
+        self.assertEqual(core.parse_setting_sources(""), [])
+        self.assertEqual(core.parse_setting_sources([]), [])
         with self.assertRaisesRegex(ValueError, "at least one"):
-            core.parse_setting_sources("")
+            core.parse_setting_sources(" , ")
 
     def test_excluded_project_sources_cannot_trigger_mcp_or_plugin_execution(self):
         root, home, workspace, previous = self.temp_context()

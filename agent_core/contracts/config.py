@@ -177,6 +177,8 @@ class ResolvedConfig(_resolved_config_required, total=False):
 
     agent: str | None
     agents: dict[str, AgentDefinition]
+    providerRegistry: Any  # Explicit ProviderRegistry; None retains legacy resolution.
+    providerAuthPath: str | None
     providerProfileName: str
     providerProfile: ProviderProfile
     providerCapabilities: dict[str, Any]

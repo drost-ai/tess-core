@@ -253,7 +253,10 @@ class SessionManager:
         runtime = self.runtime
         cwd = os.path.abspath(os.path.expanduser(options.cwd)) if options.cwd else runtime.cwd
         os.makedirs(cwd, exist_ok=True)
-        config = await resolve_config(options.config_overrides(runtime.home), cwd)
+        overrides = options.config_overrides(runtime.home)
+        if runtime.provider_registry is not None:
+            overrides["providerRegistry"] = runtime.provider_registry
+        config = await resolve_config(overrides, cwd)
         if options.timezone:
             # The owner's IANA zone: the scheduler tools' default.
             config["ownerTimezone"] = options.timezone

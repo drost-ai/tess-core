@@ -169,6 +169,10 @@
 {"concept": "Unavailable", "ts": null, "py": "Unavailable", "py_target": "Unavailable", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
 {"concept": "UnknownSessionError", "ts": null, "py": "UnknownSessionError", "py_target": "UnknownSessionError", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
 {"concept": "ExecutionBudget", "ts": null, "py": "ExecutionBudget", "py_target": "ExecutionBudget", "py_module": "agent_core.runtime.execution_budget", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
-{"concept": "ExecutionBudgetExceeded", "ts": null, "py": "ExecutionBudgetExceeded", "py_target": "ExecutionBudgetExceeded", "py_module": "agent_core.runtime.execution_budget", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]}
+{"concept": "ExecutionBudgetExceeded", "ts": null, "py": "ExecutionBudgetExceeded", "py_target": "ExecutionBudgetExceeded", "py_module": "agent_core.runtime.execution_budget", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "ProviderRegistry", "ts": null, "py": "ProviderRegistry", "py_target": "ProviderRegistry", "py_module": "agent_core.config.registry", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent", "agentic-memory"]},
+{"concept": "ProviderRegistryError", "ts": null, "py": "ProviderRegistryError", "py_target": "ProviderRegistryError", "py_module": "agent_core.config.registry", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent", "agentic-memory"]},
+{"concept": "resolve_codex_auth", "ts": null, "py": "resolve_codex_auth", "py_target": "resolve_codex_auth", "py_module": "agent_core.config.registry", "entrypoint": "root", "kind": "function", "status": "active", "consumers": ["tess-agent", "agentic-memory"]},
+{"concept": "resolve_provider_secret", "ts": null, "py": "resolve_provider_secret", "py_target": "resolve_provider_secret", "py_module": "agent_core.config.registry", "entrypoint": "root", "kind": "function", "status": "active", "consumers": ["tess-agent", "agentic-memory"]}
 ]
 }

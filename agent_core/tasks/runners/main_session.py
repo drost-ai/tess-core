@@ -82,6 +82,11 @@ def _session_config_options(session: dict[str, Any], runtime_home: str | None) -
         "provider": session.get("providerProfileName") or session.get("provider"),
         "model": session.get("model"),
     }
+    if metadata.get("agentCoreProviderRegistryPath") is not None:
+        options["providerRegistry"] = metadata["agentCoreProviderRegistryPath"]
+        options["settingSources"] = metadata.get("agentCoreSettingsSources", [])
+        if metadata.get("agentCoreProviderAuthPath") is not None:
+            options["providerAuthPath"] = metadata["agentCoreProviderAuthPath"]
     if settings:
         options["settings"] = settings
     return options

@@ -58,11 +58,13 @@ class Runtime:
         listener: Any,
         monitor_continuation: bool = True,
         shared_mcp_servers: tuple[str, ...] = (),
+        provider_registry: Any = None,
     ) -> None:
         self.home = home
         self.cwd = cwd
         self.instance_id = instance_id
         self.daemon_enabled = daemon_enabled
+        self.provider_registry = provider_registry
         self.session_options = session_options
         self.listener = listener
         self.shared_mcp_servers = tuple(shared_mcp_servers)
@@ -381,6 +383,7 @@ async def start_runtime(
     startup_timeout_seconds: float | None = None,
     monitor_continuation: bool = True,
     shared_mcp_servers: tuple[str, ...] = (),
+    provider_registry: Any = None,
 ) -> Runtime:
     """Start the runtime for ``runtime_home`` (default: ``$AGENT_CORE_HOME`` or
     the engine's default home) in this process.
@@ -391,6 +394,10 @@ async def start_runtime(
     that process's pid. ``session_options`` and
     ``listener`` are kept for the session manager.
     """
+    if provider_registry is not None:
+        from ..config import ProviderRegistry
+        if not isinstance(provider_registry, ProviderRegistry):
+            provider_registry = ProviderRegistry(provider_registry)
     if runtime_home:
         configure_runtime_home(runtime_home)
     home = get_state_root()
@@ -404,6 +411,7 @@ async def start_runtime(
         listener=listener,
         monitor_continuation=monitor_continuation,
         shared_mcp_servers=shared_mcp_servers,
+        provider_registry=provider_registry,
     )
     _reserve_active(runtime)
     try:

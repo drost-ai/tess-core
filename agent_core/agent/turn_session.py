@@ -51,21 +51,31 @@ def resolve_effective_provider_turn_binding(
     session = args["session"]
     config = args["config"]
     active_model = args.get("modelOverride") or session["model"]
-    effective_provider = ensure_provider_for_model_selection(
-        session.get("provider") or config["provider"],
-        active_model,
-        config["provider"],
-    )
-    profiles = (
-        config.get("providerProfiles")
-        if isinstance(config.get("providerProfiles"), dict)
-        else {}
-    )
-    profile_name = resolve_fallback_provider_profile_name(
-        effective_provider,
-        profiles,
-        session.get("providerProfileName") or config.get("providerProfileName"),
-    )
+    registry = config.get("providerRegistry")
+    if registry is not None:
+        profile_name = session.get("providerProfileName") or config.get("providerProfileName")
+        profile = registry.resolve_profile(profile_name, model=active_model)
+        effective_provider = profile["kind"]
+        profiles = {profile_name: profile}
+        if profile_name != config.get("providerProfileName"):
+            from ..config import ProviderRegistryError
+            raise ProviderRegistryError("Provider profile changes require explicit session configuration")
+    else:
+        effective_provider = ensure_provider_for_model_selection(
+            session.get("provider") or config["provider"],
+            active_model,
+            config["provider"],
+        )
+        profiles = (
+            config.get("providerProfiles")
+            if isinstance(config.get("providerProfiles"), dict)
+            else {}
+        )
+        profile_name = resolve_fallback_provider_profile_name(
+            effective_provider,
+            profiles,
+            session.get("providerProfileName") or config.get("providerProfileName"),
+        )
     current_profile_matches = (
         config.get("provider") == effective_provider
         and config.get("providerProfileName") == profile_name
