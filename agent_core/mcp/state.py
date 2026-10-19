@@ -182,6 +182,7 @@ def _arm_reconnect_backoff(state: dict[str, Any]) -> None:
 
 
 async def _ensure_connected(state: dict[str, Any], cwd: str, on_event: Callable[..., Any]) -> dict[str, Any]:
+    _reconcile_stdio_transport(state)
     if state.get("connected") and state.get("client"):
         return state
     async with _state_connect_lock(state):
@@ -326,7 +327,22 @@ async def _safe_request(state: dict[str, Any], method: str, params: Any = None) 
         raise
 
 
+def _reconcile_stdio_transport(state: dict[str, Any]) -> None:
+    client = state.get("client")
+    if state.get("connected") and isinstance(client, StdioMcpClient):
+        with client.state_lock:
+            closed = client.state != "open"
+        if closed:
+            # Transport threads own process cleanup, not this catalog cache.
+            # Reconcile on observation without starting a retry/watchdog loop.
+            _mark_state_failure(state, McpTransportError(
+                "transport_closed", "MCP stdio transport is no longer running."
+            ))
+            _arm_reconnect_backoff(state)
+
+
 def _server_status(state: dict[str, Any]) -> dict[str, Any]:
+    _reconcile_stdio_transport(state)
     return {
         "name": state["config"].get("name"),
         "transport": state["config"].get("transport"),

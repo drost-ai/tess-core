@@ -64,8 +64,24 @@ class StdioMcpClient(JsonRpcClient):
         self.close_error: BaseException | None = None
 
     async def initialize(self) -> None:
-        self._start_process()
-        await super().initialize()
+        try:
+            # State-managed startup also bounds catalog discovery. Direct and
+            # broker-owned clients still need a deadline for the handshake,
+            # including writes and the initialized notification.
+            async with asyncio.timeout(self.policy["startupTimeoutMs"] / 1000):
+                self._start_process()
+                await super().initialize()
+        except BaseException as error:
+            try:
+                await self.close()
+            except Exception:
+                pass  # Preserve the startup failure; close_error remains visible.
+            if isinstance(error, TimeoutError):
+                raise McpTransportError(
+                    "startup_timeout",
+                    f"MCP startup exceeded {self.policy['startupTimeoutMs']}ms for {self.config.get('name')}.",
+                ) from error
+            raise
 
     async def _send(self, request: dict[str, Any]) -> dict[str, Any]:
         self._assert_open(str(request.get("method") or "request"))
@@ -131,11 +147,25 @@ class StdioMcpClient(JsonRpcClient):
                     f"MCP stdio client is closing: {self.config.get('name')}.",
                 )
             )
-            await asyncio.to_thread(self._close_process_sync)
+            drain = asyncio.create_task(asyncio.to_thread(self._close_process_sync))
         elif not self.close_done.is_set():
-            await asyncio.to_thread(self.close_done.wait)
+            drain = asyncio.create_task(asyncio.to_thread(self.close_done.wait))
+        else:
+            drain = None
+        cancelled = False
+        if drain is not None:
+            # A cancelled owner must not return before its bounded cleanup has
+            # completed. Concurrent callers observe that same close_done event.
+            while not drain.done():
+                try:
+                    await asyncio.shield(drain)
+                except asyncio.CancelledError:
+                    cancelled = True
+            await drain
         if self.close_error:
             raise self.close_error
+        if cancelled:
+            raise asyncio.CancelledError
 
     def _start_process(self) -> None:
         self._assert_open("initialize")
@@ -177,12 +207,18 @@ class StdioMcpClient(JsonRpcClient):
                 os.close(owner_read_fd)
             if status_write_fd is not None:
                 os.close(status_write_fd)
-        self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
-        self.stderr_thread = threading.Thread(target=self._stderr_loop, daemon=True)
-        self.wait_thread = threading.Thread(target=self._wait_loop, daemon=True)
-        self.reader_thread.start()
-        self.stderr_thread.start()
-        self.wait_thread.start()
+        try:
+            self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
+            self.stderr_thread = threading.Thread(target=self._stderr_loop, daemon=True)
+            self.wait_thread = threading.Thread(target=self._wait_loop, daemon=True)
+            self.reader_thread.start()
+            self.stderr_thread.start()
+            self.wait_thread.start()
+        except Exception as error:
+            # Popen succeeded but the transport never became usable. Request
+            # guardian cleanup even if no reader/wait thread could be started.
+            self._terminal_failure(error, background=False)
+            raise
 
     def _write_message(self, request: dict[str, Any]) -> None:
         self._assert_open(str(request.get("method") or "request"))
@@ -369,6 +405,14 @@ class StdioMcpClient(JsonRpcClient):
         except BaseException as error:
             self.close_error = error
         finally:
+            # Normally the wait thread owns this descriptor. Partial thread
+            # startup has no waiter, so cleanup must release it instead.
+            if self.status_read_fd is not None and (
+                self.wait_thread is None or self.wait_thread.ident is None
+            ):
+                with contextlib.suppress(OSError):
+                    os.close(self.status_read_fd)
+                self.status_read_fd = None
             with self.state_lock:
                 self.state = "closed"
             self.close_done.set()
