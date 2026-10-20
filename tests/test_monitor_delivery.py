@@ -135,12 +135,72 @@ class MonitorDeliveryTests(AgentCoreTestCase):
                     await self.controller.publish(claim, publish)
             saved = await core.load_monitor(monitor["id"])
             self.assertNotIn("lastAssistantUpdateAt", saved)
+            self.assertNotIn("lastReceipt", saved["delivery"])
+            self.assertEqual(saved["delivery"]["queue"][0]["id"], claim["deliveryId"])
+            self.assertEqual(len(journal), 1)  # published is not yet acknowledged
             self.now += 60_001
-            recovered = await self.claim(monitor, "restarted")
+            restarted = MonitorDeliveryController(str(self.home), clock=lambda: self.now)
+            recovered = await restarted.claim(monitor["id"], self.session_id, "restarted")
+            self.assertEqual(recovered["deliveryId"], claim["deliveryId"])
             self.assertEqual(recovered["result"]["text"], "Done")
-            await self.controller.publish(recovered, publish)
+            receipt = await restarted.publish(recovered, publish)
             self.assertEqual(len(journal), 1)
-            self.assertEqual(await self.controller.list_pending(), [])
+            self.assertEqual(await restarted.list_pending(), [])
+            saved = await core.load_monitor(monitor["id"])
+            self.assertEqual(saved["delivery"]["lastReceipt"], receipt)
+            self.assertEqual(saved["delivery"]["queue"], [])
+        run(scenario())
+
+    def test_receipt_acknowledgement_holds_the_lock_until_durable_save(self):
+        async def scenario():
+            monitor = await self.fixture("completed")
+            await self.tick()
+            claim = await self.claim(monitor)
+            await self.controller.checkpoint(claim, "Done")
+            before_ack, release_ack, stop_entered = asyncio.Event(), asyncio.Event(), asyncio.Event()
+            save = core.save_monitor
+            journal = {}
+
+            def publisher(payload):
+                return journal.setdefault(payload["deliveryId"], self.receipt(payload))
+
+            async def save_with_barrier(record):
+                if record["delivery"].get("lastReceipt"):
+                    before_ack.set()
+                    await release_ack.wait()
+                await save(record)
+
+            async def stop_after_entry():
+                stop_entered.set()
+                await self.controller.stop(monitor["id"], self.session_id)
+
+            with patch("agent_core.tasks.monitor_transactions.save_monitor", save_with_barrier):
+                publish = asyncio.create_task(self.controller.publish(claim, publisher))
+                stop = None
+                try:
+                    await asyncio.wait_for(before_ack.wait(), timeout=5)
+                    self.assertEqual(len(journal), 1)
+                    saved = await core.load_monitor(monitor["id"])
+                    self.assertNotIn("lastReceipt", saved["delivery"])
+                    self.assertEqual(saved["delivery"]["queue"][0]["id"], claim["deliveryId"])
+                    self.assertFalse(publish.done())
+                    stop = asyncio.create_task(stop_after_entry())
+                    await asyncio.wait_for(stop_entered.wait(), timeout=5)
+                    self.assertFalse(stop.done())
+                    release_ack.set()
+                    receipt = await asyncio.wait_for(publish, timeout=5)
+                    await asyncio.wait_for(stop, timeout=5)
+                finally:
+                    release_ack.set()
+                    await asyncio.gather(publish, *([stop] if stop else []), return_exceptions=True)
+            saved = await core.load_monitor(monitor["id"])
+            self.assertEqual(saved["delivery"]["lastReceipt"], receipt)
+            self.assertEqual(saved["delivery"]["queue"], [])
+            # Stop sees the acknowledged terminal record, not a pending queue.
+            # Its documented already-terminal behavior is a no-op.
+            self.assertEqual(saved["status"], "completed")
+            self.assertNotIn("deliveryStoppedAt", saved)
+            self.assertEqual(len(journal), 1)
         run(scenario())
 
     def test_publication_and_stop_are_ordered_at_durable_callback(self):

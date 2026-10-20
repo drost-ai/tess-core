@@ -213,6 +213,8 @@ class MonitorDeliveryController:
         Only the bounded durable append belongs in publisher, never a model call
         or network fanout. Stop/mute use this same lock. The callback must return
         a JSON receipt and find a prior append after an ambiguous engine crash.
+        Host visibility can precede the engine's durable lastReceipt save; only
+        successful return from publish proves that acknowledgement is persisted.
         """
         async def mutate(record):
             item = self._owned(record, claim)
