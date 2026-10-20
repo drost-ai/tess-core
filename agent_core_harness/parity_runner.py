@@ -211,7 +211,11 @@ def _run_typescript_driver(
     *,
     require_trusted_reference: bool = False,
 ) -> dict[str, Any]:
-    repo = typescript_repo or os.environ.get("AGENT_CORE_TYPESCRIPT_REPO") or "/Users/dev/agents/agent-core"
+    repo = typescript_repo or os.environ.get("AGENT_CORE_TYPESCRIPT_REPO")
+    if not repo:
+        return {"implementation": "typescript", "status": "failed",
+                "error": {"message": "Configure typescript_repo or AGENT_CORE_TYPESCRIPT_REPO",
+                          "type": "ParityReferenceError"}}
     provenance = inspect_typescript_peer(repo)
     invalid = provenance_error(
         provenance,

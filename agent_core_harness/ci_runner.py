@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import shutil
 import time
@@ -130,11 +131,12 @@ def select_scenarios(scenarios: list[Scenario], scenario_ids: list[str], areas: 
 
 def detect_capabilities(typescript_repo: str | None = None, disabled: set[str] | None = None) -> dict[str, bool]:
     disabled = disabled or set()
-    repo = Path(typescript_repo or "/Users/dev/agents/agent-core")
+    configured_repo = typescript_repo or os.environ.get("AGENT_CORE_TYPESCRIPT_REPO")
+    repo = Path(configured_repo) if configured_repo else None
     capabilities = {
         "python": True,
         "node": shutil.which("node") is not None,
-        "typescript_repo": repo.exists() and (repo / "dist" / "index.js").exists(),
+        "typescript_repo": repo is not None and repo.exists() and (repo / "dist" / "index.js").exists(),
         "local_processes": True,
         "daemon": True,
         "network_loopback": True,

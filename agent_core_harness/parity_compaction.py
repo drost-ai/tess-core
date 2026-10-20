@@ -284,7 +284,7 @@ def _working_context_fields() -> dict[str, Any]:
             "commands": ["python3 -m agent_core_harness parity parity.compaction-checkpoint-v2-pack"],
             # Fixture prose compared byte-for-byte against the TS peer — the
             # runCompaction here is search-command DATA, not this port's API.
-            "searches": ["grep -RIn runCompaction agent_core /Users/dev/agents/agent-core/src"],
+            "searches": ["grep -RIn runCompaction agent_core /opt/agent-core-typescript/src"],
             "web": [],
             "failures": [],
         },
