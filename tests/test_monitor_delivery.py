@@ -11,6 +11,7 @@ from pathlib import Path
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 from agent_core.tasks.supervisor_parts.monitor_watch import tick_daemon_monitors
 from agent_core import MonitorDeliveryController, MonitorDeliveryError
+from agent_core._utils import parse_iso_ms
 
 
 class MonitorDeliveryTests(AgentCoreTestCase):
@@ -398,8 +399,13 @@ asyncio.run(main())
             initial = await self.controller.claim(monitor["id"], self.session_id, "initial", continuation_supported=True)
             await self.controller.checkpoint(initial, "Watching for progress")
             await self.controller.publish(initial, self.receipt)
+            # Publication acknowledges at real wall time; anchor the fixture
+            # clock to that persisted boundary before testing progress spacing.
+            acknowledged = await core.load_monitor(monitor["id"])
+            acknowledged_ms = parse_iso_ms(acknowledged["delivery"]["lastProcessedAt"])
+            self.assertIsNotNone(acknowledged_ms)
             Path(core.task_output_path("watched")).write_text("progress\n" * 1024)
-            self.now += 20001
+            self.now = max(self.now, acknowledged_ms) + 20001
             await self.tick()
             first = await self.controller.claim(monitor["id"], self.session_id, "first", continuation_supported=True)
             self.assertEqual(first["envelope"]["reason"], "progress")
