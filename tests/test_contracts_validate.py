@@ -277,25 +277,51 @@ class ContractSyncTests(unittest.TestCase):
 
     def test_resolved_config_validates_strict(self) -> None:
         import asyncio
-        import os
+        from contextlib import contextmanager
+        from pathlib import Path
         import tempfile
 
         from agent_core.config import resolve_config
         from agent_core.contracts import ResolvedConfig
+        from agent_core.runtime import paths as runtime_paths
+        from agent_core.runtime.paths import get_active_runtime_paths
+        from agent_core.storage.paths import scoped_runtime_home
 
-        with tempfile.TemporaryDirectory(prefix="agent-core-contracts-") as root:
-            home = os.path.join(root, "home")
-            workspace = os.path.join(root, "workspace")
-            os.makedirs(workspace)
-            previous = os.environ.get("AGENT_CORE_HOME")
-            os.environ["AGENT_CORE_HOME"] = home
-            try:
-                config = asyncio.run(resolve_config({"runtimeHome": home}, workspace))
-            finally:
-                if previous is None:
-                    os.environ.pop("AGENT_CORE_HOME", None)
-                else:
-                    os.environ["AGENT_CORE_HOME"] = previous
+        @contextmanager
+        def fixture_directory():
+            # Absolute paths keep cleanup compatible with the unchanged audit
+            # guard, which cannot resolve shutil's relative dir_fd reads.
+            def remove_contents(directory):
+                for child in directory.iterdir():
+                    if child.is_symlink() or not child.is_dir():
+                        child.unlink()
+                    else:
+                        remove_contents(child)
+                        child.rmdir()
+
+            with tempfile.TemporaryDirectory(prefix="agent-core-contracts-") as root:
+                directory = Path(root).resolve()
+                try:
+                    yield directory
+                finally:
+                    remove_contents(directory)
+
+        previous_paths = get_active_runtime_paths()
+        previous_configured = runtime_paths._configured_runtime_paths
+        previous_scoped = runtime_paths.get_scoped_runtime_paths()
+        with fixture_directory() as root:
+            home = str(root / "home")
+            workspace = root / "workspace"
+            workspace.mkdir()
+            # Do not mutate the configured-global fallback or the environment.
+            # The scope token restores even an existing caller's runtime scope.
+            with scoped_runtime_home(home):
+                config = asyncio.run(resolve_config({"runtimeHome": home}, str(workspace)))
+                self.assertEqual(get_active_runtime_paths().home, home)
+                self.assertEqual(config["runtimeHome"], home)
+            self.assertEqual(get_active_runtime_paths(), previous_paths)
+            self.assertIs(runtime_paths._configured_runtime_paths, previous_configured)
+            self.assertIs(runtime_paths.get_scoped_runtime_paths(), previous_scoped)
         self.assertEqual(validate(config, ResolvedConfig, strict=True), [])
 
     def test_builtin_agents_and_profiles_validate(self) -> None:

@@ -104,6 +104,22 @@ def _compaction_state(working_context_path: Path, summary_path: Path):
 
 
 class DurableMemoryIsolationTests(AgentCoreTestCase):
+    def restore_home(self, root, previous):
+        # Use absolute paths for this fixture's disposable tree. The guarded
+        # runner cannot resolve shutil's relative open(..., dir_fd=...) reads.
+        def remove_contents(directory):
+            for child in directory.iterdir():
+                if child.is_symlink() or not child.is_dir():
+                    child.unlink()
+                else:
+                    remove_contents(child)
+                    child.rmdir()
+
+        try:
+            remove_contents(Path(root.name).resolve())
+        finally:
+            super().restore_home(root, previous)
+
     def test_legacy_automatic_records_are_inert_across_sessions(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -263,10 +279,79 @@ class DurableMemoryIsolationTests(AgentCoreTestCase):
         )
 
     def test_compaction_context_accepts_only_active_session_artifact(self):
+        self._assert_active_session_artifact()
+
+    def test_compaction_context_accepts_active_artifact_after_stale_runtime_home(self):
+        self._assert_active_session_artifact(stale_runtime_home=True)
+
+    def test_compaction_context_rejects_untrusted_artifacts(self):
         root, home, workspace, previous = self.temp_context()
         try:
+            config = run(core.resolve_config(
+                {"provider": "openai", "runtimeHome": str(home)}, str(workspace)
+            ))
+            config["durableMemory"]["enabled"] = False
+            session = _session(workspace, "security-checkpoint-session")
+            directory = Path(core.get_session_compactions_dir(session["id"]))
+            directory.mkdir(parents=True)
+            active = directory / "working-context.json"
+            valid = _working_context(session, "UNTRUSTED_CHECKPOINT_SENTINEL")
+            outside = workspace / "outside.json"
+            outside.write_text(json.dumps(valid))
+            foreign = Path(core.get_session_compactions_dir("foreign-session"))
+            foreign.mkdir(parents=True)
+            foreign_path = foreign / "working-context.json"
+            foreign_path.write_text(json.dumps(valid))
+            sibling = directory.with_name(directory.name + "-sibling")
+            sibling.mkdir()
+            sibling_path = sibling / "working-context.json"
+            sibling_path.write_text(json.dumps(valid))
+            escaped = directory / "escaped.json"
+            escaped.symlink_to(outside)
+            traversed = directory / ".." / sibling.name / sibling_path.name
+            cases = [
+                ("outside", outside, valid),
+                ("foreign-directory", foreign_path, valid),
+                ("sibling-prefix", sibling_path, valid),
+                ("traversal", traversed, valid),
+                ("symlink-escape", escaped, valid),
+                ("foreign-session-id", active, {**valid, "sessionId": "foreign-session"}),
+                ("missing-session-id", active, {k: v for k, v in valid.items() if k != "sessionId"}),
+                ("malformed", active, None),
+            ]
+            for label, path, payload in cases:
+                with self.subTest(case=label):
+                    if path == active:
+                        active.write_text(json.dumps(payload) if payload else "{invalid")
+                    session["metadata"]["compactionState"] = _compaction_state(
+                        path, directory / "summary.md"
+                    )
+                    self.assertIsNone(run(core.build_compaction_system_prompt_context(session)))
+                    continuation = run(core.build_continuation_context({
+                        "session": session, "config": config, "prompt": "continue",
+                    }))
+                    self.assertNotIn("UNTRUSTED_CHECKPOINT_SENTINEL", continuation["systemContext"] or "")
+                    self.assertEqual(continuation["preflightSegments"]["checkpointTokens"], 0)
+        finally:
+            self.restore_home(root, previous)
+
+    def _assert_active_session_artifact(self, *, stale_runtime_home=False):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            if stale_runtime_home:
+                # Reproduce a preceding config consumer leaving a configured
+                # home which takes precedence over AGENT_CORE_HOME.
+                core.configure_runtime_home(str(Path(root.name) / "stale-home"))
+            # Bind the fixture home before deriving security-sensitive paths.
+            config = run(
+                core.resolve_config(
+                    {"provider": "openai", "runtimeHome": str(home)},
+                    str(workspace),
+                )
+            )
             session = _session(workspace, "active-checkpoint-session")
             compactions_dir = Path(core.get_session_compactions_dir(session["id"]))
+            self.assertTrue(compactions_dir.resolve().is_relative_to(home.resolve()))
             compactions_dir.mkdir(parents=True)
             working_context_path = compactions_dir / "working-context.json"
             summary_path = compactions_dir / "summary.md"
@@ -304,12 +389,6 @@ class DurableMemoryIsolationTests(AgentCoreTestCase):
             memory_path = Path(core.get_project_memory_path(str(workspace)))
             memory_path.parent.mkdir(parents=True, exist_ok=True)
             memory_path.write_text("DISABLED_MANUAL_SENTINEL\n")
-            config = run(
-                core.resolve_config(
-                    {"provider": "openai", "runtimeHome": str(home)},
-                    str(workspace),
-                )
-            )
             config["durableMemory"]["enabled"] = False
             continuation = run(
                 core.build_continuation_context(
