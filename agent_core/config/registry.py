@@ -59,8 +59,8 @@ class ProviderRegistry:
             raise ProviderRegistryError("Provider registry requires a nonempty providerProfiles mapping")
         self._profiles: dict[str, dict[str, Any]] = {}
         for name, record in records.items():
-            if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]*", name):
-                raise ProviderRegistryError("Provider profile names must be lowercase identifiers")
+            if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
+                raise ProviderRegistryError("Provider profile names must be ASCII identifiers")
             if not isinstance(record, dict) or not isinstance(record.get("kind"), str) or record["kind"] not in {"anthropic", "openai"}:
                 raise ProviderRegistryError(f"Profile '{name}' requires kind anthropic or openai")
             self._validate_no_embedded_credentials(record, name)

@@ -54,6 +54,20 @@ class ProviderRegistryTests(AgentCoreTestCase):
         finally:
             os.chdir(previous_cwd)
 
+    def test_mixed_case_identifiers_preserve_exact_lookup(self):
+        self.path.write_text(REGISTRY.replace("  custom:", "  Model-27B:"))
+        registry = ProviderRegistry(self.path)
+        self.assertEqual(registry.resolve_profile("Model-27B")["defaultModel"], "local-test")
+        with self.assertRaises(ProviderRegistryError):
+            registry.resolve_profile("model-27b")
+
+    def test_invalid_identifiers_remain_rejected(self):
+        for name in ("bad/name", "bad name", "../profile", "mödél"):
+            with self.subTest(name=name):
+                self.path.write_text(REGISTRY.replace("  custom:", f"  {name}:"))
+                with self.assertRaises(ProviderRegistryError):
+                    ProviderRegistry(self.path)
+
     def test_missing_path_unknown_profile_and_missing_name_fail_closed(self):
         with self.assertRaises(ProviderRegistryError):
             ProviderRegistry(self.home / "missing.yaml")
