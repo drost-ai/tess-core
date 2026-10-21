@@ -343,22 +343,18 @@ async def _terminate_wedged_daemon(instance_id: str, pid: int) -> bool:
 
 
 async def _is_daemon_run_process(pid: int, instance_id: str) -> bool:
-    def inspect() -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["ps", "-p", str(pid), "-o", "command="],
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
+    from ..process.identity import read_native_process_argv
 
     try:
-        result = await asyncio.to_thread(inspect)
+        argv = await read_native_process_argv(pid)
     except Exception:
         return False
+    if not instance_id:
+        return False
+    pairs = list(zip(argv, argv[1:]))
     return (
-        result.returncode == 0
-        and "agent_core.process.daemon_worker" in result.stdout
-        and instance_id in result.stdout
+        ("-m", "agent_core.process.daemon_worker") in pairs
+        and ("--instance-id", instance_id) in pairs
     )
 
 

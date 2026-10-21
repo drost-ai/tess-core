@@ -195,6 +195,35 @@ def digest_expected_command(argv: list[str]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+async def read_native_process_argv(pid: int) -> list[str]:
+    """Read bounded argv without subprocesses; reject birth/command races.
+
+    Arguments are transient inspection data, never logged or persisted here.
+    Unsupported platforms fail closed rather than falling back to ps.
+    """
+    pid = _require_pid(pid)
+    if not (sys.platform.startswith("linux") or sys.platform == "darwin"):
+        raise ProcessIdentityError("process.identity_unsupported", "Native argv inspection unsupported")
+    before = await _inspect_process_identity(pid)
+    if sys.platform.startswith("linux"):
+        command = await asyncio.to_thread(_read_bounded_file, f"/proc/{pid}/cmdline", MAX_PROCESS_COMMAND_BYTES)
+    else:
+        from .identity_darwin import read_darwin_process_command
+        command = await asyncio.to_thread(read_darwin_process_command, pid, max_command_bytes=MAX_PROCESS_COMMAND_BYTES)
+    after = await _inspect_process_identity(pid)
+    digest = hashlib.sha256(command).hexdigest()
+    if (before.get("pid") != pid or after.get("pid") != pid
+            or not before.get("startToken") or before.get("startToken") != after.get("startToken")
+            or before.get("observedCommandDigest") != digest or after.get("observedCommandDigest") != digest):
+        raise ProcessIdentityError("process.identity_mismatch", "Process changed during argv inspection")
+    if not command or len(command) > MAX_PROCESS_COMMAND_BYTES or not command.endswith(b"\0"):
+        raise _invalid_identity("Native command was empty, oversized, or unterminated")
+    argv = command[:-1].decode("utf-8", errors="strict").split("\0")
+    if not argv[0] or len(argv) > 4096:
+        raise _invalid_identity("Native argv was malformed")
+    return argv
+
+
 async def _inspect_process_identity(pid: int) -> ObservedProcessIdentity:
     for attempt in range(len(PROCESS_IDENTITY_RETRY_DELAYS_SECONDS) + 1):
         try:

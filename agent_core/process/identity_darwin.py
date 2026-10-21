@@ -88,6 +88,11 @@ def inspect_darwin_process(pid: int, *, max_command_bytes: int) -> dict[str, Any
     }
 
 
+def read_darwin_process_command(pid: int, *, max_command_bytes: int) -> bytes:
+    """Read bounded NUL-delimited argv using the existing native parser."""
+    return _read_command(ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True), pid, max_command_bytes)
+
+
 def _read_command(libproc: Any, pid: int, max_command_bytes: int) -> bytes:
     libproc.sysctl.argtypes = [
         ctypes.POINTER(ctypes.c_int),
