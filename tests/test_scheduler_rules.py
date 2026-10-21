@@ -24,6 +24,7 @@ class RuleTests(unittest.TestCase):
     def test_hourly_normalization_and_local_hour_boundaries(self):
         rule = rules.normalize({"kind": "hourly"})
         self.assertEqual(rule, {"kind": "hourly", "minute": 0})
+        self.assertEqual(rules.describe(rules.normalize({"kind": "hourly", "minute": 5}), LA), f"hourly at :05 ({LA})")
         for minute in (-1, 60, True, "0"):
             with self.assertRaises(RuleError):
                 rules.normalize({"kind": "hourly", "minute": minute})

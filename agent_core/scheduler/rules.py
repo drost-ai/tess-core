@@ -163,6 +163,8 @@ def describe(rule: dict[str, Any], tz: str) -> str:
         return "once"
     if rule["kind"] == "interval":
         return f"every {_span(rule['everySeconds'])}"
+    if rule["kind"] == "hourly":
+        return f"hourly at :{rule.get('minute', 0):02d} ({tz})"
     when = rule["time"]
     if rule.get("monthDays"):
         return f"on day {', '.join(str(day) for day in rule['monthDays'])} of each month at {when} ({tz})"
