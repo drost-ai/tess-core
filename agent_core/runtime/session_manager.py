@@ -256,6 +256,13 @@ class SessionManager:
         overrides = options.config_overrides(runtime.home)
         if runtime.provider_registry is not None:
             overrides["providerRegistry"] = runtime.provider_registry
+            if record is not None and record.get("providerProfileName"):
+                # An existing session keeps the profile and model it is bound
+                # to (its turns resolve the session's own first); the opener's
+                # selection binds new sessions. Resolve that profile's credentials.
+                overrides["provider"] = record["providerProfileName"]
+                if record.get("model"):
+                    overrides["model"] = record["model"]
         config = await resolve_config(overrides, cwd)
         if options.timezone:
             # The owner's IANA zone: the scheduler tools' default.

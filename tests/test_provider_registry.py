@@ -195,6 +195,40 @@ class ProviderRegistryTests(AgentCoreTestCase):
             asyncio.run(check())
 
 
+    def test_existing_session_keeps_its_bound_profile_when_the_opener_selection_changes(self):
+        from agent_core import start_runtime
+        from agent_core.agent.turn_session import resolve_effective_provider_turn_binding
+        from agent_core.storage import load_session
+        self.path.write_text(REGISTRY + """  renamed:
+    kind: openai
+    apiMode: chat_completions
+    baseUrl: https://provider.invalid/v1
+    defaultModel: renamed-test
+    auth:
+      kind: custom_bearer
+      envVar: SYNTHETIC_TOKEN
+""")
+        selection = {"provider": "custom"}
+        async def check():
+            runtime = await start_runtime(str(self.home), cwd=str(self.workspace), daemon_enabled=False, provider_registry=self.path, session_options=lambda *_: SessionOptions(provider=selection["provider"], extra={"settingSources": ""}))
+            try:
+                existing = await runtime.sessions.open()
+                await runtime.sessions.close(existing.id)
+                selection["provider"] = "renamed"
+                await runtime.sessions.open(existing.id)
+                live = runtime.sessions._live[existing.id]
+                self.assertEqual((live.config["providerProfileName"], live.config["model"]), ("custom", "local-test"))
+                # The turn binding's guard accepts it: config and session agree.
+                resolve_effective_provider_turn_binding({"session": await load_session(existing.id), "config": live.config})
+                fresh = await runtime.sessions.open()
+                record = await load_session(fresh.id)
+                self.assertEqual((record["providerProfileName"], record["model"]), ("renamed", "renamed-test"))
+            finally:
+                await runtime.stop()
+        with mock.patch.dict(os.environ, {"SYNTHETIC_TOKEN": "fake-runtime-token"}):
+            asyncio.run(check())
+
+
     def test_anthropic_transport_headers_are_preserved(self):
         from agent_core.providers.anthropic.payloads import build_anthropic_headers
         key_headers = build_anthropic_headers(self.registry.resolve_auth("console", environment={"SYNTHETIC_KEY": "fake-key"}))
