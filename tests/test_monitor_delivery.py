@@ -289,7 +289,10 @@ class MonitorDeliveryTests(AgentCoreTestCase):
             await self.controller.checkpoint(claim, "Initial")
             await self.controller.publish(claim, self.receipt)
             path.write_bytes(b"new")
-            self.now += 20001
+            acknowledged = await core.load_monitor(monitor["id"])
+            acknowledged_ms = parse_iso_ms(acknowledged["delivery"]["lastProcessedAt"])
+            self.assertIsNotNone(acknowledged_ms)
+            self.now = _progress_fixture_time(self.now, acknowledged_ms)
             await self.tick()
             claim = await self.claim(monitor)
             self.assertEqual(claim["envelope"]["outputGeneration"], 1)

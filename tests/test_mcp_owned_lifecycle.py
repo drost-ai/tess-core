@@ -260,7 +260,21 @@ def test_abrupt_owner_death_cleans_stubborn_server_and_descendant(tmp_path, monk
                         continue
                     return False
                 return True
-            await until(all_gone, timeout=5)
+            try:
+                await until(all_gone, timeout=5)
+            except TimeoutError:
+                # Diagnostic only: preserve the PID-disappearance assertion.
+                # Never include command lines, environment, or process names.
+                metadata = []
+                for pid in pids:
+                    item = {'pid': pid}
+                    try:
+                        tail = stdio_transport.Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
+                        item.update(state=tail[0], ppid=int(tail[1]), start_token=tail[19])
+                    except (OSError, ValueError, IndexError):
+                        pass
+                    metadata.append(item)
+                raise AssertionError(f'PID disappearance timed out: {metadata}') from None
         finally:
             if owner.poll() is None:
                 owner.kill()
