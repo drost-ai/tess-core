@@ -183,7 +183,9 @@ class StdioMcpClient(JsonRpcClient):
                 owner_read_fd, self.owner_write_fd = os.pipe()
                 self.status_read_fd, status_write_fd = os.pipe()
                 spawn_options["pass_fds"] = (owner_read_fd, status_write_fd)
-                argv = [sys.executable, "-I", str(Path(__file__).with_name("stdio_guardian.py")),
+                # -I ignores PYTHONDONTWRITEBYTECODE; keep our helper read-only
+                # explicitly, without changing the configured server's argv.
+                argv = [sys.executable, "-I", "-B", str(Path(__file__).with_name("stdio_guardian.py")),
                         str(owner_read_fd), str(status_write_fd), str(int(_knob("mcp.close_grace_ms")) / 1000), *argv]
             self.proc = subprocess.Popen(
                 argv,

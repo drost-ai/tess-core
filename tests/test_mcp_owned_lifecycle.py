@@ -128,6 +128,31 @@ def test_partial_thread_start_releases_process_pipes(tmp_path, monkeypatch, targ
     asyncio.run(run())
 
 
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX guardian interpreter')
+def test_guardian_launch_is_isolated_without_bytecode(tmp_path, monkeypatch):
+    client = client_for(tmp_path, monkeypatch, '')
+    # Even an inherited setting cannot control bytecode under -I, and this
+    # client deliberately launches with a sanitized environment.
+    monkeypatch.setenv('PYTHONDONTWRITEBYTECODE', '1')
+    server_argv = [client.config['commandOrUrl'], *client.config['args']]
+    captured = {}
+
+    def capture_launch(argv, **kwargs):
+        captured['argv'] = argv
+        captured['env'] = kwargs['env']
+        raise OSError('synthetic spawn failure')
+
+    monkeypatch.setattr(stdio_transport.subprocess, 'Popen', capture_launch)
+    with pytest.raises(OSError, match='synthetic spawn failure'):
+        client._start_process()
+    argv = captured['argv']
+    assert argv[:3] == [sys.executable, '-I', '-B']
+    assert argv[3] == str(stdio_transport.Path(stdio_transport.__file__).with_name('stdio_guardian.py'))
+    assert argv[7:] == server_argv
+    assert captured['env'] == {}
+    assert_closed(client)
+
+
 def test_spawn_failure_releases_all_descriptors(tmp_path, monkeypatch):
     client = client_for(tmp_path, monkeypatch, '')
     client.config['cwd'] = str(tmp_path / 'missing')
