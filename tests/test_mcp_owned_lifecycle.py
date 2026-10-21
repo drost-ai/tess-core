@@ -34,7 +34,7 @@ def client_for(tmp_path, monkeypatch, script, *, startup=1000):
               'mcp.close_kill_wait_ms': 2000}
     monkeypatch.setattr(stdio_transport, '_knob', values.__getitem__)
     return StdioMcpClient({'name': 'disposable', 'transport': 'stdio',
-        'commandOrUrl': sys.executable, 'args': ['-I', '-u', '-c', script],
+        'commandOrUrl': sys.executable, 'args': ['-I', '-B', '-u', '-c', script],
         'inheritEnv': False, 'env': {}, 'startupTimeoutMs': startup,
         'requestTimeoutMs': 5000}, str(tmp_path))
 
@@ -135,6 +135,7 @@ def test_guardian_launch_is_isolated_without_bytecode(tmp_path, monkeypatch):
     # client deliberately launches with a sanitized environment.
     monkeypatch.setenv('PYTHONDONTWRITEBYTECODE', '1')
     server_argv = [client.config['commandOrUrl'], *client.config['args']]
+    assert server_argv[:4] == [sys.executable, '-I', '-B', '-u']
     captured = {}
 
     def capture_launch(argv, **kwargs):
@@ -228,7 +229,7 @@ def test_abrupt_owner_death_cleans_stubborn_server_and_descendant(tmp_path, monk
         'signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)')
     script = ('import os,pathlib,signal,subprocess\n'
         'signal.signal(signal.SIGTERM, signal.SIG_IGN)\n'
-        f'child = subprocess.Popen([sys.executable, "-I", "-c", {descendant!r}])\n')
+        f'child = subprocess.Popen([sys.executable, "-I", "-B", "-c", {descendant!r}])\n')
     # The script imports sys before spawning; all children remain in the
     # guardian group and deliberately retain their inherited stdio handles.
     script = 'import sys\n' + script + (
@@ -275,7 +276,7 @@ def test_guardian_kills_term_resistant_descendant_after_server_exits(tmp_path, m
         "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
         f"pathlib.Path({str(marker)!r}).write_text(str(os.getpid())); time.sleep(60)")
     script = ('import subprocess,sys,time,pathlib\n'
-        f'subprocess.Popen([sys.executable, "-I", "-c", {descendant!r}])\n'
+        f'subprocess.Popen([sys.executable, "-I", "-B", "-c", {descendant!r}])\n'
         f'while not pathlib.Path({str(marker)!r}).exists(): time.sleep(0.01)\n'
         + RESPONDER.replace('MODE', 'sys.exit(0)'))
     client = client_for(tmp_path, monkeypatch, script)
