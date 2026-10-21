@@ -300,3 +300,37 @@ class Package131SinkProvenanceTests(AgentCoreTestCase):
         names = sink.names()
         self.assertEqual(names.count("commit"), 1)
         self.assertEqual(names.count("reconcile"), 1)
+
+    def test_reasoning_only_tool_call_commits_and_does_not_block_the_next_call(self) -> None:
+        from agent_core.providers.openai.recovery import commit_openai_delivery
+        from agent_core.providers.partial_output import PartialOutputDelivery
+        from agent_core.providers.partial_output_state import (
+            create_partial_output_state_store,
+            finalize_partial_output_state,
+        )
+
+        root, _home, _workspace, previous = self.temp_context()
+        try:
+            # A sinkless streaming host: the reasoning preview counts as published.
+            session_id = "session-package131-reasoning-only"
+            store = create_partial_output_state_store(session_id)
+            runtime = {"partialOutputStateStore": store, "includePartialMessages": True}
+
+            async def tool_call_turn() -> None:
+                delivery = PartialOutputDelivery(runtime, "call-17", session_id=session_id)
+                self.assertTrue((await delivery.begin(1))["acknowledged"])
+                await delivery.append(1, delta="Inspecting schedules", text="Inspecting schedules",
+                                      response_id="resp-17", sequence_number=4, content_kind="reasoning")
+                receipt = await commit_openai_delivery(
+                    delivery, generation=1, authoritative_text="", reasoning_text="Inspecting schedules",
+                    response_id="resp-17", provider_label="OpenAI/Codex", phase="completed",
+                    had_output=True, had_tool_use=True, logical_call_id="call-17", has_text=False,
+                )
+                self.assertTrue(await finalize_partial_output_state(store, receipt))
+                self.assertEqual((await store.load())["terminalState"], "committed")
+                after = PartialOutputDelivery(runtime, "call-18", session_id=session_id)
+                self.assertTrue((await after.begin(1))["acknowledged"])
+
+            run(tool_call_turn())
+        finally:
+            self.restore_home(root, previous)

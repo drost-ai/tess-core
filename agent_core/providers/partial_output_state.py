@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import os
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
@@ -17,6 +18,7 @@ from ..storage import (
 PARTIAL_OUTPUT_STATE_STORE_SCHEMA_VERSION = 1
 PARTIAL_OUTPUT_STATE_SCHEMA_VERSION = 1
 _TERMINAL_STATES = frozenset({"committed", "interrupted", "superseded"})
+_EMPTY_TEXT_HASH = hashlib.sha256(b"").hexdigest()
 
 
 class PartialOutputStateStore:
@@ -174,14 +176,21 @@ def _receipt_matches_state(
     state: Mapping[str, Any],
 ) -> bool:
     return all(
-        receipt.get(key) == state.get(key)
-        for key in (
-            "logicalCallId",
-            "generation",
-            "assistantTextHash",
-            "reasoningTextHash",
-        )
+        receipt.get(key) == state.get(key) for key in ("logicalCallId", "generation")
+    ) and all(
+        receipt.get(f"{kind}TextHash") == _state_text_hash(state, kind)
+        for kind in ("assistant", "reasoning")
     )
+
+
+def _state_text_hash(state: Mapping[str, Any], kind: str) -> str | None:
+    # Text that never streamed leaves no hash in the state, while a receipt
+    # always hashes its text: a tool-only call that streamed reasoning commits
+    # an empty-text receipt. Unfinalized, it would fail every later call closed.
+    value = state.get(f"{kind}TextHash")
+    if value is None and not state.get(f"{kind}TextLength"):
+        return _EMPTY_TEXT_HASH
+    return value
 
 
 def _bounded_string(value: Any, maximum: int) -> str | None:
