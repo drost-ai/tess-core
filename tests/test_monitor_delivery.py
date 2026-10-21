@@ -4,6 +4,7 @@ import asyncio
 import os
 import time
 import json
+import math
 import sys
 from unittest.mock import patch
 from pathlib import Path
@@ -12,6 +13,12 @@ from tests.support.agent_core_case import AgentCoreTestCase, core, run
 from agent_core.tasks.supervisor_parts.monitor_watch import tick_daemon_monitors
 from agent_core import MonitorDeliveryController, MonitorDeliveryError
 from agent_core._utils import parse_iso_ms
+
+
+def _progress_fixture_time(now, acknowledged_ms):
+    # Persisted delivery scheduling uses integer milliseconds. Round the parsed
+    # float boundary upward so progress remains strictly beyond acknowledgement.
+    return max(now, math.ceil(acknowledged_ms)) + 20001
 
 
 class MonitorDeliveryTests(AgentCoreTestCase):
@@ -389,6 +396,14 @@ asyncio.run(main())
             self.assertEqual(saved["delivery"]["queue"][0]["reason"], "completed")
         run(scenario())
 
+    def test_progress_clock_ack_boundary_stays_integer(self):
+        for now, acknowledged_ms, expected in ((1000, 1001.25, 21003), (1003, 1001.25, 21004)):
+            with self.subTest(now=now, acknowledged_ms=acknowledged_ms):
+                advanced = _progress_fixture_time(now, acknowledged_ms)
+                self.assertIs(type(advanced), int)
+                self.assertEqual(advanced, expected)
+                self.assertGreaterEqual(advanced, acknowledged_ms + 20001)
+
     def test_mute_preserves_superseded_execution_and_checkpoint_history(self):
         async def scenario(phase, completion_before_mute):
             monitor = await self.fixture()
@@ -405,7 +420,8 @@ asyncio.run(main())
             acknowledged_ms = parse_iso_ms(acknowledged["delivery"]["lastProcessedAt"])
             self.assertIsNotNone(acknowledged_ms)
             Path(core.task_output_path("watched")).write_text("progress\n" * 1024)
-            self.now = max(self.now, acknowledged_ms) + 20001
+            self.now = _progress_fixture_time(self.now, acknowledged_ms)
+            self.assertIs(type(self.now), int)
             await self.tick()
             first = await self.controller.claim(monitor["id"], self.session_id, "first", continuation_supported=True)
             self.assertEqual(first["envelope"]["reason"], "progress")
@@ -414,6 +430,9 @@ asyncio.run(main())
                 await self.controller.checkpoint(first, "Earlier inspection checkpoint")
             elif phase == "uncertain":
                 await self.controller.retry(first, "interrupted")
+                retried = await core.load_monitor(monitor["id"])
+                self.assertIsNotNone(retried)
+                self.assertIs(type(retried["delivery"]["queue"][0]["availableAt"]), int)
             if completion_before_mute:
                 await self.task("completed")
                 await self.tick()
