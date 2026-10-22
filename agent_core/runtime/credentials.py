@@ -169,13 +169,34 @@ class CredentialStore:
         except Exception as error:
             raise _backend_error(error) from None
 
+    def probe(self) -> str:
+        """Whether this backend can hold a credential for this installation now:
+        ``available``, ``locked``, ``permission_denied`` or ``unavailable``.
+
+        A random probe value is written under this installation's namespace,
+        read back and removed; nothing else in the store is read or listed.
+        """
+        service, name = f'tess-agent/{self.installation_id}/probe', str(uuid.uuid4())
+        value = str(uuid.uuid4())
+        try:
+            self._backend.set_password(service, name, value)
+            try:
+                if self._backend.get_password(service, name) != value:
+                    return 'unavailable'
+            finally:
+                self._backend.delete_password(service, name)
+            return 'available'
+        except Exception as error:
+            return {'credential_locked': 'locked', 'credential_permission_denied': 'permission_denied'}.get(
+                _backend_error(error).code, 'unavailable')
+
     async def bounded(self, operation: str, *args, **kwargs):
         """Bound caller wait. OS thread may finish late; immutable new refs only.
 
         Do not blindly replay timed-out writes or claim OS cancellation; caller
         must surface unknown outcome/reconcile orphan operations before retry.
         """
-        if operation not in {'write', 'consume', 'delete'}:
+        if operation not in {'write', 'consume', 'delete', 'probe'}:
             raise CredentialStoreError('credential_invalid')
         try:
             return await asyncio.wait_for(asyncio.to_thread(getattr(self, operation), *args, **kwargs), 5.0)

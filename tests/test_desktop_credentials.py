@@ -101,3 +101,25 @@ def test_registry_carries_ref_not_value_and_preserves_legacy_auth(tmp_path):
 def test_unsupported_backend_never_falls_back(backend):
     with pytest.raises(CredentialStoreError):
         desktop_backend(backend)
+
+
+def test_probe_round_trips_only_its_own_value_and_reports_backend_state():
+    store, backend, installation, account = setup()
+    ref = store.write(account, 'provider_api_key', {'api_key': secrets.token_urlsafe(24)})
+    before = dict(backend.records)
+    assert store.probe() == 'available'
+    assert backend.records == before  # the probe leaves nothing behind
+    backend.fail = True
+    assert store.probe() == 'permission_denied'
+
+    class Locked(Exception):
+        pass
+    Locked.__name__ = 'KeyringLocked'
+
+    class LockedBackend(FakeBackend):
+        def set_password(self, service, username, password):
+            raise Locked('never include backend detail')
+    locked = CredentialStore(installation, 'macos_keychain', LockedBackend())
+    assert locked.probe() == 'locked'
+    backend.fail = False
+    assert store.consume(ref, account_id=account, purpose='provider_api_key')

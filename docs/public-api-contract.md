@@ -475,16 +475,15 @@ Python public additions: `agent_core.runtime.credentials.CredentialStore`,
 `CredentialStoreError`, `CredentialBackend`, `desktop_backend`. `CredentialStore`
 uses the existing RuntimeSecretRef kind/version/purposes, with required managed
 reference fields `backend`, `installation_id`, `account_id` (UUID namespace pins).
-Backends: `macos_keychain`, `linux_secret_service`, via the optional
-`desktop-credentials` extra; no default backend, plugin auto-selection, plaintext
-or null fallback, or OS operation at import. Native backends are not test-verified.
+Backends: `macos_keychain`, `linux_secret_service`, via the optional `desktop-credentials`
+extra; no default backend, plugin auto-selection, plaintext or null fallback, or OS
+operation at import (native receipts: docs/receipts/epic92/b1-*.json at repo root).
 
-`write(account_id, purpose, payload)` creates a NEW immutable ref for an API key
-or structured OAuth bundle, keeping old refs if a replacement fails.
-`consume(ref, account_id=..., purpose=...)` is engine/transport-only and returns a
-repr-redacted value, never a browser API. `delete(..., referenced_ids=...)` rejects
-in-use refs. `bounded` limits caller wait to five seconds but cannot cancel native
-threads; late writes require orphan reconciliation, never blind replay.
+`write(account_id, purpose, payload)` makes a NEW immutable ref (API key or OAuth bundle); a
+failed replacement keeps the old one. `consume(ref, account_id=..., purpose=...)` is
+engine/transport-only and returns a repr-redacted value, never a browser API. `delete` rejects
+in-use refs. `probe()` reports available/locked/permission_denied/unavailable via a
+self-removing round trip. `bounded` caps waits at 5 s; reconcile late writes, never replay.
 
 Registry `auth` accepts `credentialRef`, exclusive with `envVar`, for API-key
 authentication only. `resolve_auth` returns the opaque ref, which proves neither
