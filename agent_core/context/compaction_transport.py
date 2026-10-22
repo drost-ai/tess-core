@@ -132,6 +132,11 @@ def resolve_compaction_execution_plan(args: dict[str, Any] | None = None) -> dic
         )
     elif config.get("compactionModel") or config.get("compactionProvider"):
         synthesis = _build_selection(provider=config.get("compactionProvider") or session_provider, model=config.get("compactionModel") or session_model, effort=synthesis_effort, purpose="synthesis", selectionSource="configured", providerProfileName=None)
+    elif config.get("providerRegistry") is not None:
+        # A registry names every model explicitly: with no compaction binding
+        # the session compacts with its own profile and model. The fixed model
+        # is a legacy default that a ChatGPT-account Codex login rejects.
+        synthesis = _build_selection(provider=session_provider, model=session_model, effort=synthesis_effort, purpose="synthesis", selectionSource="session", providerProfileName=config.get("providerProfileName"))
     else:
         synthesis = _build_selection(provider=FIXED_COMPACTION_PROVIDER, model=FIXED_COMPACTION_MODEL, effort=FIXED_COMPACTION_EFFORT, purpose="synthesis", selectionSource="fixed", providerProfileName=None)
 

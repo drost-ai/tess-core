@@ -121,6 +121,20 @@ class ProviderRegistryTests(AgentCoreTestCase):
         with mock.patch.dict(os.environ, {"SYNTHETIC_TOKEN": "fake-token"}):
             asyncio.run(check())
 
+    def test_unbound_compaction_runs_on_the_session_profile_not_a_fixed_model(self):
+        from agent_core.context.compaction_transport import create_default_compaction_model_client, resolve_compaction_execution_plan
+        async def check():
+            config = await resolve_config({"runtimeHome": str(self.home), "providerRegistry": self.registry, "provider": "custom", "settingSources": ""}, str(self.workspace))
+            plan = resolve_compaction_execution_plan({"config": config, "session": {"provider": "openai", "model": "local-test"}})
+            for purpose in ("synthesis", "verification"):
+                self.assertEqual((plan[purpose]["providerProfileName"], plan[purpose]["model"], plan[purpose]["selectionSource"]), ("custom", "local-test", "session"))
+            sender = mock.AsyncMock(return_value={"content": [{"type": "text", "text": "summary"}]})
+            result = await create_default_compaction_model_client({"openAiRequestSender": sender})["complete"]({"config": config, "model": plan["synthesis"], "system": "s", "prompt": "p"})
+            sent = sender.call_args.args[0]
+            self.assertEqual((result["text"], sent["request"]["model"], sent["token"], sent["baseUrl"], sent["mode"]), ("summary", "local-test", "fake-token", "https://provider.invalid/v1", "chat_completions"))
+        with mock.patch.dict(os.environ, {"SYNTHETIC_TOKEN": "fake-token"}):
+            asyncio.run(check())
+
     def test_explicit_registry_requires_explicit_profile_even_with_ambient(self):
         with mock.patch.dict(os.environ, {"TESS_PROVIDER": "custom"}):
             with self.assertRaises(ProviderRegistryError):
