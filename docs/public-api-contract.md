@@ -452,11 +452,12 @@ come from the declared envVar, never an implicitly discovered auth file.
   scoped runtime secret store. OAuth purpose accepts OAuth/setup-token refs without
   losing their purpose/account pinning. It does not discover credentials.
 
-Registry records must not embed credentials: `auth` accepts only `kind` and
-`envVar`; literal credential fields and Authorization/API-key/cookie headers are
-rejected recursively, while non-secret headers such as `anthropic-beta` remain
-supported. Registry read, parse, profile and missing-credential errors are redacted. No
-provider network calls are made by these interfaces.
+Registry records must not embed credentials: `auth` accepts only `kind` and `envVar` (or a
+managed `credentialRef`, below); literal credential fields and
+Authorization/API-key/cookie headers are rejected recursively, while non-secret headers
+such as `anthropic-beta` remain supported. Registry read, parse, profile and
+missing-credential errors are redacted. No provider network calls are made by these
+interfaces.
 
 ## Isolated MCP stdio children (Python)
 
@@ -467,3 +468,33 @@ it, the connection's workspace is used. These options are validated and rejected
 on HTTP/SSE descriptors. Hosts sanitizing memory subprocesses should use an
 absolute executable, an explicit environment (including any required PATH),
 `inheritEnv: false`, and an explicit `cwd`. Neither option changes other servers.
+
+### Explicit desktop managed credentials (Slice B foundation)
+
+Python public additions: `agent_core.runtime.credentials.CredentialStore`,
+`CredentialStoreError`, `CredentialBackend`, `desktop_backend`. `CredentialStore`
+uses the existing RuntimeSecretRef kind/version/purposes, with required managed
+reference fields `backend`, `installation_id`, `account_id` (UUID namespace pins).
+Backends: `macos_keychain`, `linux_secret_service`, via the optional
+`desktop-credentials` extra; no default backend, plugin auto-selection, plaintext
+or null fallback, or OS operation at import. Native backends are not test-verified.
+
+`write(account_id, purpose, payload)` creates a NEW immutable ref for an API key
+or structured OAuth bundle, keeping old refs if a replacement fails.
+`consume(ref, account_id=..., purpose=...)` is engine/transport-only and returns a
+repr-redacted value, never a browser API. `delete(..., referenced_ids=...)` rejects
+in-use refs. `bounded` limits caller wait to five seconds but cannot cancel native
+threads; late writes require orphan reconciliation, never blind replay.
+
+Registry `auth` accepts `credentialRef`, exclusive with `envVar`, for API-key
+authentication only. `resolve_auth` returns the opaque ref, which proves neither
+backend availability nor provider readiness; the existing `resolve_runtime_secret`
+transport boundary consumes it through the explicit backend, never the legacy
+runtime-secret file store. Env references and Anthropic auth tokens are unchanged;
+no setup-token onboarding or other applications' token refresh is added.
+
+Host imports stay in `engine_session.py`. Owner OS-user processes are trusted (keyring
+access is not process isolation); headless encrypted storage is an open dependency.
+`ProviderRegistry.from_document(mapping)` validates staged in-memory records with
+the registry schema, with no discovery, file writes, credential or provider I/O,
+and does not assert provider readiness.

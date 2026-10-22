@@ -7,7 +7,7 @@ Producers: ``agent_core/config/resolution.py`` (``resolve_config``),
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict, Union, get_args
+from typing import Any, Literal, NotRequired, TypedDict, Union, get_args
 
 
 PermissionMode = Literal["default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"]
@@ -35,6 +35,9 @@ class RuntimeSecretRef(TypedDict):
     id: str
     purpose: RuntimeSecretPurpose
     version: Literal[1]
+    backend: NotRequired[Literal["macos_keychain", "linux_secret_service"]]
+    installation_id: NotRequired[str]
+    account_id: NotRequired[str]
 
 
 RuntimeSecretValue = Union[str, RuntimeSecretRef]

@@ -153,6 +153,17 @@ def is_runtime_secret_ref(value: Any) -> bool:
 async def resolve_runtime_secret(ref: Mapping[str, Any], expectedPurpose: str) -> bytearray:
     if not is_runtime_secret_ref(ref) or ref.get("purpose") != expectedPurpose:
         raise RuntimeSecretError("secret_store_invalid", "reference purpose or shape is invalid")
+    if ref.get('backend') is not None:
+        # Managed refs never fall back to the legacy integrity-only file store.
+        # Resolve only here, at the engine-owned trusted transport boundary.
+        from .credentials import CredentialStore
+        store = CredentialStore.desktop(ref.get('installation_id'), ref.get('backend'))
+        value = await store.bounded('consume', ref, account_id=ref.get('account_id'), purpose=expectedPurpose)
+        key = 'api_key' if expectedPurpose == 'provider_api_key' else 'access_token'
+        result = value.payload.get(key)
+        if not isinstance(result, str) or not result:
+            raise RuntimeSecretError('secret_store_invalid', 'managed credential payload is invalid')
+        return bytearray(result.encode())
     _ensure_private_store()
     raw = bytearray(_read_bounded_regular_file(os.path.join(_records_dir(), f"{ref['id']}.json"), MAX_RECORD_BYTES))
     try:
