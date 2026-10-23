@@ -50,6 +50,8 @@ from .providers import (
     resolve_provider_profiles,
     resolve_selected_provider_profile_name,
 )
+from ._yaml import YamlSubsetError, parse_yaml_subset
+from ._yaml_dump import dump_yaml_subset
 from .registry import ProviderRegistry, ProviderRegistryError, resolve_codex_auth, resolve_provider_secret
 from .resolution import resolve_config
 from .shared import (
@@ -79,6 +81,9 @@ __all__ = [
     "resolve_codex_auth",
     "resolve_provider_secret",
     "ProviderRegistry",
+    "YamlSubsetError",
+    "dump_yaml_subset",
+    "parse_yaml_subset",
     "ProviderRegistryError",
     "BUILTIN_AGENTS",
     "BUILTIN_PROVIDER_PROFILES",

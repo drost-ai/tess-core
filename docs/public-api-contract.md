@@ -442,9 +442,9 @@ come from the declared envVar, never an implicitly discovered auth file.
   accept explicit `compactionProviderProfile` / `compactionVerificationProviderProfile`
   settings; absent bindings retain the session provider. Registry paths are persisted
   in session metadata for isolated task-runner reconstruction.
-- Engine `settings` may explicitly name a JSON or YAML file. `settingSources=""`
-  disables settings discovery while retaining explicit settings (including
-  `durableMemory.enabled`, compaction and other engine policy keys).
+- Engine `settings` may name a JSON or YAML file (`settingSources=""` disables discovery, keeps
+  explicit settings). Settings YAML is a strict subset: `agent_core.config.parse_yaml_subset` reads it,
+  `dump_yaml_subset` writes values that read back identically, else `YamlSubsetError`.
 - `await resolve_codex_auth(path)` reads only the explicitly named Codex JSON file
   and returns its API key/access token. It performs no discovery or refresh.
 - `await resolve_provider_secret(value, *, purpose="provider_api_key",
