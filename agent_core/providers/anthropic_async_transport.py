@@ -42,6 +42,16 @@ class _async_response_body:
         self._buffer.clear()
         return value
 
+    async def read_limited(self, limit: int) -> bytes:
+        """The whole body, refusing one larger than ``limit`` bytes."""
+        while not self._done:
+            await self._fill()
+            if len(self._buffer) > limit:
+                raise ValueError("response body exceeds its limit")
+        value = bytes(self._buffer)
+        self._buffer.clear()
+        return value
+
     async def readline(self) -> bytes:
         while True:
             newline = self._buffer.find(b"\n")
@@ -123,6 +133,9 @@ class AsyncAnthropicHttpResponse:
     async def read(self) -> bytes:
         return await self._body.read()
 
+    async def read_limited(self, limit: int) -> bytes:
+        return await self._body.read_limited(limit)
+
     async def readline(self) -> bytes:
         return await self._body.readline()
 
@@ -148,6 +161,7 @@ class AnthropicAsyncHttpConnectionOwner:
         body: bytes,
         headers: dict[str, str],
         timeout_seconds: float,
+        method: str = "POST",
     ) -> AsyncAnthropicHttpResponse:
         """Send one request and return the parsed response head.
 
@@ -175,7 +189,9 @@ class AnthropicAsyncHttpConnectionOwner:
             assert self._reader is not None and self._writer is not None
             request_target = url if proxy is not None and parts.scheme == "http" else _origin_form(parts)
             wire_headers = _wire_headers(parts, headers, body, self.keep_alive, proxy)
-            request_head = [f"POST {request_target} HTTP/1.1\r\n"]
+            if method not in {"POST", "GET"}:
+                raise ValueError("Unsupported HTTP method")
+            request_head = [f"{method} {request_target} HTTP/1.1\r\n"]
             request_head.extend(f"{key}: {value}\r\n" for key, value in wire_headers.items())
             request_head.append("\r\n")
             self._writer.write("".join(request_head).encode("latin-1") + body)

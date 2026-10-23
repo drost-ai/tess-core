@@ -453,11 +453,10 @@ come from the declared envVar, never an implicitly discovered auth file.
   losing their purpose/account pinning. It does not discover credentials.
 
 Registry records must not embed credentials: `auth` accepts only `kind` and `envVar` (or a
-managed `credentialRef`, below); literal credential fields and
-Authorization/API-key/cookie headers are rejected recursively, while non-secret headers
-such as `anthropic-beta` remain supported. Registry read, parse, profile and
-missing-credential errors are redacted. No provider network calls are made by these
-interfaces.
+managed `credentialRef`, below); literal credential fields and Authorization/API-key/cookie
+headers are rejected recursively, while non-secret headers such as `anthropic-beta` remain
+supported. Registry read, parse, profile and missing-credential errors are redacted. Only
+`check_provider_connection` (below) contacts a provider.
 
 ## Isolated MCP stdio children (Python)
 
@@ -495,6 +494,7 @@ runtime-secret file store. Env references and Anthropic auth tokens are unchange
 no setup-token onboarding or other applications' token refresh is added.
 
 Host imports stay in `engine_session.py`; owner OS-user processes are trusted (no isolation).
-`ProviderRegistry.from_document(mapping)` validates staged in-memory records with
-the registry schema, with no discovery, file writes, credential or provider I/O,
-and does not assert provider readiness.
+`ProviderRegistry.from_document(mapping)` validates staged in-memory records (no discovery,
+file writes, credential or provider I/O; not a readiness check). `await agent_core.providers.
+connection.check_provider_connection(registry, name)` lists models (GET, never a completion)
+with the profile's own credential resolved in the engine; it returns state/code/model ids only.
