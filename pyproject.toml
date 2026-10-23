@@ -13,6 +13,8 @@ dependencies = []
 [project.optional-dependencies]
 desktop-credentials = ["keyring>=25,<26"]
 encrypted-credentials = ["cryptography>=42"]
+# Sign in with ChatGPT: RS256 ID-token signatures.
+chatgpt-account = ["cryptography>=42"]
 dev = [
     "mypy>=1.10",
     "pytest>=8.0",
