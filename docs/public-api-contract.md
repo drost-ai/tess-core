@@ -486,12 +486,12 @@ and `resolve_runtime_secret` are transport-only (repr-redacted, never a browser 
 in-use refs. `probe()` reports available/locked/permission_denied/unavailable via a
 self-removing round trip. `bounded` caps waits at 5 s; reconcile late writes, never replay.
 
-Registry `auth` accepts `credentialRef`, exclusive with `envVar`, for API-key
-authentication only. `resolve_auth` returns the opaque ref, which proves neither
-backend availability nor provider readiness; the existing `resolve_runtime_secret`
-transport boundary consumes it through the explicit backend, never the legacy
-runtime-secret file store. Env references and Anthropic auth tokens are unchanged;
-no setup-token onboarding or other applications' token refresh is added.
+Registry `auth` accepts `credentialRef`, exclusive with `envVar`, for API-key authentication
+only; `resolve_auth` returns the opaque ref (proving neither backend availability nor provider
+readiness), consumed via `resolve_runtime_secret` through the explicit backend, never the legacy
+file store; env references are unchanged. Options `webSearch: {provider, exaApiKeyRef}` give
+WebSearch a managed Exa key; failures are static `fallback_reason` codes, and `await agent_core.
+tools.web_search_api.check_exa_connection(config)` spends one 1-result search (state/code only).
 
 Host imports stay in `engine_session.py`; owner OS-user processes are trusted (no isolation).
 `ProviderRegistry.from_document(mapping)` validates staged in-memory records (no discovery,

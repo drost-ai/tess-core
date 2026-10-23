@@ -6,6 +6,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from ..payloads.bounded_io import read_response_text_bounded_sync
@@ -13,6 +14,31 @@ from .cancellation import _create_tool_abort_error, _signal_aborted
 
 
 EXA_RESPONSE_MAX_BYTES = 2 * 1024 * 1024
+
+
+class SearchProviderError(RuntimeError):
+    """A search API call that failed; ``code`` is static and never carries
+    the key, the request or the provider's own text."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
+def exa_failure_code(error: BaseException) -> str:
+    if isinstance(error, SearchProviderError):
+        return error.code
+    if isinstance(error, HTTPError):
+        if error.code in (401, 403):
+            return "exa_unauthorized"
+        if error.code == 402:
+            return "exa_quota"
+        if error.code == 429:
+            return "exa_rate_limited"
+        return "exa_unavailable"
+    if isinstance(error, TimeoutError) or (isinstance(error, URLError) and isinstance(error.reason, TimeoutError)):
+        return "exa_timeout"
+    return "exa_unavailable"
 
 
 async def search_exa(
@@ -85,6 +111,37 @@ def _read_exa_response(request: Request) -> str:
             maxBytes=EXA_RESPONSE_MAX_BYTES,
             label="Exa search response",
         )["text"]
+
+
+async def resolve_search_api_provider_async(config: dict[str, Any] | None, provider: str | None = None) -> dict[str, str] | None:
+    """As resolve_search_api_provider, with a managed key (``exaApiKeyRef``)
+    resolved here, at the transport; a ref that cannot be read raises
+    SearchProviderError("exa_key_unavailable")."""
+    ref = web_search_settings(config).get("exaApiKeyRef")
+    if not isinstance(ref, dict) or resolve_search_provider_preference(config, provider) == "scraper":
+        return resolve_search_api_provider(config, provider)
+    from ..runtime.secrets import resolve_runtime_secret
+    try:
+        value = await resolve_runtime_secret(ref, "provider_api_key")
+    except Exception:
+        raise SearchProviderError("exa_key_unavailable") from None
+    try:
+        return {"provider": "exa", "api_key": bytes(value).decode()}
+    finally:
+        value[:] = bytes(len(value))
+
+
+async def check_exa_connection(config: dict[str, Any] | None) -> dict[str, str]:
+    """Whether the configured Exa key answers: one single-result search
+    (it spends one search's credit). Returns state and a static code only."""
+    try:
+        resolved = await resolve_search_api_provider_async(config, "exa")
+        if not resolved:
+            return {"state": "unavailable", "code": "exa_key_missing"}
+        await search_exa("Tess connection check", api_key=resolved["api_key"], count=1)
+    except Exception as error:  # noqa: BLE001 (a static code: never the key or the provider's text)
+        return {"state": "unavailable", "code": exa_failure_code(error)}
+    return {"state": "available", "code": "exa_answered"}
 
 
 def resolve_search_api_provider(config: dict[str, Any] | None, provider: str | None = None) -> dict[str, str] | None:

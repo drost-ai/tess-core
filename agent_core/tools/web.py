@@ -24,7 +24,9 @@ from .web_search_api import (
     hostname_matches_rule,
     join_fallback_reasons,
     optional_string,
-    resolve_search_api_provider,
+    SearchProviderError,
+    exa_failure_code,
+    resolve_search_api_provider_async,
     search_exa,
     resolve_search_provider_preference,
     web_search_settings,
@@ -258,9 +260,12 @@ async def search_web_response(
 ) -> dict[str, Any]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
-    api_provider = resolve_search_api_provider(config, provider)
     preferred_provider = resolve_search_provider_preference(config, provider)
     api_fallback_reason = None
+    try:
+        api_provider = await resolve_search_api_provider_async(config, provider)
+    except SearchProviderError as error:
+        api_provider, api_fallback_reason = None, error.code
     if api_provider:
         try:
             if api_provider["provider"] == "exa":
@@ -276,11 +281,13 @@ async def search_web_response(
                 )
                 if exa:
                     return {"provider": "exa", "results": exa, "fallback_reason": None}
-                api_fallback_reason = "exa_unavailable" if preferred_provider == "exa" else None
+                api_fallback_reason = "exa_empty" if preferred_provider == "exa" else None
         except Exception as exc:
-            api_fallback_reason = "exa_unavailable" if preferred_provider == "exa" else None
-    elif preferred_provider == "exa":
-        api_fallback_reason = "exa_unavailable"
+            # A static reason (unauthorized, quota, rate limited, timeout):
+            # never the key or the provider's own text.
+            api_fallback_reason = exa_failure_code(exc) if preferred_provider == "exa" else None
+    elif preferred_provider == "exa" and api_fallback_reason is None:
+        api_fallback_reason = "exa_key_missing"
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     duck = await search_duck_duck_go(query, abortSignal, fetcher=fetcher, authorizeHop=authorizeHop)
