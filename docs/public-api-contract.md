@@ -480,9 +480,9 @@ AES-256-GCM file locked until `backend.create/unlock(UnlockSecret)`; `Credential
 resolves refs). No default backend, auto-selection, plaintext or null fallback, or OS
 operation at import (native receipts: docs/receipts/epic92/b1-*.json at repo root).
 
-`write(account_id, purpose, payload)` makes a NEW immutable ref (API key or OAuth bundle); a
-failed replacement keeps the old one. `consume(ref, account_id=..., purpose=...)` is
-engine/transport-only and returns a repr-redacted value, never a browser API. `delete` rejects
+`write(account_id, purpose, payload)` makes a NEW immutable ref (API key, OAuth bundle, or a
+host channel's `{token}` under `channel_token`); a failed replacement keeps the old one. `consume`
+and `resolve_runtime_secret` are transport-only (repr-redacted, never a browser API). `delete` rejects
 in-use refs. `probe()` reports available/locked/permission_denied/unavailable via a
 self-removing round trip. `bounded` caps waits at 5 s; reconcile late writes, never replay.
 

@@ -142,6 +142,9 @@ class CredentialStore:
             if purpose == 'provider_api_key':
                 if set(value) != {'api_key'} or not isinstance(value['api_key'], str) or not value['api_key'].strip():
                     raise ValueError()
+            elif purpose == 'channel_token':  # a host's messaging-platform token (a bot token)
+                if set(value) != {'token'} or not isinstance(value['token'], str) or not value['token'].strip():
+                    raise ValueError()
             elif purpose == 'provider_oauth_token':
                 if (set(value) - {'access_token', 'refresh_token', 'expires_at', 'client_id', 'account_id', 'id_token'}
                         or any(not isinstance(value.get(key), str) or not value[key]

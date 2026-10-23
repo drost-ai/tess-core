@@ -188,3 +188,19 @@ def test_rekey_and_service_keys(tmp_path):
         UnlockSecret.service_key_file(key_file, runtime_home=runtime_home)
     with pytest.raises(ValueError):
         UnlockSecret.passphrase("too short")
+
+
+def test_a_channel_token_is_kept_under_its_own_purpose_and_read_back_only_by_it(tmp_path):
+    import asyncio
+    path, installation, account = home(tmp_path), str(uuid.uuid4()), str(uuid.uuid4())
+    store = CredentialStore.encrypted(installation, str(path))
+    store.backend.create(UnlockSecret.passphrase(PASSPHRASE))
+    token = "123456789:" + secrets.token_urlsafe(26)
+    ref = store.write(account, "channel_token", {"token": token})
+    assert ref["purpose"] == "channel_token" and token.encode() not in path.read_bytes()
+    assert bytes(asyncio.run(resolve_runtime_secret(ref, "channel_token"))).decode() == token
+    with pytest.raises(Exception):
+        asyncio.run(resolve_runtime_secret(ref, "provider_api_key"))  # a ref answers only its own purpose
+    for payload in ({"token": ""}, {"token": token, "extra": "x"}, {"api_key": token}):
+        with pytest.raises(CredentialStoreError):
+            store.write(account, "channel_token", payload)

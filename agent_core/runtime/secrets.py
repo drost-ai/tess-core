@@ -33,6 +33,7 @@ _PURPOSES = {
     "provider_api_key",
     "provider_oauth_token",
     "provider_setup_token",
+    "channel_token",
 }
 
 
@@ -159,7 +160,7 @@ async def resolve_runtime_secret(ref: Mapping[str, Any], expectedPurpose: str) -
         from .credentials import CredentialStore
         store = CredentialStore.open(ref.get('installation_id'), ref.get('backend'))
         value = await store.bounded('consume', ref, account_id=ref.get('account_id'), purpose=expectedPurpose)
-        key = 'api_key' if expectedPurpose == 'provider_api_key' else 'access_token'
+        key = {'provider_api_key': 'api_key', 'channel_token': 'token'}.get(expectedPurpose, 'access_token')
         result = value.payload.get(key)
         if not isinstance(result, str) or not result:
             raise RuntimeSecretError('secret_store_invalid', 'managed credential payload is invalid')
