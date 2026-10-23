@@ -146,10 +146,12 @@ class CredentialStore:
                 if set(value) != {'token'} or not isinstance(value['token'], str) or not value['token'].strip():
                     raise ValueError()
             elif purpose == 'provider_oauth_token':
-                if (set(value) - {'access_token', 'refresh_token', 'expires_at', 'client_id', 'account_id', 'id_token'}
+                if (set(value) - {'access_token', 'refresh_token', 'expires_at', 'client_id', 'account_id', 'id_token',
+                                  'earliest_refresh_at'}
                         or any(not isinstance(value.get(key), str) or not value[key]
                                for key in ('access_token', 'refresh_token', 'client_id', 'account_id'))
-                        or type(value.get('expires_at')) not in (int, float)):
+                        or type(value.get('expires_at')) not in (int, float)
+                        or type(value.get('earliest_refresh_at', 0)) not in (int, float)):
                     raise ValueError()
             else:
                 raise ValueError()
@@ -173,6 +175,21 @@ class CredentialStore:
         except Exception as error:
             raise _backend_error(error) from None
         return ref
+
+    def replace(self, ref: Mapping[str, Any], *, account_id: str, purpose: str, value: Mapping[str, Any]) -> None:
+        """Rewrite an OAuth bundle in place: a refresh rotates its tokens every
+        hour while configuration keeps pointing at the same reference. Only
+        ``provider_oauth_token``; keys stay immutable (``write`` a new one)."""
+        if purpose != 'provider_oauth_token':
+            raise CredentialStoreError('credential_invalid')
+        service, name = self._key(ref, account_id=account_id, purpose=purpose)
+        text = self._serialize(value, purpose)
+        try:
+            self._backend.set_password(service, name, text)
+        except PermissionError:
+            raise CredentialStoreError('credential_permission_denied') from None
+        except Exception as error:
+            raise _backend_error(error) from None
 
     def consume(self, ref: Mapping[str, Any], *, account_id: str, purpose: str) -> CredentialValue:
         service, name = self._key(ref, account_id=account_id, purpose=purpose)
@@ -231,7 +248,7 @@ class CredentialStore:
         Do not blindly replay timed-out writes or claim OS cancellation; caller
         must surface unknown outcome/reconcile orphan operations before retry.
         """
-        if operation not in {'write', 'consume', 'delete', 'probe'}:
+        if operation not in {'write', 'replace', 'consume', 'delete', 'probe'}:
             raise CredentialStoreError('credential_invalid')
         try:
             return await asyncio.wait_for(asyncio.to_thread(getattr(self, operation), *args, **kwargs), 5.0)

@@ -157,6 +157,10 @@ async def resolve_runtime_secret(ref: Mapping[str, Any], expectedPurpose: str) -
     if ref.get('backend') is not None:
         # Managed refs never fall back to the legacy integrity-only file store.
         # Resolve only here, at the engine-owned trusted transport boundary.
+        if expectedPurpose == 'provider_oauth_token':
+            # A ChatGPT account's bundle: its access token, refreshed when due.
+            from ..providers.chatgpt_account import current_access_token
+            return bytearray((await current_access_token(dict(ref))).encode())
         from .credentials import CredentialStore
         store = CredentialStore.open(ref.get('installation_id'), ref.get('backend'))
         value = await store.bounded('consume', ref, account_id=ref.get('account_id'), purpose=expectedPurpose)

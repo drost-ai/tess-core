@@ -23,10 +23,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import fcntl
 import hashlib
 import json
+import os
 import secrets
 import time
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -41,6 +44,12 @@ CALLBACK_PATH = "/auth/callback"
 PREFERRED_PORT = 1455
 MAX_RESPONSE_BYTES = 1024 * 1024
 LEEWAY_SECONDS = 60
+PURPOSE = "provider_oauth_token"
+# Refresh this long before the access token expires (unless the server's
+# earliest_refresh_at is later), and always within the last half minute.
+REFRESH_MARGIN_SECONDS = 300.0
+MUST_REFRESH_SECONDS = 30.0
+LOCK_WAIT_SECONDS = 60.0
 # Refresh errors after which only signing in again helps (errors-and-recovery).
 TERMINAL_REFRESH_ERRORS = frozenset({"invalid_grant", "invalid_refresh_token", "token_expired", "refresh_token_expired",
                                       "refresh_token_invalidated", "refresh_token_reused"})
@@ -234,6 +243,125 @@ class SignIn:
             await writer.drain()
         finally:
             writer.close()
+
+
+# -- the stored bundle: refresh and revocation -----------------------------
+#
+# The bundle lives in the managed credential store under one reference that
+# configuration keeps; a refresh rewrites it in place. Refreshes are single
+# flight: one per bundle in this process (an asyncio lock) and across every
+# process on the runtime home (a file lock), and the bundle is read again
+# once the lock is held, so a rotation another process made is used, never
+# repeated. The window between the token endpoint answering and the store
+# holding the answer cannot be closed; it is kept to one write.
+
+_LOCKS: dict[tuple[int, str], asyncio.Lock] = {}
+
+
+async def store_grant(store: Any, grant: Grant) -> dict[str, Any]:
+    """Keep a verified grant; returns the reference configuration holds."""
+    return await store.bounded("write", str(uuid.uuid4()), PURPOSE, grant.bundle())
+
+
+async def current_access_token(ref: dict[str, Any], *, force: bool = False, stale: str | None = None,
+                               endpoints: Endpoints = OPENAI, opener: Opener | None = None,
+                               clock: Callable[[], float] | None = None, lock_dir: str | None = None) -> str:
+    """The bundle's access token, refreshed first when it is due. ``force``
+    (after the API refused ``stale``) refreshes unless another caller already
+    replaced that token. A terminal refresh error raises with ``terminal``;
+    a transient one returns a token that is still valid, else raises."""
+    clock = clock or time.time
+    store = _store_for(ref)
+    bundle = await _read(store, ref)
+    if not _due(bundle, clock(), force=force, stale=stale):
+        return bundle["access_token"]
+    lock = _LOCKS.setdefault((id(asyncio.get_running_loop()), ref["id"]), asyncio.Lock())
+    async with lock:
+        handle = await asyncio.to_thread(_hold, _lock_path(ref, lock_dir))
+        try:
+            bundle = await _read(store, ref)  # another holder may have refreshed it
+            if not _due(bundle, clock(), force=force, stale=stale):
+                return bundle["access_token"]
+            try:
+                tokens = await token_request(endpoints, opener or urllib_opener, {
+                    "grant_type": "refresh_token", "client_id": bundle["client_id"],
+                    "refresh_token": bundle["refresh_token"], "resource": RESOURCE}, refresh=True)
+            except ChatGPTAccountError as error:
+                if not error.terminal and clock() < bundle["expires_at"] - MUST_REFRESH_SECONDS:
+                    return bundle["access_token"]  # still good; the next call tries again
+                raise
+            grant = grant_from(tokens, client_id=bundle["client_id"], account_id=bundle["account_id"], email="",
+                               now=clock(), previous=bundle)
+            await store.bounded("replace", ref, account_id=ref["account_id"], purpose=PURPOSE, value=grant.bundle())
+            return grant.access_token
+        finally:
+            await asyncio.to_thread(handle.close)
+
+
+async def revoke(ref: dict[str, Any], *, endpoints: Endpoints = OPENAI, opener: Opener | None = None,
+                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep, attempts: int = 3) -> bool:
+    """Sign out: revoke the refresh token (retrying a network failure or 5xx
+    a few times), then forget the bundle either way. Returns whether OpenAI
+    confirmed it; when not, the owner can disconnect in ChatGPT's settings.
+    The issued client id and host id are the caller's to keep."""
+    store = _store_for(ref)
+    bundle = await _read(store, ref)
+    confirmed = False
+    for attempt in range(max(1, attempts)):
+        try:
+            status, _ = await (opener or urllib_opener)("POST", endpoints.revoke, {
+                "token": bundle["refresh_token"], "token_type_hint": "refresh_token", "client_id": bundle["client_id"]})
+        except Exception:  # noqa: BLE001 (a network failure: retried)
+            status = 0
+        if status == 200:
+            confirmed = True
+            break
+        if status and status < 500 and status != 429:
+            break  # refused: retrying the same request will not help
+        if attempt + 1 < attempts:
+            await sleep(0.5 * 2 ** attempt)
+    await store.bounded("delete", ref, account_id=ref["account_id"], purpose=PURPOSE, referenced_ids=frozenset())
+    return confirmed
+
+
+def _store_for(ref: dict[str, Any]) -> Any:
+    from ..runtime.credentials import CredentialStore
+    return CredentialStore.open(ref.get("installation_id"), ref.get("backend"))
+
+
+async def _read(store: Any, ref: dict[str, Any]) -> dict[str, Any]:
+    return dict((await store.bounded("consume", ref, account_id=ref["account_id"], purpose=PURPOSE)).payload)
+
+
+def _due(bundle: dict[str, Any], now: float, *, force: bool, stale: str | None) -> bool:
+    if force:
+        return stale is None or bundle["access_token"] == stale
+    expires = float(bundle["expires_at"])
+    if now >= expires - MUST_REFRESH_SECONDS:
+        return True
+    return now >= max(expires - REFRESH_MARGIN_SECONDS, float(bundle.get("earliest_refresh_at") or 0))
+
+
+def _lock_path(ref: dict[str, Any], lock_dir: str | None) -> str:
+    if lock_dir is None:
+        from ..storage.paths import get_state_root
+        lock_dir = os.path.join(get_state_root(), "locks")
+    os.makedirs(lock_dir, mode=0o700, exist_ok=True)
+    return os.path.join(lock_dir, f"chatgpt-refresh-{hashlib.sha256(ref['id'].encode()).hexdigest()[:16]}.lock")
+
+
+def _hold(path: str):
+    handle = open(path, "a+")  # noqa: SIM115 (held: it is the lock)
+    deadline = time.monotonic() + LOCK_WAIT_SECONDS
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return handle
+        except OSError:
+            if time.monotonic() > deadline:
+                handle.close()
+                raise ChatGPTAccountError("refresh_busy") from None
+            time.sleep(0.05)
 
 
 # -- the token endpoint, keys and identity ---------------------------------
