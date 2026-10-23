@@ -32,7 +32,15 @@ def _backend_error(error: Exception) -> CredentialStoreError:
         return CredentialStoreError('credential_permission_denied')
     if type(error).__name__ == 'KeyringLocked':
         return CredentialStoreError('credential_locked')
+    if type(error).__name__ == 'CredentialFileInvalid':
+        return CredentialStoreError('credential_invalid')
     return CredentialStoreError()
+
+
+BACKENDS = frozenset({'macos_keychain', 'linux_secret_service', 'encrypted_file'})
+# Unlocked encrypted-file stores by installation: the engine's secret boundary
+# resolves managed refs through these, never by reading the file itself.
+_ENCRYPTED: dict[str, 'CredentialStore'] = {}
 
 
 class CredentialBackend(Protocol):
@@ -84,13 +92,37 @@ class CredentialStore:
     """
     def __init__(self, installation_id: str, backend_name: str, backend: CredentialBackend):
         self.installation_id = _uuid(installation_id)
-        if backend_name not in {'macos_keychain', 'linux_secret_service'}:
+        if backend_name not in BACKENDS:
             raise CredentialStoreError('credential_invalid')
         self.backend_name, self._backend = backend_name, backend
 
     @classmethod
     def desktop(cls, installation_id: str, backend_name: str) -> CredentialStore:
         return cls(installation_id, backend_name, desktop_backend(backend_name))
+
+    @classmethod
+    def encrypted(cls, installation_id: str, path: str) -> CredentialStore:
+        """The installation's encrypted-file store, locked until its backend
+        is created or unlocked; registered so managed refs resolve through it."""
+        from .encrypted_credentials import EncryptedFileBackend
+        store = cls(installation_id, 'encrypted_file', EncryptedFileBackend(path, _uuid(installation_id)))
+        _ENCRYPTED[store.installation_id] = store
+        return store
+
+    @classmethod
+    def open(cls, installation_id: str, backend_name: str) -> CredentialStore:
+        """The store a managed ref names. An encrypted file nobody unlocked in
+        this process is locked, not read."""
+        if backend_name == 'encrypted_file':
+            store = _ENCRYPTED.get(_uuid(installation_id))
+            if store is None:
+                raise CredentialStoreError('credential_locked')
+            return store
+        return cls.desktop(installation_id, backend_name)
+
+    @property
+    def backend(self) -> CredentialBackend:
+        return self._backend
 
     def _key(self, ref: Mapping[str, Any], *, account_id: str, purpose: str) -> tuple[str, str]:
         if (not is_runtime_secret_ref(dict(ref)) or set(ref) != {

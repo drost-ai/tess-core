@@ -157,7 +157,7 @@ async def resolve_runtime_secret(ref: Mapping[str, Any], expectedPurpose: str) -
         # Managed refs never fall back to the legacy integrity-only file store.
         # Resolve only here, at the engine-owned trusted transport boundary.
         from .credentials import CredentialStore
-        store = CredentialStore.desktop(ref.get('installation_id'), ref.get('backend'))
+        store = CredentialStore.open(ref.get('installation_id'), ref.get('backend'))
         value = await store.bounded('consume', ref, account_id=ref.get('account_id'), purpose=expectedPurpose)
         key = 'api_key' if expectedPurpose == 'provider_api_key' else 'access_token'
         result = value.payload.get(key)

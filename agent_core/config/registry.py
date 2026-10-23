@@ -91,7 +91,7 @@ class ProviderRegistry:
                 try:
                     if (auth.get('kind') not in {'openai_api_key', 'anthropic_api_key'}
                             or not is_runtime_secret_ref(ref) or ref.get('purpose') != 'provider_api_key'
-                            or ref.get('backend') not in {'macos_keychain', 'linux_secret_service'}
+                            or ref.get('backend') not in {'macos_keychain', 'linux_secret_service', 'encrypted_file'}
                             or set(ref) != {'kind', 'version', 'id', 'purpose', 'backend', 'installation_id', 'account_id'}
                             or auth.get('envVar') is not None):
                         raise ValueError()

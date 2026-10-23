@@ -475,8 +475,10 @@ Python public additions: `agent_core.runtime.credentials.CredentialStore`,
 `CredentialStoreError`, `CredentialBackend`, `desktop_backend`. `CredentialStore`
 uses the existing RuntimeSecretRef kind/version/purposes, with required managed
 reference fields `backend`, `installation_id`, `account_id` (UUID namespace pins).
-Backends: `macos_keychain`, `linux_secret_service`, via the optional `desktop-credentials`
-extra; no default backend, plugin auto-selection, plaintext or null fallback, or OS
+Backends: `macos_keychain`, `linux_secret_service` (`desktop-credentials` extra) and
+`encrypted_file` (`encrypted-credentials` extra: `CredentialStore.encrypted(id, path)`, an
+AES-256-GCM file locked until `backend.create/unlock(UnlockSecret)`; `CredentialStore.open`
+resolves refs). No default backend, auto-selection, plaintext or null fallback, or OS
 operation at import (native receipts: docs/receipts/epic92/b1-*.json at repo root).
 
 `write(account_id, purpose, payload)` makes a NEW immutable ref (API key or OAuth bundle); a
@@ -492,8 +494,7 @@ transport boundary consumes it through the explicit backend, never the legacy
 runtime-secret file store. Env references and Anthropic auth tokens are unchanged;
 no setup-token onboarding or other applications' token refresh is added.
 
-Host imports stay in `engine_session.py`. Owner OS-user processes are trusted (keyring
-access is not process isolation); headless encrypted storage is an open dependency.
+Host imports stay in `engine_session.py`; owner OS-user processes are trusted (no isolation).
 `ProviderRegistry.from_document(mapping)` validates staged in-memory records with
 the registry schema, with no discovery, file writes, credential or provider I/O,
 and does not assert provider readiness.

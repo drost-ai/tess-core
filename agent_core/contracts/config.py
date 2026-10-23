@@ -35,7 +35,7 @@ class RuntimeSecretRef(TypedDict):
     id: str
     purpose: RuntimeSecretPurpose
     version: Literal[1]
-    backend: NotRequired[Literal["macos_keychain", "linux_secret_service"]]
+    backend: NotRequired[Literal["macos_keychain", "linux_secret_service", "encrypted_file"]]
     installation_id: NotRequired[str]
     account_id: NotRequired[str]
 
