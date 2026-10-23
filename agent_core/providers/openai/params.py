@@ -20,6 +20,7 @@ def build_responses_create_params(args: dict[str, Any] | None = None) -> dict[st
     args = dict(args or {})
     request = args["request"]
     is_codex = bool(args.get("isCodexBackend"))
+    chatgpt_plan = bool(args.get("chatgptPlan"))
     params: dict[str, Any] = {
         "model": request["model"],
         "input": convert_messages_to_input(request.get("messages", [])),
@@ -35,7 +36,7 @@ def build_responses_create_params(args: dict[str, Any] | None = None) -> dict[st
         reasoning["summary"] = args["reasoningSummary"]
     if reasoning:
         params["reasoning"] = reasoning
-    if not is_codex:
+    if not is_codex and not chatgpt_plan:
         params["max_output_tokens"] = _resolve_max_output_tokens(request)
     tools = _convert_tools(request.get("tools", []))
     if tools:
@@ -45,6 +46,8 @@ def build_responses_create_params(args: dict[str, Any] | None = None) -> dict[st
     )
     if is_codex:
         _remove_codex_native_resume_options(merged)
+    if chatgpt_plan:
+        _remove_chatgpt_plan_unsupported(merged)
     return merged
 
 def build_chat_completions_create_params(request: dict[str, Any] | None = None, options: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -164,6 +167,24 @@ def _merge_request_options(
     if extra_body:
         merged["extra_body"] = extra_body
     return merged
+
+
+# Responses fields a ChatGPT plan refuses (preview limitations): history
+# travels in ``input``, and sampling and metadata stay the service's.
+_CHATGPT_PLAN_UNSUPPORTED = ("temperature", "top_p", "metadata", "user", "previous_response_id", "background",
+                             "max_output_tokens", "starting_after")
+
+
+def _remove_chatgpt_plan_unsupported(params: dict[str, Any]) -> None:
+    params["store"], params["stream"] = False, True
+    for key in _CHATGPT_PLAN_UNSUPPORTED:
+        params.pop(key, None)
+    extra_body = params.get("extra_body")
+    if isinstance(extra_body, dict):
+        for key in (*_CHATGPT_PLAN_UNSUPPORTED, "store", "stream"):
+            extra_body.pop(key, None)
+        if not extra_body:
+            params.pop("extra_body", None)
 
 
 def _remove_codex_native_resume_options(params: dict[str, Any]) -> None:

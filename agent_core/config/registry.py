@@ -89,8 +89,10 @@ class ProviderRegistry:
                 from ..runtime.secrets import is_runtime_secret_ref
                 ref = auth["credentialRef"]
                 try:
-                    if (auth.get('kind') not in {'openai_api_key', 'anthropic_api_key'}
-                            or not is_runtime_secret_ref(ref) or ref.get('purpose') != 'provider_api_key'
+                    # A ChatGPT account is an OAuth bundle; every other managed credential is an API key.
+                    purpose = 'provider_oauth_token' if auth.get('kind') == 'chatgpt' else 'provider_api_key'
+                    if (auth.get('kind') not in {'openai_api_key', 'anthropic_api_key', 'chatgpt'}
+                            or not is_runtime_secret_ref(ref) or ref.get('purpose') != purpose
                             or ref.get('backend') not in {'macos_keychain', 'linux_secret_service', 'encrypted_file'}
                             or set(ref) != {'kind', 'version', 'id', 'purpose', 'backend', 'installation_id', 'account_id'}
                             or auth.get('envVar') is not None):
@@ -99,13 +101,15 @@ class ProviderRegistry:
                     _uuid(ref['account_id'])
                 except (ValueError, KeyError, TypeError, CredentialStoreError):
                     raise ProviderRegistryError('Invalid managed credential reference') from None
-            supported = {"anthropic_api_key", "anthropic_auth_token", "custom_bearer", "none"} if record["kind"] == "anthropic" else {"openai_api_key", "openai_api_key_or_codex", "custom_bearer", "none"}
+            supported = {"anthropic_api_key", "anthropic_auth_token", "custom_bearer", "none"} if record["kind"] == "anthropic" else {"openai_api_key", "openai_api_key_or_codex", "custom_bearer", "none", "chatgpt"}
             if not isinstance(auth.get("kind"), str) or auth["kind"] not in supported:
                 raise ProviderRegistryError(f"Profile '{name}' has unsupported auth kind")
             if auth.get("envVar") is not None and (not isinstance(auth["envVar"], str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", auth["envVar"])):
                 raise ProviderRegistryError(f"Profile '{name}' has invalid auth.envVar")
             if auth["kind"] not in {"none", "openai_api_key_or_codex"} and "credentialRef" not in auth and (not isinstance(auth.get("envVar"), str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", auth["envVar"])):
                 raise ProviderRegistryError(f"Profile '{name}' requires auth.envVar")
+            if auth["kind"] == "chatgpt":
+                self._validate_chatgpt_plan(record, name)
             if not isinstance(record.get("defaultModel"), str) or not record["defaultModel"].strip():
                 raise ProviderRegistryError(f"Profile '{name}' requires defaultModel")
             if not isinstance(record.get("headers", {}), dict):
@@ -113,6 +117,16 @@ class ProviderRegistry:
             self._profiles[name] = copy.deepcopy(record)
             # Validate profile normalization without reflecting raw values in errors.
             self.resolve_profile(name)
+
+    @staticmethod
+    def _validate_chatgpt_plan(record: dict[str, Any], name: str) -> None:
+        """ChatGPT plan use is the public Responses API with full history over
+        SSE: no other endpoint, API mode, WebSocket or incremental chaining."""
+        capabilities = record.get("capabilities") if isinstance(record.get("capabilities"), dict) else {}
+        if ("credentialRef" not in record["auth"] or record.get("apiMode") not in (None, "responses")
+                or (record.get("baseUrl") or "https://api.openai.com/v1").rstrip("/") != "https://api.openai.com/v1"
+                or any(capabilities.get(key) for key in ("openaiResponsesWebSocket", "openaiResponsesIncremental", "openaiTurnState"))):
+            raise ProviderRegistryError(f"Profile '{name}' uses a ChatGPT account: the public Responses API with a managed account only")
 
     @staticmethod
     def _validate_no_embedded_credentials(record: dict[str, Any], name: str) -> None:
@@ -172,6 +186,8 @@ class ProviderRegistry:
             return {"customHeaders": headers}
         env = os.environ if environment is None else environment
         if 'credentialRef' in auth:
+            if auth['kind'] == 'chatgpt':
+                return {'openaiToken': copy.deepcopy(auth['credentialRef']), 'customHeaders': headers}
             if auth['kind'] not in {'openai_api_key', 'anthropic_api_key'}:
                 raise ProviderRegistryError('Managed credentials require API-key authentication')
             return {'apiKey': copy.deepcopy(auth['credentialRef']), 'customHeaders': headers}

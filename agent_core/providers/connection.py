@@ -32,7 +32,8 @@ async def _secret(value: Any) -> str | None:
     if value is None:
         return None
     if is_runtime_secret_ref(value):
-        return bytes(await resolve_runtime_secret(value, "provider_api_key")).decode()
+        purpose = value.get("purpose") if value.get("purpose") in ("provider_api_key", "provider_oauth_token") else "provider_api_key"
+        return bytes(await resolve_runtime_secret(value, purpose)).decode()
     return str(value)
 
 
@@ -67,6 +68,11 @@ async def check_provider_connection(registry: ProviderRegistry, name: str, *, ti
         return _result("failed", "invalid_profile")
     except RuntimeSecretError as error:
         return _result("failed", error.code if error.code.startswith("credential_") else "credential_unavailable")
+    except Exception as error:  # noqa: BLE001 (a ChatGPT account that could not be refreshed)
+        from .chatgpt_account import ChatGPTAccountError
+        if not isinstance(error, ChatGPTAccountError):
+            raise
+        return _result("failed", "reauthorization_required" if error.terminal else "credential_unavailable")
     parts = urlsplit(url)
     if parts.scheme not in {"http", "https"} or not parts.hostname:
         return _result("failed", "invalid_profile")
@@ -94,8 +100,14 @@ async def check_provider_connection(registry: ProviderRegistry, name: str, *, ti
     if not 200 <= status < 300:
         return _result("failed", "invalid_provider_response")
     try:
-        items = json.loads(body).get("data")
-        models = [str(item["id"]) for item in items if isinstance(item, dict) and isinstance(item.get("id"), str)][:MAX_MODELS]
+        listed = json.loads(body)
+        if isinstance(listed.get("models"), list):
+            # A ChatGPT account's catalog: slugs the account may pick, in the server's order.
+            models = [str(item["slug"]) for item in listed["models"] if isinstance(item, dict)
+                      and isinstance(item.get("slug"), str) and item.get("visibility") == "list"][:MAX_MODELS]
+        else:
+            items = listed.get("data")
+            models = [str(item["id"]) for item in items if isinstance(item, dict) and isinstance(item.get("id"), str)][:MAX_MODELS]
     except (ValueError, TypeError, AttributeError, KeyError):
         return _result("failed", "invalid_provider_response")
     return _result("available", "models_listed", models)

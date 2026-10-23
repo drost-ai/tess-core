@@ -126,6 +126,7 @@ async def send_openai_responses_request(args: dict[str, Any] | None = None, **kw
             logical_params = build_responses_create_params(
                 {
                     "isCodexBackend": mode == "codex",
+                    "chatgptPlan": ((((args.get("config") or {}).get("providerProfile") or {}).get("auth") or {}).get("kind") == "chatgpt"),
                     "request": args["request"],
                     "reasoningSummary": (
                         (args.get("config") or {}).get("providerProfile") or {}

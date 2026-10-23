@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from ..providers.anthropic import send_anthropic_messages_request
-from ..providers.errors import is_provider_request_error
+from ..providers.errors import ProviderRequestError, is_provider_request_error
 from ..providers.openai import send_openai_request
 from ..session.persistence import persist_provider_failure, persist_session
 from ..runtime.events.emit import safe_emit as _safe_emit
@@ -96,19 +96,33 @@ def _create_provider(
         async def send_openai(request: dict[str, Any]) -> dict[str, Any]:
             await _heal_partial_output_commit(session, state_store)
             resolved = await resolve_provider_config_secrets(config)
-            return await send_openai_request(
-                token=resolved.get("openaiToken"),
-                baseUrl=resolved.get("openaiBaseUrl"),
-                headers=resolved.get("customHeaders"),
-                mode=resolved.get("openaiApiMode"),
-                config=resolved,
-                request=request,
-                requestOptions=(resolved.get("providerProfile") or {}).get("requestOptions") or {},
-                runtime=provider_runtime,
-                clientFactory=runtime.get("openaiClientFactory") or resolved.get("openaiClientFactory"),
-                turnSession=provider_turn_session,
-                **timeout_policy,
-            )
+
+            async def send(resolved: dict[str, Any]) -> dict[str, Any]:
+                return await send_openai_request(
+                    token=resolved.get("openaiToken"),
+                    baseUrl=resolved.get("openaiBaseUrl"),
+                    headers=resolved.get("customHeaders"),
+                    mode=resolved.get("openaiApiMode"),
+                    config=resolved,
+                    request=request,
+                    requestOptions=(resolved.get("providerProfile") or {}).get("requestOptions") or {},
+                    runtime=provider_runtime,
+                    clientFactory=runtime.get("openaiClientFactory") or resolved.get("openaiClientFactory"),
+                    turnSession=provider_turn_session,
+                    **timeout_policy,
+                )
+
+            try:
+                return await send(resolved)
+            except ProviderRequestError as error:
+                account = config.get("openaiToken")
+                if not (_chatgpt_account(config) and error.record.get("status") == 401 and not error.record.get("hadAssistantOutput")):
+                    raise
+                # A ChatGPT account's token can be refused before its expiry:
+                # one forced refresh (unless another caller already made one), one retry.
+                from ..providers.chatgpt_account import current_access_token
+                await current_access_token(dict(account), force=True, stale=resolved.get("openaiToken"))
+                return await send(await resolve_provider_config_secrets(config))
 
         return {"send": send_openai}
     if not config.get("apiKey") and not config.get("authToken") and not no_auth:
@@ -202,3 +216,9 @@ def _missing_anthropic_credential_response(config: dict[str, Any], request: dict
         "model": request["model"],
         "stopReason": "end_turn",
     }
+
+
+def _chatgpt_account(config: dict[str, Any]) -> bool:
+    auth = (config.get("providerProfile") or {}).get("auth") or {}
+    token = config.get("openaiToken")
+    return auth.get("kind") == "chatgpt" and isinstance(token, dict) and token.get("purpose") == "provider_oauth_token"

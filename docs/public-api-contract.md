@@ -470,31 +470,31 @@ absolute executable, an explicit environment (including any required PATH),
 
 ### Explicit desktop managed credentials (Slice B foundation)
 
-Python public additions: `agent_core.runtime.credentials.CredentialStore`,
-`CredentialStoreError`, `CredentialBackend`, `desktop_backend`. `CredentialStore`
-uses the existing RuntimeSecretRef kind/version/purposes, with required managed
-reference fields `backend`, `installation_id`, `account_id` (UUID namespace pins).
-Backends: `macos_keychain`, `linux_secret_service` (`desktop-credentials` extra) and
-`encrypted_file` (`encrypted-credentials` extra: `CredentialStore.encrypted(id, path)`, an
-AES-256-GCM file locked until `backend.create/unlock(UnlockSecret)`; `CredentialStore.open`
-resolves refs). No default backend, auto-selection, plaintext or null fallback, or OS
-operation at import (native receipts: docs/receipts/epic92/b1-*.json at repo root).
+`agent_core.runtime.credentials.CredentialStore`, `CredentialStoreError`, `CredentialBackend`,
+`desktop_backend`: RuntimeSecretRef kind/version/purposes plus required pins `backend`,
+`installation_id`, `account_id` (UUIDs). Backends `macos_keychain`, `linux_secret_service`
+(`desktop-credentials` extra), `encrypted_file` (`encrypted-credentials`: `CredentialStore.encrypted(id,
+path)`, AES-256-GCM, locked until `backend.create/unlock(UnlockSecret)`; `open` resolves refs). No default,
+auto-selection, plaintext/null fallback or OS call at import (receipts: docs/receipts/epic92/b1-*.json).
+`write(account_id, purpose, payload)` makes a NEW immutable ref (API key, OAuth bundle, or a host
+channel's `{token}` as `channel_token`); `replace` rewrites only an OAuth bundle in place. `consume` and
+`resolve_runtime_secret` are transport-only (repr-redacted, never a browser API); `delete` rejects
+in-use refs; `probe()` says available/locked/permission_denied/unavailable; `bounded` caps waits at 5 s.
 
-`write(account_id, purpose, payload)` makes a NEW immutable ref (API key, OAuth bundle, or a
-host channel's `{token}` under `channel_token`); a failed replacement keeps the old one. `consume`
-and `resolve_runtime_secret` are transport-only (repr-redacted, never a browser API). `delete` rejects
-in-use refs. `probe()` reports available/locked/permission_denied/unavailable via a
-self-removing round trip. `bounded` caps waits at 5 s; reconcile late writes, never replay.
+Registry `auth` takes `credentialRef` (exclusive with `envVar`) for API keys, or kind `chatgpt` with a
+`provider_oauth_token` ref (public Responses API only; no WebSocket/incremental capabilities). Refs stay
+opaque until `resolve_runtime_secret`, never the legacy file store. Options `webSearch: {provider,
+exaApiKeyRef}` give WebSearch a managed Exa key; failures are static `fallback_reason` codes, and
+`await agent_core.tools.web_search_api.check_exa_connection(config)` spends one 1-result search.
 
-Registry `auth` accepts `credentialRef`, exclusive with `envVar`, for API-key authentication
-only; `resolve_auth` returns the opaque ref (proving neither backend availability nor provider
-readiness), consumed via `resolve_runtime_secret` through the explicit backend, never the legacy
-file store; env references are unchanged. Options `webSearch: {provider, exaApiKeyRef}` give
-WebSearch a managed Exa key; failures are static `fallback_reason` codes, and `await agent_core.
-tools.web_search_api.check_exa_connection(config)` spends one 1-result search (state/code only).
+`agent_core.providers.chatgpt_account` (`chatgpt-account` extra) is OpenAI's open-source Sign in with
+ChatGPT: `SignIn.begin(host_id=, app_name=, client_id=, account_id=, id_token_hint=, login_hint=)` binds
+127.0.0.1, `.url` is for the owner's browser only, `await .finish()` returns a verified `Grant` (issued
+client, `sub`, `plan_use`); `new_host_id()`, `store_grant(store, grant)`, `current_access_token(ref)`
+(single-flight refresh; `ChatGPTAccountError.terminal` means sign in again), `revoke(ref)`. Plan requests
+drop unsupported fields and a 401 gets one forced refresh; errors are static codes, tokens never logged.
 
 Host imports stay in `engine_session.py`; owner OS-user processes are trusted (no isolation).
-`ProviderRegistry.from_document(mapping)` validates staged in-memory records (no discovery,
-file writes, credential or provider I/O; not a readiness check). `await agent_core.providers.
-connection.check_provider_connection(registry, name)` lists models (GET, never a completion)
-with the profile's own credential resolved in the engine; it returns state/code/model ids only.
+`ProviderRegistry.from_document(mapping)` validates staged records (no discovery, I/O or readiness
+claim). `await agent_core.providers.connection.check_provider_connection(registry, name)` lists models
+(GET, never a completion; a ChatGPT account's own catalog) and returns state/code/model ids only.
