@@ -78,11 +78,13 @@ async def mutate_project_memory_records(cwd: str, mutate) -> list[dict[str, Any]
 # (one file per server); project/local scopes keep mcp.json in their state
 # dirs. See storage/_mcp_fragments.py for the fragment contract.
 async def load_mcp_servers(scope: Scope, cwd: str) -> list[dict[str, Any]]:
+    """The MCP servers registered at a scope: ``user``, ``project`` or ``local``."""
     if scope == "user":
         return await load_user_mcp_fragments()
     return await read_json_file(_settings_path(scope, cwd, "mcp.json"), [])
 
 async def save_mcp_servers(scope: Scope, cwd: str, servers: list[dict[str, Any]]) -> None:
+    """Replace the MCP servers registered at a scope."""
     if scope == "user":
         await save_user_mcp_fragments(servers)
         return
@@ -94,24 +96,29 @@ async def mutate_mcp_servers(scope: Scope, cwd: str, mutate) -> list[dict[str, A
     return await mutate_json_file(_settings_path(scope, cwd, "mcp.json"), mutate, [])
 
 async def load_plugins(scope: Scope, cwd: str) -> list[dict[str, Any]]:
+    """The plugin records installed at a scope."""
     return await read_json_file(_settings_path(scope, cwd, "plugins.json"), [])
 
 async def save_plugins(scope: Scope, cwd: str, records: list[dict[str, Any]]) -> None:
+    """Replace the plugin records installed at a scope."""
     await mutate_json_file(_settings_path(scope, cwd, "plugins.json"), lambda _current: records, [])
 
 async def mutate_plugins(scope: Scope, cwd: str, mutate) -> list[dict[str, Any]]:
     return await mutate_json_file(_settings_path(scope, cwd, "plugins.json"), mutate, [])
 
 async def load_marketplaces() -> list[dict[str, Any]]:
+    """The plugin marketplaces known to this runtime home."""
     return await read_json_file(os.path.join(get_state_root(), "marketplaces.json"), [])
 
 async def save_marketplaces(records: list[dict[str, Any]]) -> None:
+    """Replace the plugin marketplaces known to this runtime home."""
     await mutate_json_file(os.path.join(get_state_root(), "marketplaces.json"), lambda _current: records, [])
 
 async def mutate_marketplaces(mutate) -> list[dict[str, Any]]:
     return await mutate_json_file(os.path.join(get_state_root(), "marketplaces.json"), mutate, [])
 
 async def load_auto_mode(cwd: str) -> AutoModePolicy:
+    """The project's auto-mode policy, or the default when it has none."""
     return await read_json_file(os.path.join(get_project_state_dir(cwd), "auto-mode.json"), clone(DEFAULT_AUTO_MODE))
 
 async def save_auto_mode(cwd: str, config: AutoModePolicy) -> None:
@@ -121,6 +128,7 @@ async def mutate_auto_mode(cwd: str, mutate) -> AutoModePolicy:
     return await mutate_json_file(os.path.join(get_project_state_dir(cwd), "auto-mode.json"), mutate, clone(DEFAULT_AUTO_MODE))
 
 def get_default_auto_mode() -> AutoModePolicy:
+    """A copy of the default auto-mode policy."""
     return clone(DEFAULT_AUTO_MODE)
 
 def resolve_scope(scope: str | None) -> Scope:

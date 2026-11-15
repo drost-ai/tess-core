@@ -10,6 +10,10 @@ from ..storage import list_remote_sessions
 
 
 async def resolve_teleport_session(args: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Choose the remote session to resume: by id, or by asking when the terminal is interactive.
+
+    Returns ``None`` when no teleport was requested.
+    """
     args = dict(args or {})
     teleport = args.get("teleport")
     options = args.get("options") or {}

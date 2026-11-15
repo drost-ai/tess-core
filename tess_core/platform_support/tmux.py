@@ -8,6 +8,10 @@ from typing import Any
 from .commands import _runner_exec, _runner_exec_text, _runner_which, build_shell_command
 
 async def maybe_exec_into_tmux(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Hand the launch over to a tmux session when the ``tmux`` option asks for one.
+
+    Returns ``{"handled": False}``, with an ``error`` when it was asked to and could not.
+    """
     args = dict(args or {})
     options = args.get("options") or {}
     launch = args.get("launch") or {}
@@ -57,6 +61,7 @@ async def detect_tmux_availability(args: dict[str, Any] | None = None) -> dict[s
     return {"available": True, "binaryPath": binary, "version": version}
 
 def resolve_tmux_launch_context_from_env(env: dict[str, str] | None = None) -> dict[str, Any] | None:
+    """The launch context a tmux hand-off left in the environment, or ``None`` when there is none."""
     env = env or os.environ
     cwd = env.get("TESS_LAUNCH_CWD")
     original = env.get("TESS_LAUNCH_ORIGINAL_CWD")

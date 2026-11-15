@@ -22,6 +22,7 @@ class ImageBudgetError(RuntimeError):
 
 
 def estimate_encoded_image_request_bytes(mimeType: str, decodedBytes: int) -> int:
+    """An upper estimate of the bytes an image adds to a request once base64-encoded."""
     mime_type = normalize_image_mime_type(mimeType)
     if isinstance(decodedBytes, bool) or not isinstance(decodedBytes, int) or decodedBytes < 0:
         raise ValueError("decoded image bytes must be a non-negative integer")

@@ -23,6 +23,7 @@ FIXED_COMPACTION_EFFORT = "high"
 
 
 class CompactionModelClient:
+    """The model client compaction uses: wraps the ``complete`` callable that writes a checkpoint."""
     def __init__(self, complete):
         self.complete = complete
 

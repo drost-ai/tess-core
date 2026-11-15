@@ -95,6 +95,7 @@ async def load_session_with_reconciliation(sessionId: str) -> dict[str, Any]:
 
 
 async def load_session(sessionId: str) -> SessionRecord | None:
+    """Load a session with its conversation, or ``None`` when it does not exist."""
     result = await load_session_with_reconciliation(sessionId)
     return result["record"]
 

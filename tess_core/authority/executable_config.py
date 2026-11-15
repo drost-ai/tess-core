@@ -189,6 +189,10 @@ def _canonical_http_url(value: Any, field: str) -> str:
 
 
 def parse_mcp_server_config(value: Any, field: str = "mcp") -> dict[str, Any]:
+    """Validate one MCP server descriptor and return it in canonical form.
+
+    A malformed field is an error that names the field.
+    """
     source = _json_object(value, field)
     name = _identifier(source.get("name"), f"{field}.name")
     transport = source.get("transport")
@@ -265,6 +269,7 @@ def parse_mcp_server_config(value: Any, field: str = "mcp") -> dict[str, Any]:
 
 
 def parse_mcp_server_config_list(value: Any, field: str = "mcp") -> list[dict[str, Any]]:
+    """Validate one MCP server descriptor or a list of them. Duplicate names are an error."""
     values = value if isinstance(value, list) else [value]
     result = [parse_mcp_server_config(entry, f"{field}[{index}]") for index, entry in enumerate(values)]
     names: set[str] = set()
@@ -320,6 +325,7 @@ def _commands(value: Any, field: str) -> list[dict[str, Any]] | None:
 
 
 def parse_plugin_manifest_v1(value: Any, field: str = "plugin") -> dict[str, Any]:
+    """Validate a version-1 plugin manifest. Its entry path must stay inside the plugin root."""
     source = _json_object(value, field)
     plugin_id = _identifier(source.get("id", source.get("name")), f"{field}.id")
     version = _required_string(source.get("version"), f"{field}.version")
@@ -345,6 +351,7 @@ def parse_plugin_manifest_v1(value: Any, field: str = "plugin") -> dict[str, Any
 
 
 def parse_installed_plugin_record(value: Any, field: str = "installedPlugin") -> dict[str, Any]:
+    """Validate an installed-plugin record: manifest, enabled flag, scope, install time and source."""
     source = _object(value, field)
     if source.get("enabled") not in {True, False}:
         _fail(f"{field}.enabled", "expected a boolean")
@@ -360,6 +367,7 @@ def parse_installed_plugin_record(value: Any, field: str = "installedPlugin") ->
 
 
 def parse_marketplace_manifest(value: Any, field: str = "marketplace") -> dict[str, Any]:
+    """Validate a marketplace manifest and its plugins. Duplicate plugin ids are an error."""
     source = _json_object(value, field)
     plugins = source.get("plugins")
     if not isinstance(plugins, list):

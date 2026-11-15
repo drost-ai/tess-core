@@ -37,6 +37,10 @@ async def author_collaboration_update(args: dict[str, Any]) -> str:
 
 
 async def create_collaboration_runtime(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Start tracking a session's workers: its sub-agents, background tasks and monitors.
+
+    Returns controls to read the current snapshot, refresh it and close the tracker.
+    """
     args = dict(args or {})
     session_ref = args["session"]
     config_ref = args.get("config") or {}

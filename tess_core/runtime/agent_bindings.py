@@ -75,6 +75,11 @@ AGENT_RUNTIME_BINDING_FIELDS = frozenset(_CONTRACT_FIELDS | _EXTENSION_FIELDS)
 def create_agent_runtime_bindings(
     args: Mapping[str, Any] | None = None, **kwargs: Any
 ) -> Mapping[str, Any]:
+    """Build the read-only bindings an agent turn runs with.
+
+    They hold the tools, event sink, daemon, session binding and question policy.
+    An unknown field is an error.
+    """
     values = {**dict(args or {}), **kwargs}
     binding = _coerce_binding(values.get("sessionBinding"))
     question_policy = values.get("questionPolicy")
@@ -185,6 +190,7 @@ def materialize_agent_execution_runtime(bindings: Mapping[str, Any]) -> dict[str
 
 
 def is_task_supervisor_gateway(value: Any) -> bool:
+    """Whether a value offers the task daemon's client methods."""
     return isinstance(value, Mapping) and all(callable(value.get(name)) for name in _GATEWAY_METHODS)
 
 

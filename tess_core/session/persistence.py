@@ -34,6 +34,7 @@ from ..runtime.workspace import capture_workspace_snapshot, hydrate_session_work
 
 
 async def resolve_session(options: dict[str, Any], config: dict[str, Any], launchContext: dict[str, Any] | None = None) -> SessionRecord:
+    """Find the session the options ask to resume or fork, or create an empty one from the configuration."""
     launch = launchContext or {"cwd": config["cwd"], "originalCwd": config["cwd"]}
     sessions = await list_sessions()
     existing = await _resolve_existing_session(options, sessions, launch)
@@ -66,6 +67,7 @@ async def persist_session(
     options: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> None:
+    """Save a session when persistence is on and it has messages to save. ``force`` saves an empty one."""
     measurement = _begin_persistence_call(str(session.get("id") or ""), len(session.get("messages") or []))
     try:
         persist_options = {**(options or {}), **kwargs}
@@ -342,6 +344,7 @@ def format_session_candidate(session: dict[str, Any]) -> str:
 
 
 async def find_sessions_for_workspace(sessions: list[dict[str, Any]], cwd: str) -> list[dict[str, Any]]:
+    """The sessions that belong to a directory or to its git repository."""
     snapshot = await capture_workspace_snapshot(cwd, {"includePullRequest": False})
     resolved_cwd = os.path.abspath(cwd)
     resolved_git = os.path.abspath(snapshot["gitRoot"]) if snapshot.get("gitRoot") else None

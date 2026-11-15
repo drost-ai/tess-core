@@ -24,6 +24,10 @@ async def detect_ide_targets(args: dict[str, Any] | None = None) -> list[dict[st
     return list(targets.values())
 
 async def maybe_auto_connect_ide(cwd: str, args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Connect to the IDE when exactly one supported IDE is detected, launching it if needed.
+
+    Returns a status of ``connected`` or ``skipped`` with the reason.
+    """
     args = {**(args or {}), **kwargs}
     targets = await detect_ide_targets(args)
     if not targets:

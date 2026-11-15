@@ -185,6 +185,11 @@ class _LiveSession:
 
 
 class SessionManager:
+    """The runtime's sessions, reached as ``runtime.sessions``.
+
+    Opens, reopens, closes and ends sessions, and routes background results to the
+    session they belong to.
+    """
     def __init__(self, runtime: Any) -> None:
         self.runtime = runtime
         self._live: dict[str, _LiveSession] = {}

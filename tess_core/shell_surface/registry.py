@@ -93,6 +93,7 @@ _HOOK_REQUIREMENTS: dict[str, tuple[str, str]] = {
 
 
 def list_slash_commands(args: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """The available slash commands with their usage and description, including those the runtime adds."""
     args = dict(args or {})
     commands = [
         entry for entry in _COMMANDS

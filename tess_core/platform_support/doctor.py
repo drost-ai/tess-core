@@ -12,6 +12,11 @@ from .session_hygiene import build_session_hygiene_report
 from .tmux import detect_tmux_availability
 
 async def collect_doctor_report(cwd: str, args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Collect a diagnostic report for a workspace.
+
+    Covers the install, stored credentials, the task daemon, detected tools, session
+    hygiene, MCP servers and plugins.
+    """
     args = {**(args or {}), **kwargs}
     state_root = get_state_root()
     project_root = get_project_root(cwd)

@@ -9,6 +9,7 @@ from .sessions import _truncate_remote_summary
 
 
 async def format_bridge_tail(bridgeId: str, limit: int = 20) -> str:
+    """The last ``limit`` events of a remote bridge as text, one per line."""
     events = await load_bridge_events(bridgeId)
     if not events:
         return "No bridge events recorded."
@@ -42,6 +43,7 @@ async def get_bridge_diagnostics(bridgeId: str, limit: int = 20) -> dict[str, An
 
 
 async def list_active_bridge_rows() -> list[str]:
+    """One formatted row per active remote bridge, for display."""
     rows = []
     for bridge in await list_bridges():
         if bridge.get("status") != "active":

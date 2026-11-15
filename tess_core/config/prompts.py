@@ -32,6 +32,10 @@ def get_default_system_prompt() -> str:
     return build_default_system_prompt()
 
 def build_system_prompt_for_agent(config: dict[str, Any], agentName: str | None, fallbackSystemPrompt: str | None = None) -> str:
+    """The system prompt for a named agent: the base prompt followed by the agent's own instructions.
+
+    Returns the base prompt alone when the agent defines no instructions.
+    """
     fallback = fallbackSystemPrompt or build_effective_system_prompt(config)
     definition = resolve_agent_definition(config, agentName)
     if not definition or not definition.get("prompt"):
@@ -39,6 +43,7 @@ def build_system_prompt_for_agent(config: dict[str, Any], agentName: str | None,
     return f"{fallback}\n\n# Agent Instructions\n{definition['prompt']}"
 
 def resolve_model_for_agent(config: dict[str, Any], agentName: str | None, fallbackModel: str | None = None) -> str:
+    """The model a named agent runs on: its own, else the fallback, else the configured model."""
     definition = resolve_agent_definition(config, agentName)
     model = (definition or {}).get("model") or fallbackModel or config["model"]
     return normalize_model_name(model, resolve_provider_for_model_selection(config.get("provider"), model))

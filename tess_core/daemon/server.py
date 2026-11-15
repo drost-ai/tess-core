@@ -54,6 +54,10 @@ from .transport import (
 
 
 async def run_task_supervisor_daemon(cwd: str, instanceId: str, ownerPid: int | None = None) -> None:
+    """Run the task daemon for an instance in this process until it stops.
+
+    This is the entry point of the daemon process.
+    """
     await prepare_daemon_runtime_security({"instanceId": instanceId, "requireStoppedForMigration": True})
     wait_ms = _daemon_instance_wait_ms()
     async with with_record_transaction(

@@ -63,6 +63,10 @@ def authorize_runtime_secret_write(
     idempotencyKey: str | None = None,
     ttlMs: int | None = None,
 ) -> SecretWriteAuthorization:
+    """Issue a short-lived authorization to store one secret for one purpose.
+
+    It lasts five minutes unless ``ttlMs`` says otherwise, and never more than thirty.
+    """
     values = dict(args or {})
     selected_purpose = values.get("purpose", purpose)
     key = values.get("idempotencyKey", idempotencyKey)
@@ -88,6 +92,11 @@ async def store_runtime_secret(
     authorization: SecretWriteAuthorization | None = None,
     idempotencyKey: str | None = None,
 ) -> dict[str, Any]:
+    """Store a secret under an authorization and return a reference to it.
+
+    The secret is given as bytes. Repeating a call with the same idempotency key and
+    value returns the same reference.
+    """
     values = dict(args or {})
     selected_purpose = values.get("purpose", purpose)
     selected_secret = values.get("secret", secret)
@@ -141,6 +150,7 @@ async def store_runtime_secret(
 
 
 def is_runtime_secret_ref(value: Any) -> bool:
+    """Whether a value is a well-formed runtime secret reference."""
     return bool(
         isinstance(value, dict)
         and value.get("kind") == "runtime_secret"

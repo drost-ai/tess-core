@@ -19,6 +19,10 @@ from typing import Any
 
 
 async def finalize_background_subagent_success_from_env(session: dict[str, Any], result: dict[str, Any]) -> None:
+    """In a sub-agent worker process, record the finished turn as the child's result.
+
+    Does nothing outside a worker.
+    """
     agent_id = os.environ.get("TESS_CHILD_AGENT_ID")
     task_id = os.environ.get("TESS_CHILD_TASK_ID")
     if not agent_id or not task_id:
@@ -143,6 +147,10 @@ async def finalize_background_subagent_success_from_env(session: dict[str, Any],
 
 
 async def finalize_background_subagent_failure_from_env(error: Any) -> None:
+    """In a sub-agent worker process, record that the child failed.
+
+    A result that was already committed is kept. Does nothing outside a worker.
+    """
     agent_id = os.environ.get("TESS_CHILD_AGENT_ID")
     task_id = os.environ.get("TESS_CHILD_TASK_ID")
     session_id = os.environ.get("TESS_CHILD_SESSION_ID")

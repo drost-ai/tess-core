@@ -13,6 +13,10 @@ from .paths import get_state_root
 
 
 async def load_auth() -> dict[str, Any] | None:
+    """Read the runtime home's stored credentials file, or ``None`` when there is none.
+
+    Plain secrets found in an old file are moved into the secret store.
+    """
     auth = await read_json_file(os.path.join(get_state_root(), "auth.json"), None)
     if not auth:
         return None
@@ -43,12 +47,14 @@ def _load_codex_auth_token_sync(auth_path: str) -> str | None:
         return None
 
 async def save_auth(auth: dict[str, Any]) -> None:
+    """Write the runtime home's stored credentials file, keeping secrets in the secret store."""
     from ..runtime.secret_provider import migrate_legacy_stored_auth_secrets
 
     normalized = await migrate_legacy_stored_auth_secrets(auth)
     await write_json_file(os.path.join(get_state_root(), "auth.json"), normalized["auth"])
 
 async def clear_auth() -> None:
+    """Remove the runtime home's stored credentials file."""
     await _run_storage_io(_clear_auth_sync, os.path.join(get_state_root(), "auth.json"))
 
 

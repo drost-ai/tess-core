@@ -45,6 +45,7 @@ async def inspect_install_state(args: dict[str, Any] | None = None) -> dict[str,
     }
 
 async def run_repo_install(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Install a source checkout as the active package, in editable mode, and report the steps taken."""
     args = dict(args or {})
     runner = args.get("runner") or {}
     repo_root = str(Path(args.get("repoRoot") or REPO_ROOT))
@@ -66,6 +67,7 @@ async def run_repo_install(args: dict[str, Any] | None = None) -> dict[str, Any]
     return {"ok": True, "installState": await inspect_install_state(args), "steps": steps, "actions": actions}
 
 async def run_repo_update(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Update a source checkout from its upstream when the working tree is clean, and report each step."""
     args = dict(args or {})
     runner = args.get("runner") or {}
     repo_root = str(Path(args.get("repoRoot") or REPO_ROOT))

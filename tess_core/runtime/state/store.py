@@ -7,6 +7,9 @@ from .reducer import reduce_runtime_state
 from .shared import _extract_last_assistant_text, summarize_session_record
 
 def create_initial_runtime_state(session: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The starting runtime state: an idle turn, provider and compaction, with the session's summary
+    when a session is given.
+    """
     metadata = session.get("metadata", {}) if session else {}
     return {
         "session": (
@@ -40,6 +43,7 @@ def create_initial_runtime_state(session: dict[str, Any] | None = None) -> dict[
     }
 
 def create_runtime_state_store(initialState: dict[str, Any] | None = None) -> dict[str, Any]:
+    """A small state store over the runtime state: ``getState``, ``setState``, ``dispatch`` and ``subscribe``."""
     state = copy.deepcopy(initialState or create_initial_runtime_state())
     subscribers: list[Callable[[], None]] = []
 

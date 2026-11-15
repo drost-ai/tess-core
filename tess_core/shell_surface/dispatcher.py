@@ -96,6 +96,10 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Any]] = {
 
 
 async def handle_slash_command(args: dict[str, Any] | str | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Run a slash command the user typed.
+
+    Input that does not start with ``/`` returns ``{"outcome": "pass"}``.
+    """
     if isinstance(args, str):
         args = {"command": args, **kwargs}
     else:

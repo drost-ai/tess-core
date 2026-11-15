@@ -52,6 +52,10 @@ async def send_openai_request(args: dict[str, Any] | None = None, **kwargs: Any)
         return await send_openai_chat_completions_request(args)
     return await send_openai_responses_request({**args, "mode": mode})
 async def send_openai_responses_request(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Send one request to an OpenAI Responses endpoint and return the normalised response.
+
+    Retries transient failures.
+    """
     # Call-time import: the config package imports providers at module load.
     from ...config._knobs import knob_value
 

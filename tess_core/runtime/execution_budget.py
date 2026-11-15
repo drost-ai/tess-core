@@ -15,6 +15,11 @@ class ExecutionBudgetExceeded(RuntimeError):
 
 
 class ExecutionBudget:
+    """A ceiling on model calls, tool calls and elapsed time, shared by every turn it is given to.
+
+    Pass one as ``SessionOptions.execution_budget``. Past ``wrapup_fraction`` of a limit
+    the agent is told to finish; at the limit the turn stops.
+    """
     def __init__(self, *, max_provider_calls: int | None = 128, max_tool_calls: int | None = 128,
                  max_seconds: float = 1800, wrapup_fraction: float = 0.8) -> None:
         for name, value in (("max_provider_calls", max_provider_calls), ("max_tool_calls", max_tool_calls)):

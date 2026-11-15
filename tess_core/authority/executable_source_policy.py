@@ -38,6 +38,11 @@ class ExecutableSourceTrustError(PermissionError):
 
 
 def parse_setting_sources(raw: str | list[str] | tuple[str, ...] | None) -> list[str]:
+    """Normalise a selection of setting sources (``user``, ``project``, ``local``).
+
+    Accepts a comma-separated string or a sequence. ``None`` selects all of them, and an
+    empty value selects none.
+    """
     if raw is None:
         return list(SETTING_SOURCES)
     if raw == "" or raw == [] or raw == ():
@@ -149,6 +154,10 @@ async def _mcp_closure(cwd: str, scope: str, records: list[dict[str, Any]]) -> d
 
 
 async def inspect_mcp_source_trust(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Report whether the MCP servers configured at a scope are approved for this repository.
+
+    Takes ``cwd`` and ``scope``. The result carries a digest of the current configuration.
+    """
     args = {**(args or {}), **kwargs}
     cwd, scope = str(args["cwd"]), str(args["scope"])
     records = await _load_scoped_mcp_records(scope, cwd)
@@ -169,6 +178,10 @@ async def inspect_mcp_source_trust(args: dict[str, Any] | None = None, **kwargs:
 
 
 async def approve_mcp_source(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Approve the MCP servers configured at a scope, exactly as they are now.
+
+    Approval is tied to a digest, so a later change needs approval again.
+    """
     args = {**(args or {}), **kwargs}
     current = await inspect_mcp_source_trust(args)
     await approve_repository_content(
@@ -250,6 +263,10 @@ async def _plugin_closure(cwd: str, scope: str, records: list[dict[str, Any]]) -
 
 
 async def inspect_plugin_source_trust(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Report whether the plugins enabled at a scope are approved for this repository.
+
+    Takes ``cwd`` and ``scope``. The result carries a digest of the current plugin set.
+    """
     args = dict(args or {})
     cwd, scope = str(args["cwd"]), str(args["scope"])
     records = _normalized_plugins(scope, await load_plugins(scope, cwd))
@@ -271,6 +288,10 @@ async def inspect_plugin_source_trust(args: dict[str, Any] | None = None) -> dic
 
 
 async def approve_plugin_source(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Approve the plugins configured at a scope, exactly as they are now.
+
+    Approval is tied to a digest, so a later change needs approval again.
+    """
     args = {**(args or {}), **kwargs}
     current = await inspect_plugin_source_trust(args)
     await approve_repository_content(

@@ -198,6 +198,11 @@ def _resolve_screen_mode(
     )
 
 async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedConfig:
+    """Resolve the full configuration for a session.
+
+    Combines the given options, the settings folder, the environment and the provider
+    registry. Low-level: ``start_runtime`` does this for the sessions it manages.
+    """
     options = options or {}
     runtime_home = _resolve_runtime_home(options, cwd)
     await ensure_base_layout(cwd)

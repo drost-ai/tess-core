@@ -43,6 +43,11 @@ from ...providers.usage_costs import merge_provider_usage as _merge_provider_usa
 
 
 async def run_compaction(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Compact a session's conversation: checkpoint the older messages and keep the recent ones.
+
+    Takes ``session``, ``config``, ``runtime``, ``trigger`` and ``force``. Returns a record
+    whose ``status`` is ``completed`` or ``skipped``, with the reason.
+    """
     args = dict(args or {})
     session = args["session"]
     config = args.get("config") or {}

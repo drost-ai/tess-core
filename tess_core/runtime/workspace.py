@@ -49,6 +49,10 @@ async def create_git_worktree(
     path: str | None = None,
     branch_name: str | None = None,
 ) -> dict[str, Any]:
+    """Create a git worktree on a new branch beside the repository, for isolated work.
+
+    Returns the repository root, the worktree path and the branch name.
+    """
     git_root = find_git_root(cwd)
     if not git_root:
         raise RuntimeError("Current directory is not inside a git repository.")

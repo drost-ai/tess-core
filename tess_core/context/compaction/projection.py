@@ -50,6 +50,10 @@ def should_auto_compact(
 
 
 def build_messages_for_working_context(session: dict[str, Any]) -> list[dict[str, Any]]:
+    """The messages a request is built from: those after the session's compaction cutoff.
+
+    The start is adjusted so the list never begins inside a tool exchange.
+    """
     state = session.get("metadata", {}).get("compactionState")
     if not state:
         return list(session.get("messages", []))

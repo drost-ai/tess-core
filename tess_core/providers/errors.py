@@ -51,10 +51,15 @@ class ProviderIncompleteResponseError(ProviderRequestError):
 
 
 def is_provider_request_error(error: BaseException | Any) -> bool:
+    """Whether an exception is a provider request failure that carries a failure record."""
     return isinstance(error, ProviderRequestError)
 
 
 def create_provider_failure_record(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderFailureRecord:
+    """Build the bounded, structured record of a provider failure.
+
+    It holds the provider, phase, category, HTTP status and whether a retry may help.
+    """
     args = {**(args or {}), **kwargs}
     record: ProviderFailureRecord = {
         "provider": _bound_diagnostic_text(str(args["provider"]), 64),
@@ -92,6 +97,7 @@ def create_provider_failure_record(args: dict[str, Any] | None = None, **kwargs:
 
 
 def create_provider_request_error(record: dict[str, Any]) -> ProviderRequestError:
+    """Wrap a failure record in the exception the agent loop handles."""
     return ProviderRequestError(record)
 
 

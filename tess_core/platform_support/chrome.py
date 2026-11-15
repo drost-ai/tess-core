@@ -14,6 +14,7 @@ from .commands import _parse_json_object, _runner_which, quote_shell_arg
 from .shared import DEFAULT_CHROME_EXTENSION_ORIGIN, DEFAULT_CHROME_NATIVE_HOST_NAME
 
 async def resolve_chrome_companion_server(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Detect the Chrome companion: its status and, when supported, the MCP descriptor that starts it."""
     status = await detect_chrome_companion_status(args, **kwargs)
     enabled = bool(status.get("supported"))
     server = (
@@ -136,6 +137,10 @@ async def install_chrome_native_host_manifest(args: dict[str, Any] | None = None
     return {**installed, "status": "installed" if installed.get("installed") else "degraded", "manifest": manifest}
 
 async def run_chrome_companion_mcp_server(input_stream: Any | None = None, output_stream: Any | None = None) -> None:
+    """Serve the Chrome companion's MCP protocol on the given streams until input ends.
+
+    Defaults to standard input and output.
+    """
     input_stream = input_stream or sys.stdin.buffer
     output_stream = output_stream or sys.stdout.buffer
     buffer = b""
@@ -154,6 +159,10 @@ async def run_chrome_companion_mcp_server(input_stream: Any | None = None, outpu
                 _write_rpc_message(output_stream, response)
 
 async def run_chrome_native_host(input_stream: Any | None = None, output_stream: Any | None = None) -> None:
+    """Serve Chrome's native-messaging protocol on the given streams until input ends.
+
+    Answers ping and status requests.
+    """
     input_stream = input_stream or sys.stdin.buffer
     output_stream = output_stream or sys.stdout.buffer
     while True:

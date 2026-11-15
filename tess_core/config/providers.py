@@ -48,6 +48,7 @@ def resolve_openai_api_mode(args: dict[str, Any] | None = None) -> str:
     return DEFAULT_OPENAI_API_MODE
 
 def resolve_provider_profiles(customProfiles: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """The built-in provider profiles with custom profiles merged over them, keyed by normalised name."""
     merged = clone(BUILTIN_PROVIDER_PROFILES)
     for raw_name, record in (customProfiles or {}).items():
         name = normalize_provider_profile_name(raw_name)
@@ -56,6 +57,9 @@ def resolve_provider_profiles(customProfiles: dict[str, Any] | None) -> dict[str
     return merged
 
 def resolve_provider_profile(name: str, record: dict[str, Any], overrides: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Resolve one provider profile record into the settings a request needs, such as API mode and
+    token limits, applying any overrides.
+    """
     if kwargs:
         overrides = {**(overrides or {}), **kwargs}
     overrides = overrides or {}

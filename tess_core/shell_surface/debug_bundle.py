@@ -28,6 +28,10 @@ from ..storage import (
 
 
 async def create_debug_bundle(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Write a diagnostic bundle for a session to a directory and return its manifest and path.
+
+    By default it goes under ``logs/debug-bundles`` in the runtime home.
+    """
     args = dict(args or {})
     session_id = args.get("sessionId") or args.get("session_id") or (args.get("session") or {}).get("id")
     if not session_id:

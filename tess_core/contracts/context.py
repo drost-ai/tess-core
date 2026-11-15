@@ -16,6 +16,7 @@ from typing import Any, Callable, TypedDict
 
 
 class AskQuestionDetail(TypedDict, total=False):
+    """Context sent to the host with a question. For a permission prompt: the tool, mode, summary and reason."""
     kind: str
     tool: str
     mode: str

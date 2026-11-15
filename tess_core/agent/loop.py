@@ -72,6 +72,7 @@ from ..payloads.attachments import (
     strip_in_memory_image_data as _strip_in_memory_image_data,
 )
 async def run_agent_prompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Run one agent turn: call the model, run its tool calls, repeat until it stops. Low-level; see ``Session.run_turn``."""
     return await run_scoped_agent_turn({**(args or {}), **kwargs}, _run_agent_prompt_with_provider_session, _is_turn_cancelled)
 async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]

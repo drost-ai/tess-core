@@ -6,6 +6,7 @@ from ..contracts.records import SessionRecord
 
 
 def active_session_payload(session: SessionRecord, config: dict[str, Any]) -> dict[str, Any]:
+    """The data of the ``session.activated`` event for a session."""
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
     return {
         "session_id": session.get("id"),

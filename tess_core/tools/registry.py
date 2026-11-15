@@ -27,6 +27,7 @@ def create_builtin_tool_contract_snapshot(options: dict[str, Any] | None = None)
 
 
 def create_builtin_tools(options: dict[str, Any] | None = None) -> list[ToolDefinition]:
+    """The built-in tools, as ``ToolDefinition`` objects."""
     options = options or {}
     tools = [
         _read_tool(),

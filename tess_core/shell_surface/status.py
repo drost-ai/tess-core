@@ -325,6 +325,7 @@ def format_auto_mode_policy(policy: dict[str, Any]) -> str:
 
 
 def compact_model_name(model: str) -> str:
+    """A shorter model name for status lines."""
     return model.replace("claude-", "").replace("-2025-08-07", "")
 
 
@@ -333,6 +334,7 @@ def normalize_model(inputModel: str) -> str:
 
 
 def format_usage_summary(usage: dict[str, Any] | None) -> str:
+    """One line of token, tool and turn counts for display."""
     if not usage:
         return "no tracked usage"
     summary = f"{usage.get('inputTokens', 0)} in · {usage.get('outputTokens', 0)} out · {usage.get('toolCalls', 0)} tools · {usage.get('turns', 0)} turns"

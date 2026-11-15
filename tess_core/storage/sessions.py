@@ -34,6 +34,7 @@ from .session_schema_v2 import commit_session_v2, hydrate_persisted_session, is_
 from .session_transactions import normalize_session_revision
 
 async def save_session(session: SessionRecord) -> None:
+    """Save a session, merged with what is already stored so another writer's changes are kept."""
     path = session_path(session["id"])
     async with with_record_transaction("session", session["id"]):
         raw = await read_json_file_tolerant(path, None)
@@ -293,6 +294,7 @@ def has_persistable_session_messages(session: SessionRecord) -> bool:
     return False
 
 async def list_sessions() -> list[SessionRecord]:
+    """Every saved session that has messages, most recently updated first."""
     directory = os.path.join(get_state_root(), "sessions")
     names = await _run_storage_io(_list_json_names_sync, directory)
     records: list[dict[str, Any]] = []
@@ -409,6 +411,10 @@ def _session_list_summary(record: SessionRecord) -> dict[str, Any]:
     }
 
 def create_empty_session(params: dict[str, Any] | None = None, **kwargs: Any) -> SessionRecord:
+    """A new session record with no messages.
+
+    Requires ``cwd``, ``provider``, ``model``, ``systemPrompt`` and ``permissionMode``.
+    """
     params = {**(params or {}), **kwargs}
     timestamp = now_iso()
     return {

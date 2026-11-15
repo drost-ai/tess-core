@@ -9,6 +9,7 @@ from ..storage import load_remote_session, save_remote_session
 
 
 async def create_remote_session(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Create and save the remote-session record for a session, and return it."""
     args = dict(args or {})
     session = args.get("session") or {}
     now = now_iso()
@@ -38,6 +39,7 @@ async def create_remote_session(args: dict[str, Any] | None = None) -> dict[str,
 
 
 async def update_remote_session(remoteSessionId: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    """Apply updates to a remote-session record and save it. Returns ``None`` when it does not exist."""
     record = await load_remote_session(remoteSessionId)
     if not record:
         return None

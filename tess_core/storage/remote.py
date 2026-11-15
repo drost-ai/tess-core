@@ -76,10 +76,12 @@ def bridge_recovery_path(sessionId: str) -> str:
     return os.path.join(get_state_root(), "bridge-recovery", f"{parse_session_id(sessionId)}.json")
 
 async def save_bridge(record: dict[str, Any]) -> None:
+    """Save a remote bridge record."""
     _assert_serialized_bound(record, "bridge record", 512 * 1024)
     await write_json_file(bridge_path(record["id"]), omit_none_fields(record))
 
 async def load_bridge(bridgeId: str) -> dict[str, Any] | None:
+    """Load a remote bridge record, or ``None`` when it does not exist. A damaged record is an error."""
     bridge_id = parse_bridge_id(bridgeId)
     result = await read_persisted_json_record(
         family="bridge",
@@ -157,6 +159,7 @@ async def replace_bridge_inbox(bridgeId: str, messages: list[dict[str, Any]]) ->
     await write_json_file(bridge_inbox_path(bridge_id), value)
 
 async def load_bridge_events(bridgeId: str) -> list[dict[str, Any]]:
+    """The recorded events of a remote bridge, oldest first."""
     bridge_id = parse_bridge_id(bridgeId)
     return await _load_bridge_array(
         family="bridge_event_log",

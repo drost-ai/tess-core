@@ -28,6 +28,7 @@ MAX_LEASE_MS = 300_000
 
 
 class MonitorDeliveryError(RuntimeError):
+    """A monitor delivery was refused. ``code`` says why, for example ``monitor.not_found``."""
     def __init__(self, code: str):
         self.code = code
         super().__init__(code)

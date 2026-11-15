@@ -200,6 +200,7 @@ async def approve_repository_content(args: dict[str, Any] | None = None, **kwarg
 
 
 async def revoke_repository_approval(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Withdraw one approval (``cwd``, ``family``, ``scope``) and return the repository's trust status."""
     args = dict(args or {})
     family, scope = str(args.get("family")), str(args.get("scope"))
     _assert_family_scope(family, scope)
@@ -218,6 +219,7 @@ async def revoke_repository_approval(args: dict[str, Any] | None = None) -> dict
 
 
 async def get_repository_trust_status(cwd: str) -> dict[str, Any]:
+    """A repository's identity, where its trust record is kept, and its current approvals."""
     identity = await resolve_repository_identity(cwd)
     record = _read_record(identity)
     legacy_root = get_local_state_dir(cwd)

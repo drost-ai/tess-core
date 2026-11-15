@@ -31,6 +31,7 @@ RuntimeSecretPurpose = Literal[
 
 
 class RuntimeSecretRef(TypedDict):
+    """An opaque reference to a secret the runtime holds. It carries no secret material."""
     kind: Literal["runtime_secret"]
     id: str
     purpose: RuntimeSecretPurpose

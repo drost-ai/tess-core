@@ -7,6 +7,10 @@ from typing import Any
 
 
 def build_transcript_snapshot(session: dict[str, Any], limit: int | None = None) -> list[dict[str, Any]]:
+    """Render a session's messages as display entries: text, and tool results grouped by tool.
+
+    ``limit`` keeps only the most recent messages.
+    """
     messages = session.get("messages", [])
     if isinstance(limit, int):
         messages = messages[-limit:]
@@ -96,6 +100,7 @@ def build_transcript_snapshot(session: dict[str, Any], limit: int | None = None)
 
 
 def make_text_entry(args: dict[str, Any]) -> dict[str, Any]:
+    """A display entry for a piece of text."""
     return {
         "tone": args.get("tone", "assistant"),
         "title": args.get("title", "Assistant"),
@@ -105,6 +110,7 @@ def make_text_entry(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def make_tool_entry(args: dict[str, Any]) -> dict[str, Any]:
+    """A display entry for one tool result."""
     normalized_output = normalize_tool_output(args.get("output"))
     title = str(args.get("title") or "Tool")
     tool_name = str(args.get("toolName") or infer_tool_name_from_label(title) or "Tool")
@@ -125,6 +131,7 @@ def make_tool_entry(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def merge_transcript_entry(entries: list[dict[str, Any]], entry: dict[str, Any]) -> list[dict[str, Any]]:
+    """Append a display entry, merging it into the previous one when both are results of the same tool."""
     if not entry.get("payload") or entry.get("tone") != "tool":
         return [*entries, entry]
     previous = entries[-1] if entries else None
@@ -157,6 +164,7 @@ def compact_transcript_entries(entries: list[dict[str, Any]]) -> list[dict[str, 
 
 
 def normalize_transcript_body(value: str) -> str:
+    """Normalise line endings and remove leading and trailing blank lines."""
     return re.sub(r"\n+$", "", re.sub(r"^\n+", "", value.replace("\r\n", "\n")))
 
 

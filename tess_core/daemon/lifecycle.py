@@ -60,6 +60,10 @@ async def connect_task_supervisor_daemon_client(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any] | None:
+    """Connect to an instance's running task daemon.
+
+    Returns ``None`` when none is running. What a dead daemon left behind is cleaned up.
+    """
     values = {**(args or {}), **kwargs}
     instance_id = _required_instance_id(values)
     state = await load_daemon_state(instance_id)
@@ -95,6 +99,7 @@ async def ensure_task_supervisor_daemon(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
+    """Start the task daemon for an instance if it is not running, and return a connected client."""
     values = {**(args or {}), **kwargs}
     instance_id = _required_instance_id(values)
     cwd = values.get("cwd") or os.getcwd()

@@ -82,6 +82,10 @@ class Unavailable:
 
 
 class SessionUnavailableError(RuntimeError):
+    """Raised when the host's ``session_options`` answered ``Unavailable`` for a session.
+
+    Carries the ``reason`` and whether to ``retry``.
+    """
     def __init__(self, session_id: str, unavailable: Unavailable) -> None:
         self.session_id = session_id
         self.reason = unavailable.reason

@@ -114,6 +114,10 @@ def create_runtime_session_binding(
     runtimeInstanceId: str = "standalone",
     pathGraphId: str = "unbound",
 ) -> RuntimeSessionBinding:
+    """Bind a session to a runtime generation and configuration revision.
+
+    Work that carries a superseded binding can then be recognised and discarded.
+    """
     if not isinstance(sessionId, str) or not sessionId:
         raise ValueError("Runtime session binding requires a non-empty session id.")
     if not _positive_integer(generation) or not _positive_integer(configRevision):

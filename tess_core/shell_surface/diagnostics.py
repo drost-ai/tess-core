@@ -244,6 +244,7 @@ def _handle_screen(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
 
 
 def format_session_candidate(session: dict[str, Any]) -> str:
+    """One line describing a session for a picker: short id, time, model and name."""
     name = session.get("name") or _first_user_text(session) or "untitled"
     return f"{_short_id(session.get('id', ''))}  {session.get('updatedAt', '')[:19]}  {session.get('model', '')}  {truncate_ascii(squash_whitespace(name), 90)}"
 

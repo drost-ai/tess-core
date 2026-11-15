@@ -130,6 +130,7 @@ def _json_candidate(directory: str, entry: os.DirEntry[str], parse_id) -> dict[s
     return {"id": record_id, "filePath": os.path.join(directory, entry.name)}
 
 async def save_child_agent(record: ChildAgentRecord) -> None:
+    """Save a sub-agent record, merged with what is already stored."""
     agent_id = parse_agent_id(record["agentId"])
     path = child_agent_path(agent_id)
     async with with_record_transaction("agent-record", agent_id):
@@ -169,6 +170,7 @@ async def load_child_agent(agentId: str) -> ChildAgentRecord | None:
     return result.get("record")
 
 async def list_child_agents() -> list[ChildAgentRecord]:
+    """Every valid sub-agent record, most recently started first."""
     directory = os.path.join(get_state_root(), "agents")
     scan = await scan_persisted_json_records(
         family="agent",
@@ -243,6 +245,7 @@ async def list_session_task_records(sessionId: str) -> list[TaskRecord]:
     return [task for task in await list_task_records() if task.get("sessionId") == sessionId]
 
 async def save_monitor(record: MonitorRecord) -> None:
+    """Save a monitor record."""
     monitor_id = parse_monitor_id(record["id"])
     async with with_record_transaction("monitor-record", monitor_id):
         await write_json_file(monitor_path(monitor_id), record)

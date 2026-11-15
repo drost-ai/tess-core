@@ -49,6 +49,11 @@ from .async_request import (
 )
 
 async def send_anthropic_messages_request(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
+    """Send one request to the Anthropic Messages API and return the normalised response.
+
+    Takes ``config``, ``request`` and ``runtime``. Streams when the runtime asks for it,
+    and retries transient failures.
+    """
     # Call-time import: the config package imports providers at module load.
     from ...config._knobs import knob_value
 

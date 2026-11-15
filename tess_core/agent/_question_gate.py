@@ -24,6 +24,7 @@ from ..storage import read_task_meta
 
 
 async def read_open_child_questions(session: dict[str, Any]) -> list[dict[str, Any]]:
+    """The questions this session's sub-agents have asked that are still waiting for an answer."""
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
     open_questions: list[dict[str, Any]] = []
     for task_id in metadata.get("taskIds") or []:

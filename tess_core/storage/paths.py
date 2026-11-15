@@ -58,12 +58,15 @@ def resolve_runtime_home(cwd: str | None = None, candidate: str | None = None) -
     return resolve_runtime_paths(cwd, candidate).home
 
 def configure_runtime_home(runtimeHome: str) -> str:
+    """Set the runtime home for this process and return its absolute path."""
     return configure_active_runtime_paths(runtimeHome).home
 
 def reset_configured_runtime_home() -> None:
+    """Forget the configured runtime home and return to the default."""
     reset_active_runtime_paths()
 
 def get_state_root() -> str:
+    """The absolute path of the active runtime home."""
     return get_active_runtime_paths().home
 
 def find_git_root(cwd: str) -> str | None:
@@ -176,6 +179,7 @@ def compaction_checkpoint_path(sessionId: str, generation: int) -> str:
     return os.path.join(get_session_compactions_dir(sessionId), "checkpoints", f"{generation:04d}.json")
 
 async def ensure_base_layout(cwd: str, paths: RuntimePaths | None = None) -> None:
+    """Create the runtime home's directories when they are missing."""
     graph = paths or get_active_runtime_paths()
     runtime_dirs = [
         graph.home,
