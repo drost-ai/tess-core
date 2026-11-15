@@ -8,7 +8,7 @@ from .model import Scenario, ScenarioStep, ScenarioValidationError
 from .paths import DEFAULT_SCENARIOS_DIR
 
 
-SUPPORTED_MODES = {"python", "parity"}
+SUPPORTED_MODES = {"python"}
 SUPPORTED_STEPS = {
     "assert_file_exists",
     "assert_observation",
@@ -54,7 +54,6 @@ SUPPORTED_STEPS = {
     "list_mcp_resources",
     "list_mcp_tools",
     "load_session",
-    "parity_action",
     "provider_request",
     "read_mcp_resource",
     "record_mcp_protocol_probe",
@@ -123,10 +122,6 @@ SUPPORTED_CAPTURE = {
     "mcp_servers",
     "mcp_status",
     "mcp_tools",
-    "parity_comparison",
-    "parity_python",
-    "parity_summary",
-    "parity_typescript",
     "provider_events",
     "provider_requests",
     "provider_response",

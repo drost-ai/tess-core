@@ -59,7 +59,6 @@ SCENARIO_PROCESS_FILES = (
     "test_harness_goldens.py",
     "test_harness_loader.py",
     "test_harness_mcp_driver.py",
-    "test_harness_parity_runner.py",
     "test_harness_remote_driver.py",
     "test_harness_runtime_driver.py",
     "test_harness_sandbox.py",

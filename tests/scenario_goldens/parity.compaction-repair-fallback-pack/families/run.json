@@ -1,7 +1,0 @@
-{
-  "debug": "<runtime-home>/debug",
-  "id": "<run-id>",
-  "normalized": "<runtime-home>/normalized",
-  "raw": "<runtime-home>/raw",
-  "runDir": "<runtime-home>"
-}

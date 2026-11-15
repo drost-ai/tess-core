@@ -10,7 +10,6 @@ from .executor import run_scenario
 from .fault_matrix import runAnthropicFaultMatrix, runProviderFaultMatrix, writeFaultMatrixReport
 from .loader import load_scenarios
 from .model import ScenarioValidationError
-from .parity_runner import run_parity_scenario
 from .performance import (
     runAnthropicTransportBenchmark,
     runPersistenceBenchmark,
@@ -32,12 +31,6 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--cleanup", choices=["never", "success"], default="never")
     run_parser.add_argument("--golden", choices=["off", "compare", "update"], default="off")
     run_parser.add_argument("--goldens-dir")
-    parity_parser = subparsers.add_parser("parity")
-    parity_parser.add_argument("scenario_id")
-    parity_parser.add_argument("--cleanup", choices=["never", "success"], default="never")
-    parity_parser.add_argument("--golden", choices=["off", "compare", "update"], default="off")
-    parity_parser.add_argument("--goldens-dir")
-    parity_parser.add_argument("--typescript-repo")
     ci_parser = subparsers.add_parser("ci")
     ci_parser.add_argument("--scenario", action="append", dest="scenario_ids")
     ci_parser.add_argument("--area", action="append", dest="areas")
@@ -47,7 +40,6 @@ def main(argv: list[str] | None = None) -> int:
     ci_parser.add_argument("--golden", choices=["off", "compare", "update"], default="compare")
     ci_parser.add_argument("--goldens-dir")
     ci_parser.add_argument("--disable-capability", action="append", dest="disabled_capabilities")
-    ci_parser.add_argument("--typescript-repo")
     ci_parser.add_argument("--fail-fast", action="store_true")
     benchmark_parser = subparsers.add_parser("benchmark")
     benchmark_parser.add_argument("benchmark", choices=["persistence", "rollback", "transport"])
@@ -78,8 +70,6 @@ def main(argv: list[str] | None = None) -> int:
             return _list(args.scenarios_dir)
         if args.command == "run":
             return _run(args)
-        if args.command == "parity":
-            return _parity(args)
         if args.command == "ci":
             return _ci(args)
         if args.command == "benchmark":
@@ -129,29 +119,6 @@ def _run(args: argparse.Namespace) -> int:
     return 1
 
 
-def _parity(args: argparse.Namespace) -> int:
-    result = run_parity_scenario(
-        args.scenario_id,
-        scenarios_dir=args.scenarios_dir,
-        runs_dir=args.runs_dir,
-        cleanup=args.cleanup,
-        golden=args.golden,
-        goldens_dir=args.goldens_dir,
-        typescript_repo=args.typescript_repo,
-    )
-    print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
-    if result.status == "passed":
-        return 0
-    failure = result.failure or {}
-    print(
-        f"parity failed: {result.scenarioId} classification={failure.get('classification')} error={failure.get('message')}",
-        file=sys.stderr,
-    )
-    if result.debugDir:
-        print(f"debug bundle: {result.debugDir}", file=sys.stderr)
-    return 1
-
-
 def _ci(args: argparse.Namespace) -> int:
     result = run_ci_suite(
         scenarios_dir=args.scenarios_dir,
@@ -164,7 +131,6 @@ def _ci(args: argparse.Namespace) -> int:
         golden=args.golden,
         goldens_dir=args.goldens_dir,
         disabled_capabilities=args.disabled_capabilities,
-        typescript_repo=args.typescript_repo,
         fail_fast=args.fail_fast,
     )
     print(json.dumps(result.to_dict(), indent=2, sort_keys=True))

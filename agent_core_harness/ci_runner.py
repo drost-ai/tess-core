@@ -14,7 +14,6 @@ from typing import Any
 from .executor import run_scenario
 from .loader import load_scenarios
 from .model import Scenario, ScenarioValidationError
-from .parity_runner import run_parity_scenario
 from .paths import DEFAULT_RUNS_DIR
 
 
@@ -74,7 +73,6 @@ def run_ci_suite(
     golden: str = "compare",
     goldens_dir: str | None = None,
     disabled_capabilities: list[str] | None = None,
-    typescript_repo: str | None = None,
     fail_fast: bool = False,
 ) -> SuiteResult:
     run_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
@@ -84,19 +82,19 @@ def run_ci_suite(
     report_dir.mkdir(parents=True, exist_ok=True)
     scenarios = select_scenarios(load_scenarios(scenarios_dir), scenario_ids or [], areas or [], changed_areas or [])
     disabled = set(disabled_capabilities or [])
-    capabilities = detect_capabilities(typescript_repo, disabled)
+    capabilities = detect_capabilities(disabled)
     records: list[SuiteRecord] = []
     selectors = {"scenario_ids": scenario_ids or [], "areas": areas or [], "changed_areas": changed_areas or []}
     for scenario in scenarios:
         mode = scenario_mode(scenario)
-        replay = command_for(scenario, mode, scenario_runs_dir, scenarios_dir, golden, "never", goldens_dir, typescript_repo)
-        update = command_for(scenario, mode, scenario_runs_dir, scenarios_dir, "update", "success", goldens_dir, typescript_repo)
+        replay = command_for(scenario, mode, scenario_runs_dir, scenarios_dir, golden, "never", goldens_dir)
+        update = command_for(scenario, mode, scenario_runs_dir, scenarios_dir, "update", "success", goldens_dir)
         missing = missing_capabilities(scenario, capabilities)
         if missing:
             records.append(SuiteRecord(scenario.id, scenario.title, scenario.area, mode, "skipped", reason=f"missing capabilities: {', '.join(missing)}", replayCommand=replay, goldenUpdateCommand=update))
             continue
         started = time.monotonic()
-        result = _run_one(scenario, mode, str(scenario_runs_dir), scenarios_dir, cleanup, golden, goldens_dir, typescript_repo)
+        result = _run_one(scenario, mode, str(scenario_runs_dir), scenarios_dir, cleanup, golden, goldens_dir)
         duration = round(time.monotonic() - started, 3)
         records.append(_record_from_result(scenario, mode, result, duration, replay, update))
         if fail_fast and result.status != "passed":
@@ -129,14 +127,11 @@ def select_scenarios(scenarios: list[Scenario], scenario_ids: list[str], areas: 
     return selected
 
 
-def detect_capabilities(typescript_repo: str | None = None, disabled: set[str] | None = None) -> dict[str, bool]:
+def detect_capabilities(disabled: set[str] | None = None) -> dict[str, bool]:
     disabled = disabled or set()
-    configured_repo = typescript_repo or os.environ.get("AGENT_CORE_TYPESCRIPT_REPO")
-    repo = Path(configured_repo) if configured_repo else None
     capabilities = {
         "python": True,
         "node": shutil.which("node") is not None,
-        "typescript_repo": repo is not None and repo.exists() and (repo / "dist" / "index.js").exists(),
         "local_processes": True,
         "daemon": True,
         "network_loopback": True,
@@ -151,7 +146,7 @@ def missing_capabilities(scenario: Scenario, capabilities: dict[str, bool]) -> l
 
 
 def scenario_mode(scenario: Scenario) -> str:
-    return "parity" if "parity" in scenario.modes and "python" not in scenario.modes else "run"
+    return "run"
 
 
 def command_for(
@@ -162,7 +157,6 @@ def command_for(
     golden: str,
     cleanup: str,
     goldens_dir: str | None,
-    typescript_repo: str | None,
 ) -> str:
     parts = ["python3", "-m", "agent_core_harness", "--runs-dir", str(runs_dir)]
     if scenarios_dir:
@@ -170,8 +164,6 @@ def command_for(
     parts += [mode, scenario.id, "--golden", golden, "--cleanup", cleanup]
     if goldens_dir:
         parts += ["--goldens-dir", goldens_dir]
-    if mode == "parity" and typescript_repo:
-        parts += ["--typescript-repo", typescript_repo]
     return " ".join(shlex.quote(str(part)) for part in parts)
 
 
@@ -234,9 +226,7 @@ def render_junit(run_id: str, records: list[SuiteRecord]) -> str:
     return ET.tostring(suite, encoding="unicode") + "\n"
 
 
-def _run_one(scenario: Scenario, mode: str, runs_dir: str, scenarios_dir: str | None, cleanup: str, golden: str, goldens_dir: str | None, typescript_repo: str | None) -> Any:
-    if mode == "parity":
-        return run_parity_scenario(scenario.id, scenarios_dir=scenarios_dir, runs_dir=runs_dir, cleanup=cleanup, golden=golden, goldens_dir=goldens_dir, typescript_repo=typescript_repo)
+def _run_one(scenario: Scenario, mode: str, runs_dir: str, scenarios_dir: str | None, cleanup: str, golden: str, goldens_dir: str | None) -> Any:
     return run_scenario(scenario.id, scenarios_dir=scenarios_dir, runs_dir=runs_dir, cleanup=cleanup, golden=golden, goldens_dir=goldens_dir)
 
 

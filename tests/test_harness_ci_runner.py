@@ -40,11 +40,18 @@ class HarnessCiRunnerTests(AgentCoreTestCase):
         self.assertNotIn("providers.fake-provider-pack", ids)
 
     def test_ci_suite_skips_disabled_capability(self):
-        with tempfile.TemporaryDirectory() as runs, tempfile.TemporaryDirectory() as reports:
+        with tempfile.TemporaryDirectory() as scenarios, tempfile.TemporaryDirectory() as runs, tempfile.TemporaryDirectory() as reports:
+            (Path(scenarios) / "needs-node.json").write_text(json.dumps({
+                "id": "ci.needs-node", "title": "Needs Node", "area": "smoke", "mode": ["python"],
+                "capabilities": ["node"],
+                "steps": [{"create_session": {"permissionMode": "bypassPermissions"}}],
+                "capture": {"include": ["session"]},
+            }), encoding="utf-8")
             result = run_ci_suite(
+                scenarios_dir=scenarios,
                 runs_dir=runs,
                 reports_dir=reports,
-                scenario_ids=["parity.runtime-state-smoke"],
+                scenario_ids=["ci.needs-node"],
                 golden="off",
                 disabled_capabilities=["node"],
             )
