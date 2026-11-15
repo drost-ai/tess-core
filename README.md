@@ -208,7 +208,7 @@ The same pages live in this repository:
 
 ## Status
 
-Tess Core is at version 0.1. It is in daily use as the engine of Tess-Agent, and its public
+Tess Core is at version 0.1. It is in daily use as the engine of a personal AI that runs for months at a time, and its public
 API is small and contract-tested, but it has not yet made a 1.0 stability promise: expect
 additions, and read the release notes before upgrading. It is developed and tested on macOS
 and Linux.
