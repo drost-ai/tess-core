@@ -62,6 +62,9 @@ class StdioMcpClient(JsonRpcClient):
         self.state = "open"
         self.close_done = threading.Event()
         self.close_error: BaseException | None = None
+        # Why the handshake failed, kept for a caller whose own deadline
+        # expires while this client is still reaping its process.
+        self.startup_error: BaseException | None = None
 
     async def initialize(self) -> None:
         try:
@@ -72,6 +75,8 @@ class StdioMcpClient(JsonRpcClient):
                 self._start_process()
                 await super().initialize()
         except BaseException as error:
+            if isinstance(error, Exception) and not isinstance(error, TimeoutError):
+                self.startup_error = error
             try:
                 await self.close()
             except Exception:

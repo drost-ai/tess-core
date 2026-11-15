@@ -87,6 +87,12 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
                 timeout=startup_timeout_ms / 1000,
             )
         except asyncio.TimeoutError as error:
+            # The deadline can expire while a client that already failed is
+            # still reaping its process. Report why it failed, not that the
+            # cleanup outlasted the deadline.
+            failure = getattr(client, "startup_error", None)
+            if isinstance(failure, Exception):
+                raise failure from error
             raise McpTransportError(
                 "startup_timeout",
                 f"MCP startup exceeded {startup_timeout_ms}ms for {state['config'].get('name')}.",
