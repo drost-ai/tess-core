@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-import agent_core.agent.context as context_module
-from agent_core.providers.prompt_cache import (
+import tess_core.agent.context as context_module
+from tess_core.providers.prompt_cache import (
     anthropic_automatic_cache_enabled,
     anthropic_explicit_cache_enabled,
     normalize_cache_usage_fields,
@@ -11,10 +11,10 @@ from agent_core.providers.prompt_cache import (
     provider_affinity_key,
     resolve_prompt_cache_policy,
 )
-from agent_core.providers.anthropic.payloads import build_anthropic_messages_payload
+from tess_core.providers.anthropic.payloads import build_anthropic_messages_payload
 
 
-class ProviderPromptCacheTests(AgentCoreTestCase):
+class ProviderPromptCacheTests(TessCoreTestCase):
     def test_prompt_cache_policy_defaults_and_overrides(self):
         self.assertEqual(
             resolve_prompt_cache_policy()["enabled"],
@@ -68,7 +68,7 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
             request=request,
             request_options={"prompt_cache_retention": "24h"},
         )
-        self.assertTrue(codex_options["prompt_cache_key"].startswith("agent-core-"))
+        self.assertTrue(codex_options["prompt_cache_key"].startswith("tess-core-"))
         self.assertEqual(codex_options["prompt_cache_retention"], "24h")
 
         xai_options = open_ai_prompt_cache_request_options(

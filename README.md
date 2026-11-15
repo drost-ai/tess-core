@@ -1,7 +1,12 @@
-# Agent Core Python
+# Tess Core
 
-Python port of the agent-core runtime, providing the execution engine
-used by Tess-Agent.
+The execution engine for persistent agents: sessions and their lifecycle,
+turns, tools and permissions, model providers, MCP, sub-agents, background
+tasks and scheduling. Tess-Agent is built on it.
+
+The Python package is `tess_core`. It began as a port of a TypeScript
+runtime; a few on-disk and wire identifiers still carry the earlier
+`agent-core` name so existing sessions stay readable.
 
 ## Licensing
 

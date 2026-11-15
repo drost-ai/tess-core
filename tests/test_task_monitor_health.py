@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-from agent_core.tasks.health_check_policy import (
+from tests.support.tess_core_case import *
+from tess_core.tasks.health_check_policy import (
     authorize_health_check_spec,
     health_check_spec_digest,
     normalize_health_check_spec,
@@ -36,12 +36,12 @@ async def _start_authorized_health_check(
     )
 
 
-class TaskMonitorHealthTests(AgentCoreTestCase):
+class TaskMonitorHealthTests(TessCoreTestCase):
     def setUp(self):
         super().setUp()
         # HTTP health checks target loopback fixtures; the fetch plane's
         # private-address block requires the explicit opt-in knob.
-        env = mock.patch.dict(os.environ, {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "127.0.0.1,localhost"})
+        env = mock.patch.dict(os.environ, {"TESS_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "127.0.0.1,localhost"})
         env.start()
         self.addCleanup(env.stop)
 
@@ -176,7 +176,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                     await asyncio.sleep(0.04)
                     self.assertNotIn("args", calls)
                     self.assertFalse(any(event == "monitor.assistant_update" for event, _ in events))
-                    from agent_core import MonitorDeliveryController
+                    from tess_core import MonitorDeliveryController
                     consumer = MonitorDeliveryController(str(home))
                     claim = await consumer.claim(monitor["id"], session["id"], "test-consumer")
                     envelope = claim["envelope"]

@@ -6,20 +6,20 @@ import os
 import time
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
-from agent_core._utils import now_iso
+from tests.support.tess_core_case import TessCoreTestCase, core, run
+from tess_core._utils import now_iso
 from unittest import mock
 
 
-live_work = importlib.import_module("agent_core.tasks.supervisor_parts.live_work")
-collaboration_runtime_module = importlib.import_module("agent_core.tasks.collaboration")
-monitors_module = importlib.import_module("agent_core.tasks.monitor_narration")
+live_work = importlib.import_module("tess_core.tasks.supervisor_parts.live_work")
+collaboration_runtime_module = importlib.import_module("tess_core.tasks.collaboration")
+monitors_module = importlib.import_module("tess_core.tasks.monitor_narration")
 
 _OLD = "2026-01-01T00:00:00Z"
 _DEAD_PID = 99_999_999
 
 
-class Package29LiveWorkTests(AgentCoreTestCase):
+class Package29LiveWorkTests(TessCoreTestCase):
     def _session(self, workspace: Path, session_id: str, metadata: dict | None = None) -> dict:
         session = core.create_empty_session(
             cwd=str(workspace), provider="openai", model="test-model", systemPrompt="test",
@@ -141,7 +141,7 @@ class Package29LiveWorkTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class Package29BootstrapNarrationTests(AgentCoreTestCase):
+class Package29BootstrapNarrationTests(TessCoreTestCase):
     def test_collaboration_bootstrap_is_silent_and_later_transition_narrates(self):
         root, _home, workspace, previous = self.temp_context()
         runtime = None
@@ -230,9 +230,9 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class BackgroundedDeadPidReconciliationTests(AgentCoreTestCase):
+class BackgroundedDeadPidReconciliationTests(TessCoreTestCase):
     def test_backgrounded_task_with_dead_pid_is_reconciled_lazily(self):
-        import agent_core.tasks.supervisor_parts.live_work as live_work
+        import tess_core.tasks.supervisor_parts.live_work as live_work
 
         meta = {
             "type": "background_command",

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.tasks.communication import read_task_events, read_task_mailbox_messages, send_task_message
+from tess_core.tasks.communication import read_task_events, read_task_mailbox_messages, send_task_message
 
 
-class TraceEmitterTests(AgentCoreTestCase):
+class TraceEmitterTests(TessCoreTestCase):
     def test_worker_events_land_as_compact_trace_records(self):
-        from agent_core.tasks.runners.subagent import _create_trace_emitter
+        from tess_core.tasks.runners.subagent import _create_trace_emitter
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -40,7 +40,7 @@ class TraceEmitterTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_initial_resident_turn_marks_running_before_the_first_prompt(self):
-        import agent_core.tasks.runners.subagent as runner_module
+        import tess_core.tasks.runners.subagent as runner_module
 
         calls = []
 
@@ -75,7 +75,7 @@ class TraceEmitterTests(AgentCoreTestCase):
         self.assertEqual(calls, [("prepare",), ("mark", "running", None), ("prompt",), ("publish", [])])
 
 
-class ResidentSubagentTests(AgentCoreTestCase):
+class ResidentSubagentTests(TessCoreTestCase):
     def _seed_family(self, home, workspace):
         settings_path = home / "settings.json"
         settings_path.write_text(
@@ -85,13 +85,13 @@ class ResidentSubagentTests(AgentCoreTestCase):
                     "resident-openai": {
                         "kind": "openai",
                         "defaultModel": "resident-model",
-                        "auth": {"kind": "openai_api_key", "envVar": "AGENT_CORE_TEST_MISSING_RESIDENT_KEY"},
+                        "auth": {"kind": "openai_api_key", "envVar": "TESS_CORE_TEST_MISSING_RESIDENT_KEY"},
                     }
                 },
             }),
             encoding="utf-8",
         )
-        os.environ.pop("AGENT_CORE_TEST_MISSING_RESIDENT_KEY", None)
+        os.environ.pop("TESS_CORE_TEST_MISSING_RESIDENT_KEY", None)
         config = run(core.resolve_config(
             {"provider": "resident-openai", "settings": str(settings_path), "runtimeHome": str(home), "permissionMode": "bypassPermissions"},
             str(workspace),
@@ -136,7 +136,7 @@ class ResidentSubagentTests(AgentCoreTestCase):
         supervisor = None
         task_id = None
         try:
-            os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "200"
+            os.environ["TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "200"
             config, parent, child = self._seed_family(home, workspace)
             supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             started = run(supervisor["startSubagentTask"]({
@@ -178,7 +178,7 @@ class ResidentSubagentTests(AgentCoreTestCase):
             stopped = run(supervisor["stopTask"](task_id))
             self.assertEqual(stopped["status"], "stopped")
         finally:
-            os.environ.pop("AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS", None)
+            os.environ.pop("TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS", None)
             if supervisor:
                 run(supervisor["close"]())
             self.restore_home(root, previous)
@@ -188,13 +188,13 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class SubagentCapacityGovernanceTests(AgentCoreTestCase):
+class SubagentCapacityGovernanceTests(TessCoreTestCase):
     def test_capacity_roster_then_stop_frees_a_slot(self):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            os.environ["AGENT_CORE_SUBAGENTS_MAX_LIVE"] = "1"
-            os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "200"
+            os.environ["TESS_CORE_SUBAGENTS_MAX_LIVE"] = "1"
+            os.environ["TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "200"
             seeder = ResidentSubagentTests()
             config, parent, child = seeder._seed_family(home, workspace)
             events = []
@@ -236,8 +236,8 @@ class SubagentCapacityGovernanceTests(AgentCoreTestCase):
             self.assertIn("taskId", second_started)
             run(supervisor["stopTask"](second_started["taskId"]))
         finally:
-            os.environ.pop("AGENT_CORE_SUBAGENTS_MAX_LIVE", None)
-            os.environ.pop("AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS", None)
+            os.environ.pop("TESS_CORE_SUBAGENTS_MAX_LIVE", None)
+            os.environ.pop("TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS", None)
             if supervisor:
                 run(supervisor["close"]())
             self.restore_home(root, previous)

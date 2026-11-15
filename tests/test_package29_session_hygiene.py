@@ -6,11 +6,11 @@ import json
 import os
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
-from agent_core._utils import now_iso
+from tests.support.tess_core_case import TessCoreTestCase, core, run
+from tess_core._utils import now_iso
 
 
-hygiene_module = importlib.import_module("agent_core.platform_support.session_hygiene")
+hygiene_module = importlib.import_module("tess_core.platform_support.session_hygiene")
 
 _REAL = "2026-06-17T22:13:26.545Z"
 _BAD = "2026-07-11T16:08:40.392Z"
@@ -18,7 +18,7 @@ _OLD = "2026-06-15T22:34:53.564Z"
 _DEAD_PID = 99_999_999
 
 
-class Package29SessionHygieneTests(AgentCoreTestCase):
+class Package29SessionHygieneTests(TessCoreTestCase):
     def _record(self, workspace: Path, session_id: str, *, updated_at: str = _OLD) -> dict:
         record = core.create_empty_session(
             cwd=str(workspace), provider="openai", model="test-model", systemPrompt="test",

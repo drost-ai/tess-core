@@ -9,13 +9,13 @@ import textwrap
 import unittest
 from pathlib import Path
 
-import agent_core._facade as core
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-class MutateJsonFileTests(AgentCoreTestCase):
+class MutateJsonFileTests(TessCoreTestCase):
     def test_mutate_creates_from_fallback_and_returns_updated(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -79,7 +79,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
                 """
                 import asyncio, sys
                 sys.path.insert(0, sys.argv[3])
-                import agent_core._facade as core
+                import tess_core._facade as core
 
                 async def main():
                     index = sys.argv[2]
@@ -155,7 +155,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
                 """
                 import asyncio, sys, time
                 sys.path.insert(0, sys.argv[2])
-                import agent_core._facade as core
+                import tess_core._facade as core
 
                 async def main():
                     async with core.file_lock(sys.argv[1]):
@@ -196,8 +196,8 @@ class MutateJsonFileTests(AgentCoreTestCase):
                 """
                 import asyncio, os, sys
                 sys.path.insert(0, sys.argv[2])
-                import agent_core._facade as core
-                from agent_core.storage import json_io
+                import tess_core._facade as core
+                from tess_core.storage import json_io
 
                 real_replace = os.replace
 
@@ -224,12 +224,12 @@ class MutateJsonFileTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_lock_timeout_event_name_is_known(self):
-        from agent_core.runtime.events.shared import KNOWN_RUNTIME_EVENTS
+        from tess_core.runtime.events.shared import KNOWN_RUNTIME_EVENTS
 
         self.assertIn("storage.lock_timeout", KNOWN_RUNTIME_EVENTS)
 
 
-class RecordMutationHelperTests(AgentCoreTestCase):
+class RecordMutationHelperTests(TessCoreTestCase):
     def test_concurrent_child_agent_mutations_preserve_both_writers(self):
         """Finalizer-vs-reconciler shape: merge updates from two coroutines survive."""
         root, home, workspace, previous = self.temp_context()

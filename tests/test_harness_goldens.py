@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core_harness.executor import run_scenario
-from agent_core_harness.normalization import normalize_observations
-from agent_core_harness.sandbox import ScenarioSandbox
+from tess_core_harness.executor import run_scenario
+from tess_core_harness.normalization import normalize_observations
+from tess_core_harness.sandbox import ScenarioSandbox
 
 
-class HarnessGoldenTests(AgentCoreTestCase):
+class HarnessGoldenTests(TessCoreTestCase):
     def test_golden_update_compare_and_mismatch_debug_bundle(self):
         with tempfile.TemporaryDirectory() as runs, tempfile.TemporaryDirectory() as goldens:
             updated = run_scenario("smoke.basic-session", runs_dir=runs, goldens_dir=goldens, golden="update", cleanup="success")
@@ -49,7 +49,7 @@ class HarnessGoldenTests(AgentCoreTestCase):
                     "unittest": "Ran 12 tests in 1.234s",
                     "sessionId": "session-11111111-2222-3333-4444-555555555555",
                     "path": str(sandbox.workspace / "README.md"),
-                    "repo": str(Path.cwd() / "agent_core_harness"),
+                    "repo": str(Path.cwd() / "tess_core_harness"),
                     "python": f"{Path.cwd()}/.venv/bin/python",
                     "python3": f"{Path.cwd()}/.venv/bin/python3",
                     "cursor": "acp1.eyJ2IjoxLCJzIjoiZHluYW1pYyJ9",
@@ -99,7 +99,7 @@ class HarnessGoldenTests(AgentCoreTestCase):
                 self.assertEqual(normalized["unittest"], "Ran 12 tests in <duration-s>")
                 self.assertEqual(normalized["sessionId"], "session-<uuid:1>")
                 self.assertEqual(normalized["path"], "<workspace>/README.md")
-                self.assertEqual(normalized["repo"], "<repo>/agent_core_harness")
+                self.assertEqual(normalized["repo"], "<repo>/tess_core_harness")
                 self.assertEqual(normalized["python"], "<python>")
                 self.assertEqual(normalized["python3"], "<python>")
                 self.assertEqual(normalized["cursor"], "<payload-cursor:1>")
@@ -157,7 +157,7 @@ class HarnessGoldenTests(AgentCoreTestCase):
     def test_normalizer_replaces_home_compacted_sandbox_paths(self):
         sandbox = ScenarioSandbox(
             "normalize.case",
-            runs_dir=Path.home() / "agent-core-harness-runs",
+            runs_dir=Path.home() / "tess-core-harness-runs",
             run_id="20260429-112233-abcdef12",
         )
         compact_workspace = f"~/{sandbox.workspace.resolve().relative_to(Path.home().resolve()).as_posix()}"

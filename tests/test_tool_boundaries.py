@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import unittest
 
-import agent_core._facade as core
-from agent_core.context.compaction.projection import build_messages_for_working_context
-from agent_core.session.tool_boundaries import (
+import tess_core._facade as core
+from tess_core.context.compaction.projection import build_messages_for_working_context
+from tess_core.session.tool_boundaries import (
     adjust_start_to_tool_boundary,
     find_incomplete_tool_exchange,
     slice_start_crosses_tool_exchange,

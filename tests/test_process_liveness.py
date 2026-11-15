@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest import mock
 
-from agent_core._utils import is_process_alive
+from tess_core._utils import is_process_alive
 
 
 class ProcessLivenessTests(unittest.TestCase):

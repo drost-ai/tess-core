@@ -8,14 +8,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-import agent_core._facade as core
-from agent_core.storage.persistence_metrics import register_persistence_observer
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tess_core.storage.persistence_metrics import register_persistence_observer
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
 _CRASH_SCRIPT = r"""
 import asyncio, os, signal, sys
-import agent_core._facade as core
+import tess_core._facade as core
 
 async def main():
     home, session_id, boundary, mode = sys.argv[1:]
@@ -37,7 +37,7 @@ asyncio.run(main())
 """
 
 
-class Package46S2bSchemaTests(AgentCoreTestCase):
+class Package46S2bSchemaTests(TessCoreTestCase):
     def _session(self, workspace: Path, session_id: str, count: int = 1) -> dict:
         session = core.create_empty_session(
             cwd=str(workspace),
@@ -100,7 +100,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
                 [
                     sys.executable,
                     "-m",
-                    "agent_core",
+                    "tess_core",
                     "session-write-back-v1",
                     session["id"],
                     "--runtime-home",
@@ -227,7 +227,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
 
     def test_append_watermark_commits_without_hydrating_the_persisted_prefix(self):
         root, _home, workspace, previous = self.temp_context()
-        schema = importlib.import_module("agent_core.storage.session_schema_v2")
+        schema = importlib.import_module("tess_core.storage.session_schema_v2")
         original_read = schema._read_body_sync
         try:
             session = self._session(workspace, "package46-fast-watermark", 3)
@@ -260,7 +260,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
 
     def test_delta_commit_snapshots_the_live_list_before_awaits(self):
         root, _home, workspace, previous = self.temp_context()
-        schema = importlib.import_module("agent_core.storage.session_schema_v2")
+        schema = importlib.import_module("tess_core.storage.session_schema_v2")
         original_read = schema._read_body_sync
         try:
             session = self._session(workspace, "package46-delta-race", 1)

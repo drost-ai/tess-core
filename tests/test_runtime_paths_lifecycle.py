@@ -4,24 +4,24 @@ import asyncio
 import os
 from pathlib import Path
 
-import agent_core._facade as core
-from agent_core.runtime.lifecycle_barrier import (
+import tess_core._facade as core
+from tess_core.runtime.lifecycle_barrier import (
     LifecycleCloseTimeoutError,
     LifecycleClosedError,
     construct_with_rollback,
     create_lifecycle_barrier,
 )
-from agent_core.runtime.paths import (
+from tess_core.runtime.paths import (
     get_active_runtime_paths,
     resolve_runtime_paths,
     run_with_runtime_paths,
 )
-from tests.support.agent_core_case import AgentCoreTestCase, run
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
-class RuntimePathsLifecycleTests(AgentCoreTestCase):
+class RuntimePathsLifecycleTests(TessCoreTestCase):
     def test_async_scope_can_be_created_before_asyncio_run(self):
-        paths = resolve_runtime_paths(candidate="/tmp/agent-core-runtime-paths-task")
+        paths = resolve_runtime_paths(candidate="/tmp/tess-core-runtime-paths-task")
 
         async def read_active_home():
             await asyncio.sleep(0)

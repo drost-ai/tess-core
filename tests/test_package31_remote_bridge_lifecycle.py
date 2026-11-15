@@ -7,10 +7,10 @@ import os
 import threading
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from tests.support.tess_core_case import TessCoreTestCase, core, run
 
-import agent_core.remote.bridge_recovery as bridge_recovery
-from agent_core.storage.remote import (
+import tess_core.remote.bridge_recovery as bridge_recovery
+from tess_core.storage.remote import (
     append_bridge_event,
     append_bridge_inbox_message,
     bridge_events_path,
@@ -22,7 +22,7 @@ from agent_core.storage.remote import (
 )
 
 
-class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
+class Package31RemoteBridgeLifecycleTests(TessCoreTestCase):
     def _session_remote(self, workspace):
         session = core.create_empty_session(
             cwd=str(workspace), provider="openai", providerProfileName="openai",

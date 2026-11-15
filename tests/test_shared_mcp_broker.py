@@ -8,13 +8,13 @@ import sys
 import tempfile
 import unittest
 
-from agent_core.mcp.clients import JsonRpcClient
-from agent_core.mcp.stdio_transport import StdioMcpClient
-from agent_core.mcp.http_transport import HttpMcpClient
-from agent_core.mcp.shared_broker import BrokerGrant
-from agent_core.mcp.shared_broker_http import SharedMcpBroker, delegate_shared_mcp_descriptor
-from agent_core.runtime.secrets import resolve_mcp_server_config_secrets, authorize_runtime_secret_write, store_runtime_secret
-from agent_core.storage.paths import RuntimeHomeScope
+from tess_core.mcp.clients import JsonRpcClient
+from tess_core.mcp.stdio_transport import StdioMcpClient
+from tess_core.mcp.http_transport import HttpMcpClient
+from tess_core.mcp.shared_broker import BrokerGrant
+from tess_core.mcp.shared_broker_http import SharedMcpBroker, delegate_shared_mcp_descriptor
+from tess_core.runtime.secrets import resolve_mcp_server_config_secrets, authorize_runtime_secret_write, store_runtime_secret
+from tess_core.storage.paths import RuntimeHomeScope
 
 
 SERVER = r'''
@@ -40,9 +40,9 @@ for line in sys.stdin:
 '''
 CHILD = r'''
 import asyncio, json, sys
-from agent_core.mcp.http_transport import HttpMcpClient
-from agent_core.runtime.secrets import resolve_mcp_server_config_secrets
-from agent_core.storage.paths import RuntimeHomeScope
+from tess_core.mcp.http_transport import HttpMcpClient
+from tess_core.runtime.secrets import resolve_mcp_server_config_secrets
+from tess_core.storage.paths import RuntimeHomeScope
 async def main():
     descriptor=json.loads(sys.stdin.readline())
     client=HttpMcpClient(await resolve_mcp_server_config_secrets(descriptor),'.')

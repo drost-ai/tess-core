@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class Package28McpProtocolTests(AgentCoreTestCase):
+class Package28McpProtocolTests(TessCoreTestCase):
     def test_protocol_negotiation_current_intermediate_legacy_missing_and_unsupported(self):
         async def initialize(version_marker):
             class Client(mcp_module.JsonRpcClient):
@@ -190,7 +190,7 @@ class Package28McpProtocolTests(AgentCoreTestCase):
                 "applyPendingCatalogChanges": apply_changes,
                 "close": lambda: None,
             }
-            with tempfile.TemporaryDirectory(prefix="agent-core-p28-catalog-bootstrap-") as cwd:
+            with tempfile.TemporaryDirectory(prefix="tess-core-p28-catalog-bootstrap-") as cwd:
                 config = await core.resolve_config(
                     {"provider": "openai", "runtimeHome": cwd, "permissionMode": "bypassPermissions"},
                     cwd,

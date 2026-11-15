@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from typing import Any
 
-import agent_core._facade as core
-from agent_core.context.compaction.models import _extract_recent_user_requests
-from agent_core.context.request_preflight import _request_fingerprint
-from agent_core.storage.message_origin import (
+import tess_core._facade as core
+from tess_core.context.compaction.models import _extract_recent_user_requests
+from tess_core.context.request_preflight import _request_fingerprint
+from tess_core.storage.message_origin import (
     is_genuine_user_request,
     is_plain_user_turn_anchor,
     message_with_origin,
     synthetic_user_message,
     user_request_message,
 )
-from agent_core.providers.token_budget import resolve_interactive_context_policy
-from tests.support.agent_core_case import AgentCoreTestCase
+from tess_core.providers.token_budget import resolve_interactive_context_policy
+from tests.support.tess_core_case import TessCoreTestCase
 
 
-class Package44ProvenanceTests(AgentCoreTestCase):
+class Package44ProvenanceTests(TessCoreTestCase):
     def test_removed_settings_are_inert_and_reported(self):
         policy = resolve_interactive_context_policy(
             {

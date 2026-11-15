@@ -8,10 +8,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import agent_core._facade as core
-from agent_core.headless.stream import JsonStreamSink
-from agent_core.payloads.media_persistence import sanitize_media_for_persistence
-from tests.support.agent_core_case import bind_test_runtime, run
+import tess_core._facade as core
+from tess_core.headless.stream import JsonStreamSink
+from tess_core.payloads.media_persistence import sanitize_media_for_persistence
+from tests.support.tess_core_case import bind_test_runtime, run
 
 
 _SENTINEL_BYTES = b"PACKAGE_146_PRIVATE_IMAGE_SENTINEL" * 32_768
@@ -146,7 +146,7 @@ class Package146MediaSanitizerTests(unittest.TestCase):
         )
 
     def test_session_transcript_checkpoint_and_headless_event_are_clean(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="agent-core-p146-artifacts-") as raw:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p146-artifacts-") as raw:
             root = Path(raw)
             session = _session(root, "p146-artifacts")
             session["messages"] = [
@@ -194,7 +194,7 @@ class Package146MediaSanitizerTests(unittest.TestCase):
             _assert_runtime_clean(self, root)
 
     def test_loaded_legacy_session_is_clean_in_memory_before_normal_persist(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="agent-core-p146-legacy-") as raw:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p146-legacy-") as raw:
             root = Path(raw)
             config = _config(root)
             legacy = _session(root, "p146-legacy-loaded")
@@ -226,7 +226,7 @@ class Package146MediaSanitizerTests(unittest.TestCase):
             run(execute())
 
     def test_archive_recovery_returns_the_sanitized_record_it_writes(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="agent-core-p146-recovery-") as raw:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p146-recovery-") as raw:
             root = Path(raw)
             recovered = _session(root, "p146-legacy-recovery")
             recovered["messages"] = []
@@ -278,7 +278,7 @@ class Package146MediaSanitizerTests(unittest.TestCase):
 
 class Package146TransientOverlayTests(unittest.TestCase):
     def test_provider_receives_exact_bytes_while_canonical_state_stays_clean(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="agent-core-p146-overlay-") as raw:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p146-overlay-") as raw:
             root = Path(raw)
             config = _config(root)
             session = _session(root, "p146-overlay-success")
@@ -336,7 +336,7 @@ class Package146TransientOverlayTests(unittest.TestCase):
             _assert_runtime_clean(self, root)
 
     def test_fail_before_first_event_sanitizes_failure_and_releases_overlay(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="agent-core-p146-failure-") as raw:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p146-failure-") as raw:
             root = Path(raw)
             config = _config(root)
             session = _session(root, "p146-overlay-failure")

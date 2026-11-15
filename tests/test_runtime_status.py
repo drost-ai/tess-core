@@ -4,22 +4,22 @@ processes. Every test is one coroutine.
 """
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.support.session_monitors import LEASE, ScriptedProvider, SilentListener, complete, registered_runtime, tool_reply
 from tests.test_session_end import Listener, _child_pid, _reply, _settings, _spawn_child, _wait, _wait_async
 
-from agent_core import SessionOptions, start_runtime
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.tasks.communication import send_task_message
+from tess_core import SessionOptions, start_runtime
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.tasks.communication import send_task_message
 
-_ENV = ("AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS", "AGENT_CORE_TEST_MISSING_END_KEY", LEASE)
+_ENV = ("TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS", "TESS_CORE_TEST_MISSING_END_KEY", LEASE)
 
 
-class RuntimeStatusTests(AgentCoreTestCase):
+class RuntimeStatusTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
-        os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "5000"  # a queued message stays queued long enough to be seen
+        os.environ["TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "5000"  # a queued message stays queued long enough to be seen
 
     def tearDown(self):
         for name in _ENV:

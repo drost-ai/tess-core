@@ -7,17 +7,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.support.session_monitors import Listener, ScriptedProvider, SilentListener, eventually
 
-from agent_core import SessionOptions, start_runtime
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.scheduler import operations, rules
-from agent_core.scheduler.store import load_job, mutate_job
+from tess_core import SessionOptions, start_runtime
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.scheduler import operations, rules
+from tess_core.scheduler.store import load_job, mutate_job
 
 LA = "America/Los_Angeles"
-MAX_LATE = "AGENT_CORE_SCHEDULER_MAX_LATE_MS"
+MAX_LATE = "TESS_CORE_SCHEDULER_MAX_LATE_MS"
 
 
 def soon(seconds: float = 0.3) -> str:
@@ -34,7 +34,7 @@ class NoticeListener(Listener):
         return {"noticeId": notice["noticeId"], "seq": len(self.notices)}
 
 
-class SchedulerTimerTests(AgentCoreTestCase):
+class SchedulerTimerTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class CompactionHardeningTests(AgentCoreTestCase):
+class CompactionHardeningTests(TessCoreTestCase):
     def test_legacy_working_context_projects_only_newest_bounded_trace(self):
         traces = [
             {"sourceRange": {"generation": 1}, "content": "old-one"},

@@ -5,10 +5,10 @@ import json
 import os
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from tests.support.tess_core_case import TessCoreTestCase, core, run
 
 
-class Package30MonitorTransitionTests(AgentCoreTestCase):
+class Package30MonitorTransitionTests(TessCoreTestCase):
     def _fixture(self, home: Path, workspace: Path, status: str, suffix: str = "1"):
         config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
         session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")

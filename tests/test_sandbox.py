@@ -5,12 +5,12 @@ import shutil
 import subprocess
 import time
 
-from tests.support.agent_core_case import *
-import agent_core.sandbox as sandbox_module
-import agent_core.tools.processes as processes_module
+from tests.support.tess_core_case import *
+import tess_core.sandbox as sandbox_module
+import tess_core.tools.processes as processes_module
 
 
-class SandboxTests(AgentCoreTestCase):
+class SandboxTests(TessCoreTestCase):
     def test_backend_selection_and_wrapper_shapes(self):
         config = {"sandbox": {"mode": "auto"}}
         darwin = core.resolve_sandbox_backend(config, platform="darwin", which=lambda name: "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None)

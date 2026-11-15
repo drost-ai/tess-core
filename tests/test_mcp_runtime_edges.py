@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class McpRuntimeEdgeTests(AgentCoreTestCase):
+class McpRuntimeEdgeTests(TessCoreTestCase):
     def test_mcp_runtime_marks_degraded_and_reconnects_after_request_failure(self):
         root, home, workspace, previous = self.temp_context()
         calls = {"tool": 0}

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class AgentLoopTests(AgentCoreTestCase):
+class AgentLoopTests(TessCoreTestCase):
     def test_run_agent_prompt_rejects_image_inputs_for_non_vision_profile(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-vision-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-vision-") as cwd:
             config = {
                 "cwd": cwd,
                 "runtimeHome": cwd,
@@ -71,7 +71,7 @@ class AgentLoopTests(AgentCoreTestCase):
             self.assertEqual(session["messages"][-1]["content"][0]["text"], core.IMAGE_INPUT_UNSUPPORTED_MESSAGE)
 
     def test_run_agent_prompt_sends_image_inputs_for_vision_profile(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-vision-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-vision-") as cwd:
             config = {
                 "cwd": cwd,
                 "runtimeHome": cwd,
@@ -145,7 +145,7 @@ class AgentLoopTests(AgentCoreTestCase):
             self.assertEqual(content[1]["type"], "image")
 
     def test_run_agent_prompt_textifies_persisted_current_turn_image_placeholders(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-vision-replay-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-vision-replay-") as cwd:
             config = {
                 "cwd": cwd,
                 "runtimeHome": cwd,
@@ -229,7 +229,7 @@ class AgentLoopTests(AgentCoreTestCase):
             self.assertNotIn("image", {block.get("type") for block in replay_content if isinstance(block, dict)})
 
     def test_run_agent_prompt_concurrent_tool_dispatch_and_order(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-concurrent-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-concurrent-") as cwd:
             config = {
                 "cwd": cwd,
                 "runtimeHome": cwd,
@@ -298,7 +298,7 @@ class AgentLoopTests(AgentCoreTestCase):
             self.assertEqual(blocks[1]["content"], "FAST")
 
     def test_run_agent_prompt_stops_only_after_persisted_tool_boundary(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-stable-boundary-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-stable-boundary-") as cwd:
             config = {
                 "cwd": cwd,
                 "runtimeHome": cwd,
@@ -398,7 +398,7 @@ class AgentLoopTests(AgentCoreTestCase):
             self.assertEqual(session["messages"][-1]["role"], "user")
 
     def test_run_agent_prompt_turns_invalid_streamed_tool_input_into_repairable_tool_result(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-invalid-tool-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-invalid-tool-") as cwd:
             config = {
                 "cwd": cwd,
                 "runtimeHome": cwd,

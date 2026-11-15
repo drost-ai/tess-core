@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class RuntimeStateCoreTests(AgentCoreTestCase):
+class RuntimeStateCoreTests(TessCoreTestCase):
     def test_runtime_state_reduces_provider_task_daemon_events(self):
         state = core.create_initial_runtime_state()
         state = core.reduce_runtime_state(state, {"event": "session.activated", "createdAt": "2026-01-01T00:00:00Z", "data": {"id": "s1", "cwd": "/tmp/w", "provider": "openai", "model": "gpt-5.4", "permissionMode": "default"}})

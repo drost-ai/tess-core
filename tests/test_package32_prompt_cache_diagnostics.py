@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers.anthropic.payloads import plan_anthropic_cache_breakpoints
-from agent_core.providers.prompt_cache_orchestration import resolve_prompt_cache_preparation
-from agent_core.providers.prompt_cache_diagnostics import (
+from tess_core.providers.anthropic.payloads import plan_anthropic_cache_breakpoints
+from tess_core.providers.prompt_cache_orchestration import resolve_prompt_cache_preparation
+from tess_core.providers.prompt_cache_diagnostics import (
     MAX_PROMPT_CACHE_STATE_BYTES,
     build_prompt_cache_request_snapshot,
     canonical_prompt_cache_json,
@@ -14,8 +14,8 @@ from agent_core.providers.prompt_cache_diagnostics import (
     hash_prompt_cache_value,
     normalize_prompt_cache_provider_reason,
 )
-from agent_core.shell_surface.status import format_usage_breakdown, format_usage_summary
-from agent_core.providers.usage_costs import (
+from tess_core.shell_surface.status import format_usage_breakdown, format_usage_summary
+from tess_core.providers.usage_costs import (
     cache_creation_usage_detail,
     create_usage_totals,
     ensure_usage_totals,
@@ -92,7 +92,7 @@ def _snapshot(**overrides):
     )
 
 
-class PromptCacheDiagnosticsTests(AgentCoreTestCase):
+class PromptCacheDiagnosticsTests(TessCoreTestCase):
     def test_preparation_provenance_matrix_is_closed_and_priority_ordered(self):
         cases = (
             ({}, "normal"),

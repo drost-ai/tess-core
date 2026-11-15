@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 REQUEST = {
@@ -25,7 +25,7 @@ def _sse(events):
     )
 
 
-class Package31AnthropicTerminalCompletionTests(AgentCoreTestCase):
+class Package31AnthropicTerminalCompletionTests(TessCoreTestCase):
     def assert_incomplete(self, error, assistant_bytes):
         self.assertIsInstance(error, core.ProviderIncompleteResponseError)
         self.assertEqual(error.record["category"], "protocol")

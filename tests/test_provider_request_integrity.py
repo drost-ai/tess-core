@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.agent.request_integrity import normalize_provider_request_messages
+from tess_core.agent.request_integrity import normalize_provider_request_messages
 
 def _tool_use(call_id: str, name: str = "Read") -> dict:
     return {"role": "assistant", "content": [{"type": "tool_use", "id": call_id, "name": name, "input": {}}]}
@@ -12,7 +12,7 @@ def _tool_result(call_id: str, content: str = "tool output") -> dict:
     return {"role": "user", "content": [{"type": "tool_result", "tool_use_id": call_id, "content": content, "is_error": False}]}
 
 
-class ProviderRequestIntegrityTests(AgentCoreTestCase):
+class ProviderRequestIntegrityTests(TessCoreTestCase):
     def test_orphaned_tool_result_at_request_start_is_textified(self):
         normalized = normalize_provider_request_messages(
             "anthropic",

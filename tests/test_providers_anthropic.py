@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class AnthropicProviderTests(AgentCoreTestCase):
+class AnthropicProviderTests(TessCoreTestCase):
     def test_anthropic_payload_and_sse_normalization(self):
         request = {
             "model": "claude-sonnet-4-6",

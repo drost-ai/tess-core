@@ -1,27 +1,27 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 import sys
 
-from agent_core.payloads.cursor import (
+from tess_core.payloads.cursor import (
     encode_payload_cursor,
     fingerprint_payload_source,
     resolve_payload_cursor,
 )
-from agent_core.mcp.payloads import shape_mcp_resource_list, shape_mcp_resource_read
-from agent_core.acquisition.search import run_streaming_search
-from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serialized_content_bytes
-from agent_core.payloads.utf8_bounds import slice_utf8_window, utf8_byte_length
+from tess_core.mcp.payloads import shape_mcp_resource_list, shape_mcp_resource_read
+from tess_core.acquisition.search import run_streaming_search
+from tess_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serialized_content_bytes
+from tess_core.payloads.utf8_bounds import slice_utf8_window, utf8_byte_length
 
 
-class TextInlineBudgetCalibrationTests(AgentCoreTestCase):
+class TextInlineBudgetCalibrationTests(TessCoreTestCase):
     def test_short_lined_text_within_byte_budget_returns_inline_full(self):
         # Field case: a stripped web page of ~7KB across ~300 short lines
         # (small class, 8KB budget) must NOT be excerpted — the old 140-line
         # cap cut it at ~3.2KB and cost artifact round trips for content
         # that fit inline.
-        from agent_core.payloads.tools import TOOL_PAYLOAD_POLICIES, shape_text_tool_result
+        from tess_core.payloads.tools import TOOL_PAYLOAD_POLICIES, shape_text_tool_result
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -44,7 +44,7 @@ class TextInlineBudgetCalibrationTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class Package31PayloadPaginationTests(AgentCoreTestCase):
+class Package31PayloadPaginationTests(TessCoreTestCase):
     def test_payload_cursor_and_utf8_windows_are_bound_and_progressive(self):
         fingerprint = fingerprint_payload_source(["fixture", "漢🙂", "3"])
         encoded = encode_payload_cursor(

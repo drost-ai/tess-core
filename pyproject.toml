@@ -3,10 +3,10 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-core-python"
+name = "tess-core"
 version = "0.1.0"
 license = { file = "LICENSE" }
-description = "Python port of the agent-core runtime."
+description = "Tess Core: the execution engine for persistent agents."
 requires-python = ">=3.12"
 dependencies = []
 
@@ -25,7 +25,7 @@ dev = [
 license-files = ["LICENSE"]
 
 [tool.setuptools.packages.find]
-include = ["agent_core*", "agent_core_harness*"]
+include = ["tess_core*", "tess_core_harness*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -36,7 +36,7 @@ pythonpath = ["."]
 # Enforced (blocking) by tests/test_contracts_typecheck.py when mypy is
 # installed; the test skips gracefully when it is not.
 [tool.mypy]
-files = ["agent_core/contracts"]
+files = ["tess_core/contracts"]
 python_version = "3.12"
 strict = true
 warn_unreachable = true
@@ -44,11 +44,11 @@ warn_unreachable = true
 # The lane is scoped to the typed boundaries: the rest of the runtime is
 # deliberately Any-shaped (TypeScript-port idiom) and stays out of the gate.
 [[tool.mypy.overrides]]
-module = "agent_core.*"
+module = "tess_core.*"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = "agent_core.contracts.*"
+module = "tess_core.contracts.*"
 ignore_errors = false
 
 # Editor/Pylance lane: the merged-namespace idiom was retired in the v1

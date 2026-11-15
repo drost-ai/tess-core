@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.mcp.normalization import _normalize_tool_call_result
+from tess_core.mcp.normalization import _normalize_tool_call_result
 
 
-class McpRichContentTests(AgentCoreTestCase):
+class McpRichContentTests(TessCoreTestCase):
     def test_image_audio_and_blob_resources_spill_and_attach(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -69,7 +69,7 @@ class McpRichContentTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class BootstrapRefreshContractTests(AgentCoreTestCase):
+class BootstrapRefreshContractTests(TessCoreTestCase):
     def test_bootstrap_refresh_returns_live_registry_even_when_unchanged(self):
         # Regression: the hook must hand back the LIVE tool list on every
         # call. Returning None on "no new change" made each later turn revert
@@ -104,7 +104,7 @@ class BootstrapRefreshContractTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class McpRefreshLastHopTests(AgentCoreTestCase):
+class McpRefreshLastHopTests(TessCoreTestCase):
     def _config(self, cwd: str) -> dict:
         return {
             "cwd": cwd,
@@ -131,7 +131,7 @@ class McpRefreshLastHopTests(AgentCoreTestCase):
         }
 
     def test_turn_adopts_refreshed_tool_registry(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-mcp-refresh-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-mcp-refresh-") as cwd:
             config = self._config(cwd)
             session = core.create_empty_session(cwd=cwd, provider="anthropic", model="claude-sonnet-4-6", effort="medium", systemPrompt="test", permissionMode="bypassPermissions")
 

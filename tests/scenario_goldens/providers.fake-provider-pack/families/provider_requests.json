@@ -18,7 +18,7 @@
       "instructions": "Harness provider system.",
       "max_output_tokens": 16384,
       "model": "gpt-5.4",
-      "prompt_cache_key": "agent-core-8204ea1aaf05888f61ab578bb41fdaad",
+      "prompt_cache_key": "tess-core-8204ea1aaf05888f61ab578bb41fdaad",
       "store": false,
       "stream": true
     },
@@ -43,7 +43,7 @@
       "instructions": "Harness provider system.",
       "max_output_tokens": 16384,
       "model": "gpt-5.4",
-      "prompt_cache_key": "agent-core-8204ea1aaf05888f61ab578bb41fdaad",
+      "prompt_cache_key": "tess-core-8204ea1aaf05888f61ab578bb41fdaad",
       "store": false,
       "stream": true
     },

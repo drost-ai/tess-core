@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.mcp.sse_decoder import McpSseDecoder, parse_sse_events
-from agent_core.mcp.stdio_decoder import McpStdioFrameDecoder
-from agent_core.mcp.stdio_transport import StdioMcpClient
-from agent_core.mcp.transport_policy import (
+from tess_core.mcp.sse_decoder import McpSseDecoder, parse_sse_events
+from tess_core.mcp.stdio_decoder import McpStdioFrameDecoder
+from tess_core.mcp.stdio_transport import StdioMcpClient
+from tess_core.mcp.transport_policy import (
     MCP_FRAME_MAX_BYTES,
     MCP_PENDING_REQUEST_MAX,
     MCP_SSE_EVENT_MAX_BYTES,
     McpTransportError,
 )
-from agent_core.mcp.transport_shared import BoundedNotificationQueue
+from tess_core.mcp.transport_shared import BoundedNotificationQueue
 
 
 def _stdio_config(name: str, mode: str, server: Path, **overrides):
@@ -197,7 +197,7 @@ class _Response:
         self.closed = True
 
 
-class Package31McpTransportTests(AgentCoreTestCase):
+class Package31McpTransportTests(TessCoreTestCase):
     def test_stdio_decoder_exact_limits_fragmentation_and_invalid_frames(self):
         payload = b" " * MCP_FRAME_MAX_BYTES
         decoder = McpStdioFrameDecoder()

@@ -3,16 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import agent_core._facade as core
-from agent_core.session.fork import SESSION_FORK_METADATA_DISPOSITIONS
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tess_core.session.fork import SESSION_FORK_METADATA_DISPOSITIONS
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
 PARENT_ID = "60000000-0000-4000-8000-000000000001"
 CHILD_ID = "60000000-0000-4000-8000-000000000002"
 
 
-class SessionForkIsolationTests(AgentCoreTestCase):
+class SessionForkIsolationTests(TessCoreTestCase):
     def test_fork_allowlist_creates_fresh_state_and_recoverable_archive(self):
         root, home, workspace, previous = self.temp_context()
         try:

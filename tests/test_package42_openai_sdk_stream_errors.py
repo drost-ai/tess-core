@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 class _OpenAiSdkStreamError(Exception):
@@ -16,7 +16,7 @@ class _OpenAiSdkStreamError(Exception):
         self.type = body.get("type")
 
 
-class Package42OpenAiSdkStreamErrorTests(AgentCoreTestCase):
+class Package42OpenAiSdkStreamErrorTests(TessCoreTestCase):
     def test_structured_sdk_stream_errors_preserve_diagnostics_and_policy(self):
         base = {
             "provider": "openai",

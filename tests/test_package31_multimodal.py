@@ -9,11 +9,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
+from tests.support.tess_core_case import TessCoreTestCase, bind_test_runtime, run
 
-import agent_core._facade as core
-from agent_core.payloads.agent_results import finalize_tool_dispatch_result
-from agent_core.payloads.image_budget import (
+import tess_core._facade as core
+from tess_core.payloads.agent_results import finalize_tool_dispatch_result
+from tess_core.payloads.image_budget import (
     ImageBudgetError,
     admit_image_messages,
     create_image_budget_reservation,
@@ -22,7 +22,7 @@ from agent_core.payloads.image_budget import (
     measure_canonical_base64,
     assert_image_context_capacity,
 )
-from agent_core.payloads.attachments import (
+from tess_core.payloads.attachments import (
     filter_images_for_provider_capabilities,
     resolve_runtime_provider_capabilities,
     strip_in_memory_image_data,
@@ -257,7 +257,7 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
         self.assertEqual(caught.exception.measurement["imageCount"], 1)
 
 
-class Package31MultimodalIntegrationTests(AgentCoreTestCase):
+class Package31MultimodalIntegrationTests(TessCoreTestCase):
     def _read_tool(self):
         return next(tool for tool in core.create_builtin_tools() if tool.name == "Read")
 
@@ -276,7 +276,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
         }
 
     def test_read_image_and_pdf_return_metadata_without_inline_binary_content(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p31-image-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p31-image-") as cwd:
             config = image_config(cwd)
             session = create_session(config)
             image_path = Path(cwd, "screen.png")
@@ -303,14 +303,14 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
             self.assertNotIn("base64", pdf_result["content"])
 
     def test_text_only_read_does_not_acquire_or_encode_image_bytes(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p31-no-image-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p31-no-image-") as cwd:
             config = image_config(cwd, enabled=False)
             session = create_session(config)
             path = Path(cwd, "screen.png")
             path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"a" * 4096)
             events = []
             with mock.patch(
-                "agent_core.tools.files._read_regular_file_bounded",
+                "tess_core.tools.files._read_regular_file_bounded",
                 side_effect=AssertionError("image acquisition must not run"),
             ):
                 result = run(self._read_tool().handler(
@@ -323,7 +323,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
             self.assertTrue(any(event == "tool.attachment_dropped" for event, _ in events))
 
     def test_finalizer_emits_image_after_tool_result_and_drops_invalid_metadata(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p31-finalizer-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p31-finalizer-") as cwd:
             config = image_config(cwd)
             attachment = {
                 "type": "image",
@@ -415,7 +415,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_provider_boundary_drops_preexisting_image_for_disabled_profile(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p31-boundary-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p31-boundary-") as cwd:
             config = image_config(cwd, enabled=False)
             session = create_session(config)
             session["messages"].append({"role": "user", "content": [image_block(b"img")]})
@@ -471,7 +471,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
         self.assertEqual(caught.exception.code, "image_count_limit")
 
     def test_agent_aggregate_rejection_restores_sanitized_stable_state_and_emits(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p31-reject-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p31-reject-") as cwd:
             config = image_config(cwd)
             config["providerCapabilities"] = {**DEFAULT_CAPABILITIES, "maxImageCount": 1}
             session = create_session(config)

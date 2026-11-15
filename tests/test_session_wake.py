@@ -10,17 +10,17 @@ Every test is one coroutine: a runtime belongs to the loop that started it.
 """
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.support.session_wake import *
 from tests.support.session_wake import _ENV, _adopt_on_disk, _seed_task, _start, _wait
 
-from agent_core import SessionOptions, Unavailable
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.tasks.communication import read_task_mailbox_messages, read_task_questions, send_task_message
+from tess_core import SessionOptions, Unavailable
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.tasks.communication import read_task_mailbox_messages, read_task_questions, send_task_message
 
 
-class SessionWakeTests(AgentCoreTestCase):
+class SessionWakeTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 
@@ -36,7 +36,7 @@ class SessionWakeTests(AgentCoreTestCase):
             settings_path = home / "settings.json"
             settings_path.write_text(json.dumps({
                 "provider": "wake-openai",
-                "providerProfiles": {"wake-openai": {"kind": "openai", "defaultModel": "wake-model", "auth": {"kind": "openai_api_key", "envVar": "AGENT_CORE_TEST_MISSING_WAKE_KEY"}}},
+                "providerProfiles": {"wake-openai": {"kind": "openai", "defaultModel": "wake-model", "auth": {"kind": "openai_api_key", "envVar": "TESS_CORE_TEST_MISSING_WAKE_KEY"}}},
             }), encoding="utf-8")
             provider = Provider("noted, child")
 

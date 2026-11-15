@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers.openai.responses import send_openai_request
-from agent_core.providers.openai.transport import (
+from tess_core.providers.openai.responses import send_openai_request
+from tess_core.providers.openai.transport import (
     _acquire_openai_client,
     _create_openai_client,
 )
-from agent_core.providers.openai._wire import OpenAiWireClient
-from agent_core.providers.turn_session import create_provider_turn_session
-from agent_core.providers.watchdog import AbortSignal
-from agent_core_harness.fake_providers.server import (
+from tess_core.providers.openai._wire import OpenAiWireClient
+from tess_core.providers.turn_session import create_provider_turn_session
+from tess_core.providers.watchdog import AbortSignal
+from tess_core_harness.fake_providers.server import (
     FakeProviderHttpServer,
     openaiChatSseBody,
     openaiResponsesSseBody,

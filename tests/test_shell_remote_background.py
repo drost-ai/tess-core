@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-import agent_core.shell_surface.tasks as shell_surface_tasks_module
+import tess_core.shell_surface.tasks as shell_surface_tasks_module
 
 
-class ShellRemoteBackgroundTests(AgentCoreTestCase):
+class ShellRemoteBackgroundTests(TessCoreTestCase):
     def test_shell_daemon_client_fallback_for_tasks_and_agents(self):
         root, home, workspace, previous = self.temp_context()
         try:

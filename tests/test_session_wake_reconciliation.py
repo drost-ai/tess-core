@@ -3,16 +3,16 @@ one-shot child wakes its closed parent, and work for a parent this home has no
 record of is refused by the runtime without asking the host."""
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.support.session_wake import *
 from tests.support.session_wake import _ENV, _adopt_on_disk, _seed_task, _start, _wait
 
-from agent_core import SessionOptions
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
+from tess_core import SessionOptions
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
 
 
-class SessionWakeReconciliationTests(AgentCoreTestCase):
+class SessionWakeReconciliationTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 
@@ -35,7 +35,7 @@ class SessionWakeReconciliationTests(AgentCoreTestCase):
                 return SessionOptions(provider_override=Provider().override)
 
             async def scenario():
-                from agent_core.subagents.reconciliation import upsert_subagent_reconciliation
+                from tess_core.subagents.reconciliation import upsert_subagent_reconciliation
 
                 listener = Listener()
                 runtime = await _start(home, workspace, listener, session_options=options_for)
@@ -67,7 +67,7 @@ class SessionWakeReconciliationTests(AgentCoreTestCase):
             provider = Provider("noted the failure")
 
             async def scenario():
-                from agent_core.subagents.reconciliation import list_unconsumed_subagent_reconciliations, upsert_subagent_reconciliation
+                from tess_core.subagents.reconciliation import list_unconsumed_subagent_reconciliations, upsert_subagent_reconciliation
 
                 listener = Listener()
                 runtime, = (await _start(home, workspace, listener, session_options=lambda sid, reason: SessionOptions(provider_override=provider.override)),)

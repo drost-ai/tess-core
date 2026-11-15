@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class ShellCommandTests(AgentCoreTestCase):
+class ShellCommandTests(TessCoreTestCase):
     def test_dispatcher_covers_exactly_the_registered_builtins(self):
-        from agent_core.shell_surface.dispatcher import _HANDLERS
-        from agent_core.shell_surface.registry import list_slash_commands
+        from tess_core.shell_surface.dispatcher import _HANDLERS
+        from tess_core.shell_surface.registry import list_slash_commands
 
         listed = {
             command["name"]

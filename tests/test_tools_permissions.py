@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class ToolPermissionTests(AgentCoreTestCase):
+class ToolPermissionTests(TessCoreTestCase):
     def test_tool_permission_modes_for_edits_and_interactive_switch(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -63,7 +63,7 @@ class ToolPermissionTests(AgentCoreTestCase):
         # derivation bookkeeping; that must not strip the root's
         # "Switch to bypassPermissions" option or pin its mode — only real
         # child sessions (parentSessionId) are authority-pinned.
-        from agent_core.tools.permissions import _ensure_tool_permission
+        from tess_core.tools.permissions import _ensure_tool_permission
 
         root, home, workspace, previous = self.temp_context()
         try:

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.agent.provider_turn import is_empty_assistant_response
-from agent_core.providers.openai.params import is_codex_base_url
-from agent_core.providers.openai.transport import _infer_openai_responses_mode
-from agent_core_harness.fake_providers.server import (
+from tess_core.agent.provider_turn import is_empty_assistant_response
+from tess_core.providers.openai.params import is_codex_base_url
+from tess_core.providers.openai.transport import _infer_openai_responses_mode
+from tess_core_harness.fake_providers.server import (
     FakeProviderHttpServer,
     openaiChatSseBody,
     openaiResponsesSseBody,

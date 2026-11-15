@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import stat
 
-from tests.support.agent_core_case import *
-from agent_core._utils import now_iso
+from tests.support.tess_core_case import *
+from tess_core._utils import now_iso
 
-from agent_core.daemon.protocol import (
+from tess_core.daemon.protocol import (
     DAEMON_MAX_REQUEST_FRAME_BYTES,
     DAEMON_PROTOCOL_VERSION,
     DaemonLineDecoder,
@@ -14,11 +14,11 @@ from agent_core.daemon.protocol import (
     parse_daemon_frame,
     parse_daemon_request,
 )
-from agent_core.daemon.transport import (
+from tess_core.daemon.transport import (
     DaemonServerPeer,
     create_authenticated_daemon_server,
 )
-from agent_core.daemon.security import (
+from tess_core.daemon.security import (
     DaemonSecurityError,
     create_daemon_auth_material,
     daemon_auth_token_path,
@@ -26,16 +26,16 @@ from agent_core.daemon.security import (
     publish_daemon_auth_material,
     read_daemon_auth_material,
 )
-from agent_core.daemon.security_tree import (
+from tess_core.daemon.security_tree import (
     prepare_daemon_runtime_security,
     verify_private_daemon_runtime,
 )
-import agent_core.daemon.server as daemon_server_module
+import tess_core.daemon.server as daemon_server_module
 
 TEST_INSTANCE = "sec-test-instance"
 
 
-class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
+class Package31DaemonProtocolSecurityTests(TessCoreTestCase):
     def test_daemon_publishes_after_bind_and_constructs_only_while_recovering(self):
         trace = []
         state = {}

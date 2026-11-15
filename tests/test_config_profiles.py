@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-from agent_core.runtime.secret_provider import resolve_compaction_provider_secrets, resolve_provider_config_secrets
-from agent_core.runtime.secrets import is_runtime_secret_ref
+from tests.support.tess_core_case import *
+from tess_core.runtime.secret_provider import resolve_compaction_provider_secrets, resolve_provider_config_secrets
+from tess_core.runtime.secrets import is_runtime_secret_ref
 
 
-class ConfigProfileTests(AgentCoreTestCase):
+class ConfigProfileTests(TessCoreTestCase):
     def test_built_in_provider_profiles(self):
         profiles = core.resolve_provider_profiles(None)
         self.assertEqual(core.list_provider_profiles(profiles), ["anthropic-claude-code", "anthropic-console", "codex", "openai"])

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class McpCancellationBlobPluginTests(AgentCoreTestCase):
+class McpCancellationBlobPluginTests(TessCoreTestCase):
     def test_stdio_mcp_cancellation_cleans_pending_request_and_keeps_connection(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -71,8 +71,8 @@ class McpCancellationBlobPluginTests(AgentCoreTestCase):
 
     def test_mcp_blob_lifecycle_uses_stable_paths_and_cleanup(self):
         root, home, workspace, previous = self.temp_context()
-        previous_keep = os.environ.get("AGENT_CORE_MCP_BLOB_KEEP")
-        os.environ["AGENT_CORE_MCP_BLOB_KEEP"] = "2"
+        previous_keep = os.environ.get("TESS_CORE_MCP_BLOB_KEEP")
+        os.environ["TESS_CORE_MCP_BLOB_KEEP"] = "2"
         try:
             first = base64.b64encode(b"a" * 65536).decode("ascii")
             second = base64.b64encode(b"b" * 1024).decode("ascii")
@@ -88,9 +88,9 @@ class McpCancellationBlobPluginTests(AgentCoreTestCase):
             self.assertFalse(Path(first_path).exists())
         finally:
             if previous_keep is None:
-                os.environ.pop("AGENT_CORE_MCP_BLOB_KEEP", None)
+                os.environ.pop("TESS_CORE_MCP_BLOB_KEEP", None)
             else:
-                os.environ["AGENT_CORE_MCP_BLOB_KEEP"] = previous_keep
+                os.environ["TESS_CORE_MCP_BLOB_KEEP"] = previous_keep
             self.restore_home(root, previous)
 
     def test_plugin_mcp_server_conflict_uses_last_plugin_server_definition(self):

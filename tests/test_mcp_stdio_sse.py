@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class McpStdioSseTests(AgentCoreTestCase):
+class McpStdioSseTests(TessCoreTestCase):
     def test_stdio_mcp_runtime_discovers_tools_and_resources(self):
         root, home, workspace, previous = self.temp_context()
         try:

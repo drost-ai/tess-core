@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-import agent_core.remote.bridge_runtime as bridge_runtime_module
+import tess_core.remote.bridge_runtime as bridge_runtime_module
 
 
-class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
+class RuntimeBootstrapLifecycleTests(TessCoreTestCase):
     def test_bootstrap_runtime_closes_owned_local_runtimes_in_reference_order(self):
         root, home, workspace, previous = self.temp_context()
         try:

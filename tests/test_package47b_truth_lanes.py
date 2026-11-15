@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from agent_core_harness.cache_economics import runCacheEconomicLane
-from agent_core_harness.event_corpus import CORPUS_SCHEMA, DEFAULT_CORPUS_DIR, verifyEventCorpus
-from agent_core_harness.fault_contract import PROVIDER_FAMILIES, buildFaultContract
-from agent_core_harness.fault_matrix import runProviderFaultMatrix
-from agent_core_harness.performance_lane import BUDGETS, _evaluate
-from agent_core_harness.paths import REPO_ROOT
-from agent_core_harness.suite_speed import (
+from tess_core_harness.cache_economics import runCacheEconomicLane
+from tess_core_harness.event_corpus import CORPUS_SCHEMA, DEFAULT_CORPUS_DIR, verifyEventCorpus
+from tess_core_harness.fault_contract import PROVIDER_FAMILIES, buildFaultContract
+from tess_core_harness.fault_matrix import runProviderFaultMatrix
+from tess_core_harness.performance_lane import BUDGETS, _evaluate
+from tess_core_harness.paths import REPO_ROOT
+from tess_core_harness.suite_speed import (
     CRITICAL_TIMING_FILES,
     PROCESS_FILES,
     TIMING_FILES,
@@ -23,7 +23,7 @@ from agent_core_harness.suite_speed import (
 )
 
 
-class Package47BFaultMatrixTests(AgentCoreTestCase):
+class Package47BFaultMatrixTests(TessCoreTestCase):
     def test_every_declared_cell_has_an_explicit_verdict(self):
         for family in PROVIDER_FAMILIES:
             with self.subTest(family=family):
@@ -126,7 +126,7 @@ class Package47BFaultMatrixTests(AgentCoreTestCase):
         self.assertTrue(all(projection == projections[0] for projection in projections[1:]))
 
 
-class Package47BEventCorpusTests(AgentCoreTestCase):
+class Package47BEventCorpusTests(TessCoreTestCase):
     def test_committed_event_corpus_regenerates_byte_identically(self):
         report = verifyEventCorpus()
         self.assertEqual(report["schemaVersion"], CORPUS_SCHEMA)
@@ -163,7 +163,7 @@ class Package47BEventCorpusTests(AgentCoreTestCase):
         self.assertEqual(manifest["consumerStatus"], "unacknowledged")
 
 
-class Package47BCacheEconomicTests(AgentCoreTestCase):
+class Package47BCacheEconomicTests(TessCoreTestCase):
     def test_both_ttls_hold_recorded_cache_economics(self):
         report = runCacheEconomicLane()
         self.assertEqual(report["status"], "passed", report["regressions"])
@@ -186,7 +186,7 @@ class Package47BCacheEconomicTests(AgentCoreTestCase):
         self.assertTrue(all("relief" in item["metric"] for item in report["regressions"]))
 
 
-class Package47BPerformanceLaneTests(AgentCoreTestCase):
+class Package47BPerformanceLaneTests(TessCoreTestCase):
     def test_quick_lane_exercises_real_measurements_and_hard_gates(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "performance.json"
@@ -194,7 +194,7 @@ class Package47BPerformanceLaneTests(AgentCoreTestCase):
                 [
                     sys.executable,
                     "-m",
-                    "agent_core_harness",
+                    "tess_core_harness",
                     "performance-lane",
                     "--quick",
                     "--output",
@@ -231,7 +231,7 @@ class Package47BPerformanceLaneTests(AgentCoreTestCase):
             self.assertEqual([item["metric"] for item in regressions], [metric])
 
 
-class Package47BSuiteSpeedTests(AgentCoreTestCase):
+class Package47BSuiteSpeedTests(TessCoreTestCase):
     def test_explicit_process_and_timing_partitions_are_disjoint_and_exist(self):
         listed = PROCESS_FILES + TIMING_FILES + CRITICAL_TIMING_FILES
         self.assertEqual(len(listed), len(set(listed)))
@@ -241,7 +241,7 @@ class Package47BSuiteSpeedTests(AgentCoreTestCase):
         )
 
     def test_zero_collection_aggregators_are_not_scheduled(self):
-        self.assertEqual(_test_weight(REPO_ROOT / "tests" / "test_agent_core.py"), 0)
+        self.assertEqual(_test_weight(REPO_ROOT / "tests" / "test_tess_core.py"), 0)
 
     def test_junit_identity_and_outcome_equivalence_detects_loss_and_change(self):
         with tempfile.TemporaryDirectory() as tmp:

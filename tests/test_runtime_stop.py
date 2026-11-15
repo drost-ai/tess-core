@@ -11,24 +11,24 @@ import subprocess
 import sys
 import textwrap
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.test_session_end import Listener, _child_pid, _reply, _settings, _spawn_child, _wait, _wait_async
 
-from agent_core import RuntimeStopped, SessionOptions, start_runtime
-from agent_core._utils import is_process_alive
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.runtime.owner_lease import read_owner_lease
-from agent_core.storage.records import save_task_record
-from agent_core.tasks.communication import read_task_events, read_task_mailbox_messages, send_task_message
+from tess_core import RuntimeStopped, SessionOptions, start_runtime
+from tess_core._utils import is_process_alive
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.runtime.owner_lease import read_owner_lease
+from tess_core.storage.records import save_task_record
+from tess_core.tasks.communication import read_task_events, read_task_mailbox_messages, send_task_message
 
-_ENV = ("AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS", "AGENT_CORE_TEST_MISSING_END_KEY", "AGENT_CORE_SESSIONS_IDLE_CLOSE_MS", "AGENT_CORE_DAEMON_MAILBOX_WATCH_MS")
+_ENV = ("TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS", "TESS_CORE_TEST_MISSING_END_KEY", "TESS_CORE_SESSIONS_IDLE_CLOSE_MS", "TESS_CORE_DAEMON_MAILBOX_WATCH_MS")
 
 HOST_SCRIPT = textwrap.dedent(
     """
     import asyncio, json, os, sys
-    import agent_core._facade as core
-    from agent_core import start_runtime
+    import tess_core._facade as core
+    from tess_core import start_runtime
 
     async def main():
         runtime = await start_runtime(sys.argv[1], cwd=os.getcwd(), startup_timeout_seconds=20)
@@ -50,10 +50,10 @@ HOST_SCRIPT = textwrap.dedent(
 )
 
 
-class RuntimeStopTests(AgentCoreTestCase):
+class RuntimeStopTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
-        os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "100"
+        os.environ["TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "100"
 
     def tearDown(self):
         for name in _ENV:
@@ -165,7 +165,7 @@ class RuntimeStopTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         host = None
         try:
-            env = {**os.environ, "AGENT_CORE_HOME": str(home), "AGENT_CORE_DAEMON_OWNER_POLL_MS": "300",
+            env = {**os.environ, "TESS_CORE_HOME": str(home), "TESS_CORE_DAEMON_OWNER_POLL_MS": "300",
                    "PYTHONPATH": str(Path(core.__file__).resolve().parents[1])}
             host = subprocess.Popen([sys.executable, "-c", HOST_SCRIPT, str(home)], cwd=str(workspace), env=env, text=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -215,7 +215,7 @@ class RuntimeStopTests(AgentCoreTestCase):
     def test_published_results_are_not_redelivered_after_a_restart(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            os.environ["AGENT_CORE_SESSIONS_IDLE_CLOSE_MS"], os.environ["AGENT_CORE_DAEMON_MAILBOX_WATCH_MS"] = "300", "200"
+            os.environ["TESS_CORE_SESSIONS_IDLE_CLOSE_MS"], os.environ["TESS_CORE_DAEMON_MAILBOX_WATCH_MS"] = "300", "200"
 
             async def scenario():
                 calls = {"first": 0, "second": 0}

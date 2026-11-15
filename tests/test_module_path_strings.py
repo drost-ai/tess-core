@@ -6,18 +6,18 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "agent_core"
+PACKAGE = ROOT / "tess_core"
 
-# ``agent_core.<name>`` written inside a *string* rather than an import: the
-# subprocess entry points (``python -m agent_core.process.daemon_worker``),
+# ``tess_core.<name>`` written inside a *string* rather than an import: the
+# subprocess entry points (``python -m tess_core.process.daemon_worker``),
 # mock.patch targets, and daemon process-table probes. Import rewriting cannot
 # see these, so a module move silently breaks them at runtime instead of at
 # import time -- which is exactly how it presents: a child process that exits 1.
-MODULE_PATH_IN_STRING = re.compile(r"agent_core((?:\.[a-z_][a-z_0-9]*)+)")
+MODULE_PATH_IN_STRING = re.compile(r"tess_core((?:\.[a-z_][a-z_0-9]*)+)")
 
-SEARCH_ROOTS = ("agent_core", "tests", "agent_core_harness")
+SEARCH_ROOTS = ("tess_core", "tests", "tess_core_harness")
 
-# "agent_core.py" and friends are filenames in prose or fixtures, not modules.
+# "tess_core.py" and friends are filenames in prose or fixtures, not modules.
 FILE_SUFFIXES = {"py", "json", "jsonl", "md", "txt", "log", "toml"}
 
 
@@ -66,7 +66,7 @@ class ModulePathStringTests(unittest.TestCase):
                             continue
                         if _resolves(segments):
                             continue
-                        offenders.append(f"{path.relative_to(ROOT)}:{number}: agent_core.{'.'.join(segments)}")
+                        offenders.append(f"{path.relative_to(ROOT)}:{number}: tess_core.{'.'.join(segments)}")
         self.assertEqual([], offenders)
 
 

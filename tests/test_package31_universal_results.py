@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.process.bash_lifecycle import _process_group_live, run_inline_shell_command
-from agent_core.payloads.bash_results import build_bash_result_payload
-from agent_core.process.output import create_subprocess_output_collector
-from agent_core.payloads.result_guard import (
+from tess_core.process.bash_lifecycle import _process_group_live, run_inline_shell_command
+from tess_core.payloads.bash_results import build_bash_result_payload
+from tess_core.process.output import create_subprocess_output_collector
+from tess_core.payloads.result_guard import (
     TOOL_RESULT_FINAL_BYTES,
     guard_tool_call_result,
     serialized_content_bytes,
 )
-from agent_core.payloads.utf8_bounds import has_lone_utf16_surrogate, utf8_byte_length
+from tess_core.payloads.utf8_bounds import has_lone_utf16_surrogate, utf8_byte_length
 
 
 _SMALL_CONFIG = {
@@ -21,7 +21,7 @@ _SMALL_CONFIG = {
 }
 
 
-class Package31UniversalResultTests(AgentCoreTestCase):
+class Package31UniversalResultTests(TessCoreTestCase):
     def test_durable_memory_projects_oversized_manual_memory_inside_total_prompt_budget(self):
         root, home, workspace, previous = self.temp_context()
         try:

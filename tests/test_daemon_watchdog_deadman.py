@@ -5,14 +5,14 @@ import socket
 import unittest
 from unittest import mock
 
-import agent_core.daemon as daemon_module
-from agent_core.runtime._daemon_watch import check_daemon_once
-from agent_core.storage import daemon_socket_path
-from agent_core.storage.daemon import save_daemon_state
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core.daemon as daemon_module
+from tess_core.runtime._daemon_watch import check_daemon_once
+from tess_core.storage import daemon_socket_path
+from tess_core.storage.daemon import save_daemon_state
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
-class DaemonWatchdogDeadManTests(AgentCoreTestCase):
+class DaemonWatchdogDeadManTests(TessCoreTestCase):
     def test_live_pid_without_accepting_socket_is_declared_lost(self):
         """Dead-man regression: a daemon whose pid is alive (wedged listener,
         or a recycled pid behind a stale state file) must not read healthy —

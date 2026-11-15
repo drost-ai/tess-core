@@ -5,7 +5,7 @@ import copy
 import stat
 from urllib.parse import parse_qs, urlsplit
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 ACCESS_ONE = "access-secret-one"
@@ -188,7 +188,7 @@ class OAuthFixtureServer:
         self.thread.join(timeout=2)
 
 
-class Package28McpOAuthTests(AgentCoreTestCase):
+class Package28McpOAuthTests(TessCoreTestCase):
     def test_oauth_pkce_exchange_forced_401_refresh_single_flight_and_secret_redaction(self):
         fixture = OAuthFixtureServer()
         store = MemoryTokenStore()
@@ -381,7 +381,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
             fixture.close()
 
     def test_file_token_store_permissions_atomicity_and_injected_store_exclusivity(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p28-token-store-") as root:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p28-token-store-") as root:
             store_dir = Path(root) / "tokens"
             store = core.create_file_mcp_token_store(store_dir)
             key = "server\0https://example.test/mcp"
@@ -398,7 +398,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
 
         fixture = OAuthFixtureServer()
         runtime = None
-        with tempfile.TemporaryDirectory(prefix="agent-core-p28-injected-") as runtime_home:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p28-injected-") as runtime_home:
             core.configure_runtime_home(runtime_home)
             try:
                 injected = MemoryTokenStore()

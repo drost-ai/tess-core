@@ -4,15 +4,15 @@ import json
 import os
 import textwrap
 
-from tests.support.agent_core_case import *
-import agent_core.authority.executable_closure as closure_module
+from tests.support.tess_core_case import *
+import tess_core.authority.executable_closure as closure_module
 
 
 def _stdio_server(name: str) -> dict[str, Any]:
     return {"name": name, "transport": "stdio", "commandOrUrl": "/bin/echo", "args": [name]}
 
 
-class ExecutableSourceTrustTests(AgentCoreTestCase):
+class ExecutableSourceTrustTests(TessCoreTestCase):
     def tearDown(self):
         getattr(closure_module, "_set_executable_closure_test_hook_for_tests")(None)
 

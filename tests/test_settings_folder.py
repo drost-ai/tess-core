@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 def _write(path: Path, text: str) -> None:
@@ -8,7 +8,7 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-class SettingsFolderTests(AgentCoreTestCase):
+class SettingsFolderTests(TessCoreTestCase):
     def test_folder_only_merges_env_providers_and_config(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -97,7 +97,7 @@ class SettingsFolderTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_fragment_knobs_reach_knob_values_via_resolve_config(self):
-        from agent_core.config._knobs import knob_value
+        from tess_core.config._knobs import knob_value
 
         root, home, workspace, previous = self.temp_context()
         try:

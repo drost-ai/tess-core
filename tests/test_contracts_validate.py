@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from typing import Any, Literal, TypedDict
 
-from agent_core.contracts import (
+from tess_core.contracts import (
     ChildAgentRecord,
     MonitorRecord,
     RuntimeEventEnvelope,
@@ -170,7 +170,7 @@ class ContractsValidateTests(unittest.TestCase):
 
 class CanonicalAccessorTests(unittest.TestCase):
     def test_launch_accessors_prefer_canonical_spelling(self) -> None:
-        from agent_core.contracts import launch_output_file, launch_task_id
+        from tess_core.contracts import launch_output_file, launch_task_id
 
         both = {"taskId": "camel", "task_id": "snake", "outputFile": "/camel", "output_file": "/snake"}
         self.assertEqual(launch_task_id(both), "camel")
@@ -181,7 +181,7 @@ class CanonicalAccessorTests(unittest.TestCase):
         self.assertIsNone(launch_output_file({}))
 
     def test_task_meta_id_absorbs_finalizer_spelling(self) -> None:
-        from agent_core.contracts import task_meta_id
+        from tess_core.contracts import task_meta_id
 
         self.assertEqual(task_meta_id({"taskId": "a", "task_id": "b", "id": "c"}), "a")
         self.assertEqual(task_meta_id({"task_id": "b", "id": "c"}), "b")
@@ -189,7 +189,7 @@ class CanonicalAccessorTests(unittest.TestCase):
         self.assertIsNone(task_meta_id({}))
 
     def test_event_accessors_mirror_reader_order(self) -> None:
-        from agent_core.contracts import (
+        from tess_core.contracts import (
             event_body,
             event_kind,
             event_name,
@@ -236,39 +236,39 @@ class ContractSyncTests(unittest.TestCase):
         return set(typing.get_args(alias))
 
     def test_runtime_event_names_match_known_events(self) -> None:
-        from agent_core.contracts.events import RuntimeEventName
-        from agent_core.runtime.events.shared import KNOWN_RUNTIME_EVENTS
+        from tess_core.contracts.events import RuntimeEventName
+        from tess_core.runtime.events.shared import KNOWN_RUNTIME_EVENTS
 
         self.assertEqual(self._literal_values(RuntimeEventName), set(KNOWN_RUNTIME_EVENTS))
 
     def test_context_relief_modes_match_runtime(self) -> None:
-        from agent_core.contracts.events import ContextReliefMode
-        from agent_core.runtime.events.shared import _CONTEXT_RELIEF_MODES
+        from tess_core.contracts.events import ContextReliefMode
+        from tess_core.runtime.events.shared import _CONTEXT_RELIEF_MODES
 
         self.assertEqual(self._literal_values(ContextReliefMode), set(_CONTEXT_RELIEF_MODES))
 
     def test_task_statuses_match_runtime(self) -> None:
-        from agent_core.contracts.records import TaskStatus
-        from agent_core.runtime.events.shared import _TASK_STATUSES
+        from tess_core.contracts.records import TaskStatus
+        from tess_core.runtime.events.shared import _TASK_STATUSES
 
         self.assertEqual(self._literal_values(TaskStatus), set(_TASK_STATUSES))
 
     def test_task_kinds_match_runtime(self) -> None:
-        from agent_core.contracts.records import TaskKind
-        from agent_core.runtime.events.shared import _TASK_KINDS
+        from tess_core.contracts.records import TaskKind
+        from tess_core.runtime.events.shared import _TASK_KINDS
 
         self.assertEqual(self._literal_values(TaskKind), set(_TASK_KINDS))
 
     def test_permission_modes_match_runtime(self) -> None:
-        from agent_core.contracts.config import PermissionMode
-        from agent_core.tools.permissions import PERMISSION_MODES
-        from agent_core.shell_surface.shared import PERMISSION_MODE_ORDER
+        from tess_core.contracts.config import PermissionMode
+        from tess_core.tools.permissions import PERMISSION_MODES
+        from tess_core.shell_surface.shared import PERMISSION_MODE_ORDER
         self.assertEqual(set(PERMISSION_MODE_ORDER), set(PERMISSION_MODES))
 
         self.assertEqual(self._literal_values(PermissionMode), set(PERMISSION_MODES))
 
     def test_created_runtime_event_envelope_validates_strict(self) -> None:
-        from agent_core.runtime.events import create_runtime_event
+        from tess_core.runtime.events import create_runtime_event
 
         envelope = create_runtime_event(
             {"event": "task.updated", "data": {"task_id": "t-1", "session_id": "s-1"}}
@@ -281,11 +281,11 @@ class ContractSyncTests(unittest.TestCase):
         from pathlib import Path
         import tempfile
 
-        from agent_core.config import resolve_config
-        from agent_core.contracts import ResolvedConfig
-        from agent_core.runtime import paths as runtime_paths
-        from agent_core.runtime.paths import get_active_runtime_paths
-        from agent_core.storage.paths import scoped_runtime_home
+        from tess_core.config import resolve_config
+        from tess_core.contracts import ResolvedConfig
+        from tess_core.runtime import paths as runtime_paths
+        from tess_core.runtime.paths import get_active_runtime_paths
+        from tess_core.storage.paths import scoped_runtime_home
 
         @contextmanager
         def fixture_directory():
@@ -299,7 +299,7 @@ class ContractSyncTests(unittest.TestCase):
                         remove_contents(child)
                         child.rmdir()
 
-            with tempfile.TemporaryDirectory(prefix="agent-core-contracts-") as root:
+            with tempfile.TemporaryDirectory(prefix="tess-core-contracts-") as root:
                 directory = Path(root).resolve()
                 try:
                     yield directory
@@ -325,8 +325,8 @@ class ContractSyncTests(unittest.TestCase):
         self.assertEqual(validate(config, ResolvedConfig, strict=True), [])
 
     def test_builtin_agents_and_profiles_validate(self) -> None:
-        from agent_core.config.shared import BUILTIN_AGENTS, BUILTIN_PROVIDER_PROFILES
-        from agent_core.contracts import AgentDefinition, ProviderProfile
+        from tess_core.config.shared import BUILTIN_AGENTS, BUILTIN_PROVIDER_PROFILES
+        from tess_core.contracts import AgentDefinition, ProviderProfile
 
         for name, definition in BUILTIN_AGENTS.items():
             self.assertEqual(validate(definition, AgentDefinition, strict=True), [], name)
@@ -334,14 +334,14 @@ class ContractSyncTests(unittest.TestCase):
             self.assertEqual(validate(profile, ProviderProfile, strict=True), [], name)
 
     def test_default_auto_mode_validates_strict(self) -> None:
-        from agent_core.contracts import AutoModePolicy
-        from agent_core.storage.settings import get_default_auto_mode
+        from tess_core.contracts import AutoModePolicy
+        from tess_core.storage.settings import get_default_auto_mode
 
         self.assertEqual(validate(get_default_auto_mode(), AutoModePolicy, strict=True), [])
 
     def test_provider_failure_record_validates_strict(self) -> None:
-        from agent_core.contracts import ProviderFailureRecord
-        from agent_core.providers.errors import classify_provider_http_failure, create_provider_failure_record
+        from tess_core.contracts import ProviderFailureRecord
+        from tess_core.providers.errors import classify_provider_http_failure, create_provider_failure_record
 
         record = create_provider_failure_record(
             provider="anthropic",
@@ -369,7 +369,7 @@ class ContractSyncTests(unittest.TestCase):
         self.assertEqual(validate(error.record, ProviderFailureRecord, strict=True), [])
 
     def test_empty_session_record_validates_strict(self) -> None:
-        from agent_core.storage import create_empty_session
+        from tess_core.storage import create_empty_session
 
         session = create_empty_session(
             cwd="/tmp",

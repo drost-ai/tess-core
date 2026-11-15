@@ -6,10 +6,10 @@ import json
 import os
 from unittest import mock
 
-from agent_core import ProviderRegistry, ProviderRegistryError, SessionOptions, resolve_codex_auth
-from agent_core.config import resolve_config
-from agent_core.runtime.secret_provider import resolve_provider_config_secrets
-from tests.support.agent_core_case import AgentCoreTestCase
+from tess_core import ProviderRegistry, ProviderRegistryError, SessionOptions, resolve_codex_auth
+from tess_core.config import resolve_config
+from tess_core.runtime.secret_provider import resolve_provider_config_secrets
+from tests.support.tess_core_case import TessCoreTestCase
 
 
 REGISTRY = """providerProfiles:
@@ -36,7 +36,7 @@ REGISTRY = """providerProfiles:
 """
 
 
-class ProviderRegistryTests(AgentCoreTestCase):
+class ProviderRegistryTests(TessCoreTestCase):
     def setUp(self):
         self.root, self.home, self.workspace, self.previous = self.temp_context()
         self.addCleanup(self._cleanup_temp_home)
@@ -107,7 +107,7 @@ class ProviderRegistryTests(AgentCoreTestCase):
             self.assertEqual(config["providerProfileName"], "custom")
             self.assertEqual(config["openaiBaseUrl"], "https://provider.invalid/v1")
             self.assertEqual(set(config["providerProfiles"]), {"custom", "console", "bearer"})
-        with mock.patch.dict(os.environ, {"SYNTHETIC_TOKEN": "fake-token", "TESS_PROVIDER": "unknown", "TESS_MODEL": "gpt-ambient", "OPENAI_BASE_URL": "https://wrong.invalid", "ANTHROPIC_CUSTOM_HEADERS": "Authorization: fake-ambient"}), mock.patch("agent_core.config.resolution.load_auth", side_effect=AssertionError("legacy auth read")), mock.patch("agent_core.config.resolution.load_codex_auth_token", side_effect=AssertionError("ambient codex read")), mock.patch("agent_core.config.resolution._resolve_api_key_from_helper", side_effect=AssertionError("helper called")):
+        with mock.patch.dict(os.environ, {"SYNTHETIC_TOKEN": "fake-token", "TESS_PROVIDER": "unknown", "TESS_MODEL": "gpt-ambient", "OPENAI_BASE_URL": "https://wrong.invalid", "ANTHROPIC_CUSTOM_HEADERS": "Authorization: fake-ambient"}), mock.patch("tess_core.config.resolution.load_auth", side_effect=AssertionError("legacy auth read")), mock.patch("tess_core.config.resolution.load_codex_auth_token", side_effect=AssertionError("ambient codex read")), mock.patch("tess_core.config.resolution._resolve_api_key_from_helper", side_effect=AssertionError("helper called")):
             asyncio.run(check())
 
     def test_explicit_yaml_engine_settings_preserved_for_memory_and_compaction(self):
@@ -122,7 +122,7 @@ class ProviderRegistryTests(AgentCoreTestCase):
             asyncio.run(check())
 
     def test_unbound_compaction_runs_on_the_session_profile_not_a_fixed_model(self):
-        from agent_core.context.compaction_transport import create_default_compaction_model_client, resolve_compaction_execution_plan
+        from tess_core.context.compaction_transport import create_default_compaction_model_client, resolve_compaction_execution_plan
         async def check():
             config = await resolve_config({"runtimeHome": str(self.home), "providerRegistry": self.registry, "provider": "custom", "settingSources": ""}, str(self.workspace))
             plan = resolve_compaction_execution_plan({"config": config, "session": {"provider": "openai", "model": "local-test"}})
@@ -154,7 +154,7 @@ class ProviderRegistryTests(AgentCoreTestCase):
         self.assertNotIn("sk-must-not-echo", str(error.exception))
 
     def test_turn_binding_never_infers_other_provider_from_model(self):
-        from agent_core.agent.turn_session import resolve_effective_provider_turn_binding
+        from tess_core.agent.turn_session import resolve_effective_provider_turn_binding
         config = {"providerRegistry": self.registry, "provider": "openai", "providerProfileName": "custom", "providerProfile": self.registry.resolve_profile("custom")}
         binding = resolve_effective_provider_turn_binding({"session": {"model": "claude-looking-model", "providerProfileName": "custom"}, "config": config})
         self.assertEqual(binding["config"]["provider"], "openai")
@@ -172,28 +172,28 @@ class ProviderRegistryTests(AgentCoreTestCase):
                 ProviderRegistry(path)
 
     def test_explicit_no_sources_never_loads_ambient_executable_configuration(self):
-        from agent_core.authority.executable_source_policy import parse_setting_sources, load_selected_mcp_servers, load_selected_plugin_records
-        from agent_core.authority.permission_rules import load_permission_rules
-        from agent_core.authority.hooks import load_hooks
+        from tess_core.authority.executable_source_policy import parse_setting_sources, load_selected_mcp_servers, load_selected_plugin_records
+        from tess_core.authority.permission_rules import load_permission_rules
+        from tess_core.authority.hooks import load_hooks
         self.assertEqual(parse_setting_sources(""), [])
         self.assertEqual(parse_setting_sources([]), [])
         self.assertEqual(parse_setting_sources(None), ["user", "project", "local"])
         async def check():
-            with mock.patch("agent_core.authority.executable_source_policy._load_scoped_mcp_records", side_effect=AssertionError("ambient MCP")), mock.patch("agent_core.authority.executable_source_policy.load_plugins", side_effect=AssertionError("ambient plugins")):
+            with mock.patch("tess_core.authority.executable_source_policy._load_scoped_mcp_records", side_effect=AssertionError("ambient MCP")), mock.patch("tess_core.authority.executable_source_policy.load_plugins", side_effect=AssertionError("ambient plugins")):
                 self.assertEqual(await load_selected_mcp_servers(cwd=str(self.workspace), sources=[]), [])
                 self.assertEqual(await load_selected_plugin_records(cwd=str(self.workspace), sources=[]), [])
-            with mock.patch("agent_core.authority.permission_rules.load_settings", side_effect=AssertionError("ambient permissions")):
+            with mock.patch("tess_core.authority.permission_rules.load_settings", side_effect=AssertionError("ambient permissions")):
                 self.assertEqual(await load_permission_rules(cwd=str(self.workspace), sources=[]), [])
-            with mock.patch("agent_core.authority.hooks.load_settings", side_effect=AssertionError("ambient hooks")):
+            with mock.patch("tess_core.authority.hooks.load_settings", side_effect=AssertionError("ambient hooks")):
                 self.assertEqual(await load_hooks(cwd=str(self.workspace), sources=[]), [])
         asyncio.run(check())
 
 
     def test_runtime_registry_inherited_and_persisted_for_task_runners(self):
-        from agent_core import start_runtime
-        from agent_core.storage import load_session
-        from agent_core.tasks.runners.main_session import _session_config_options as main_options
-        from agent_core.tasks.runners.subagent import _session_config_options as child_options
+        from tess_core import start_runtime
+        from tess_core.storage import load_session
+        from tess_core.tasks.runners.main_session import _session_config_options as main_options
+        from tess_core.tasks.runners.subagent import _session_config_options as child_options
         async def check():
             runtime = await start_runtime(str(self.home), cwd=str(self.workspace), daemon_enabled=False, provider_registry=self.path, session_options=lambda *_: SessionOptions(provider="custom", extra={"settingSources": ""}))
             try:
@@ -210,9 +210,9 @@ class ProviderRegistryTests(AgentCoreTestCase):
 
 
     def test_existing_session_keeps_its_bound_profile_when_the_opener_selection_changes(self):
-        from agent_core import start_runtime
-        from agent_core.agent.turn_session import resolve_effective_provider_turn_binding
-        from agent_core.storage import load_session
+        from tess_core import start_runtime
+        from tess_core.agent.turn_session import resolve_effective_provider_turn_binding
+        from tess_core.storage import load_session
         self.path.write_text(REGISTRY + """  renamed:
     kind: openai
     apiMode: chat_completions
@@ -244,7 +244,7 @@ class ProviderRegistryTests(AgentCoreTestCase):
 
 
     def test_anthropic_transport_headers_are_preserved(self):
-        from agent_core.providers.anthropic.payloads import build_anthropic_headers
+        from tess_core.providers.anthropic.payloads import build_anthropic_headers
         key_headers = build_anthropic_headers(self.registry.resolve_auth("console", environment={"SYNTHETIC_KEY": "fake-key"}))
         bearer_headers = build_anthropic_headers(self.registry.resolve_auth("bearer", environment={"SYNTHETIC_BEARER": "fake-token"}))
         self.assertEqual(key_headers["x-api-key"], "fake-key")
@@ -253,8 +253,8 @@ class ProviderRegistryTests(AgentCoreTestCase):
         self.assertNotIn("x-api-key", bearer_headers)
 
     def test_public_secret_normalization_preserves_setup_reference(self):
-        from agent_core import resolve_provider_secret
-        from agent_core.storage import configure_runtime_home
+        from tess_core import resolve_provider_secret
+        from tess_core.storage import configure_runtime_home
         configure_runtime_home(str(self.home))
         async def check():
             setup = await resolve_provider_secret("fake-setup", purpose="provider_setup_token", idempotency_scope="test-setup")
@@ -298,9 +298,9 @@ class ProviderRegistryTests(AgentCoreTestCase):
 
 
     def test_explicit_noauth_reaches_wire_without_dummy_or_ambient_credentials(self):
-        from agent_core.agent.providers import _create_provider
-        from agent_core.providers.openai.transport import _create_openai_client
-        from agent_core.providers.anthropic.payloads import build_anthropic_headers
+        from tess_core.agent.providers import _create_provider
+        from tess_core.providers.openai.transport import _create_openai_client
+        from tess_core.providers.anthropic.payloads import build_anthropic_headers
         profile = self.registry.profiles["custom"]
         profile["auth"] = {"kind": "none"}
         path = self.home / "local.json"
@@ -309,7 +309,7 @@ class ProviderRegistryTests(AgentCoreTestCase):
         async def check():
             config = await resolve_config({"runtimeHome": str(self.home), "providerRegistry": registry, "provider": "local", "settingSources": ""}, str(self.workspace))
             self.assertIsNone(config["openaiToken"])
-            with mock.patch("agent_core.agent.providers.send_openai_request", new_callable=mock.AsyncMock, return_value={"synthetic": True}) as send:
+            with mock.patch("tess_core.agent.providers.send_openai_request", new_callable=mock.AsyncMock, return_value={"synthetic": True}) as send:
                 result = await _create_provider(config, {})["send"]({"model": "local-test"})
                 self.assertEqual(result, {"synthetic": True})
                 self.assertIsNone(send.call_args.kwargs["token"])

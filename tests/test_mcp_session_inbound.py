@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 import socket
 import uuid
 
 from tests.test_mcp_interop_quickwins import _RawHttpServer, _http_config, _json_response
 
-from agent_core.mcp.http_transport import HttpMcpClient
-from agent_core.mcp.state import (
+from tess_core.mcp.http_transport import HttpMcpClient
+from tess_core.mcp.state import (
     _connect_state,
     _create_state,
     _ensure_connected,
     _request_with_state_tracking,
 )
-from agent_core.mcp.stdio_transport import StdioMcpClient
-from agent_core.mcp.transport_policy import McpTransportError
-from agent_core.mcp.transport_shared import _validate_transport_message
+from tess_core.mcp.stdio_transport import StdioMcpClient
+from tess_core.mcp.transport_policy import McpTransportError
+from tess_core.mcp.transport_shared import _validate_transport_message
 
 
 def _noop_event(*_args, **_kwargs) -> None:
@@ -99,7 +99,7 @@ class _SessionServer:
         self.server.close()
 
 
-class McpSessionManagementTests(AgentCoreTestCase):
+class McpSessionManagementTests(TessCoreTestCase):
     def test_session_id_is_captured_echoed_and_deleted(self):
         server = _SessionServer()
         client = HttpMcpClient(_http_config(server.server.origin), os.getcwd())
@@ -221,7 +221,7 @@ def _write_inbound_fixture(workspace: Path) -> Path:
     return target
 
 
-class McpInboundServerRequestTests(AgentCoreTestCase):
+class McpInboundServerRequestTests(TessCoreTestCase):
     def test_validation_allows_string_ids_only_on_inbound_requests(self):
         message = _validate_transport_message(
             {"jsonrpc": "2.0", "id": "srv-1", "method": "ping"}, "stdio frame"

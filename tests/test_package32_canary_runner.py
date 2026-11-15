@@ -8,14 +8,14 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
-from tests.support.agent_core_case import AgentCoreTestCase
+from tests.support.tess_core_case import TessCoreTestCase
 
-import agent_core._facade as core
-from agent_core.providers.anthropic.payloads import build_anthropic_messages_envelope
-from agent_core.providers.errors import create_provider_failure_record, create_provider_request_error
-from agent_core_harness.package32_canary import main, runPackage32AnthropicCanary
-from agent_core_harness.package32_canary_cli import runPackage32CanaryCli
-from agent_core_harness.package32_canary_evidence import (
+import tess_core._facade as core
+from tess_core.providers.anthropic.payloads import build_anthropic_messages_envelope
+from tess_core.providers.errors import create_provider_failure_record, create_provider_request_error
+from tess_core_harness.package32_canary import main, runPackage32AnthropicCanary
+from tess_core_harness.package32_canary_cli import runPackage32CanaryCli
+from tess_core_harness.package32_canary_evidence import (
     Package32CanaryError,
     preparePrivateCanaryRuntime,
     reservePrivateEvidenceFile,
@@ -23,7 +23,7 @@ from agent_core_harness.package32_canary_evidence import (
 )
 
 
-class Package32CanaryRunnerTests(AgentCoreTestCase):
+class Package32CanaryRunnerTests(TessCoreTestCase):
     def test_provider_failure_evidence_is_closed_and_content_free(self):
         error = create_provider_request_error(
             create_provider_failure_record(

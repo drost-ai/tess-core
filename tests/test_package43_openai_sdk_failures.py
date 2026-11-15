@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from tests.support.agent_core_case import AgentCoreTestCase, AsyncChunks, core, run, testing
+from tests.support.tess_core_case import TessCoreTestCase, AsyncChunks, core, run, testing
 
 
 _PROCESSING_MESSAGE = (
@@ -77,7 +77,7 @@ def _completed(text: str = "recovered") -> AsyncChunks:
     )
 
 
-class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
+class Package43OpenAiSdkFailureTests(TessCoreTestCase):
     def test_six_incident_corpus_preserves_sdk_evidence_and_classifies_server(self) -> None:
         for occurred_at, turn, request_id in _INCIDENTS:
             with self.subTest(occurred_at=occurred_at, turn=turn):

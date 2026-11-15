@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class RemoteBridgeTests(AgentCoreTestCase):
+class RemoteBridgeTests(TessCoreTestCase):
     def test_bridge_runtime_polls_inbox_and_records_received_event(self):
         root, home, workspace, previous = self.temp_context()
         try:

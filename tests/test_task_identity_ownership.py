@@ -7,9 +7,9 @@ import signal
 import subprocess
 import sys
 
-from tests.support.agent_core_case import *
-from agent_core._utils import now_iso
-import agent_core.process.identity as process_identity_module
+from tests.support.tess_core_case import *
+from tess_core._utils import now_iso
+import tess_core.process.identity as process_identity_module
 
 
 ACCEPTED = {
@@ -39,7 +39,7 @@ REJECTED = (
 )
 
 
-class TaskIdentityOwnershipTests(AgentCoreTestCase):
+class TaskIdentityOwnershipTests(TessCoreTestCase):
     def tearDown(self):
         getattr(process_identity_module, "_set_process_identity_observer_for_tests")(None)
 

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class ExecutableConfigTests(AgentCoreTestCase):
+class ExecutableConfigTests(TessCoreTestCase):
     def test_mcp_parser_normalizes_valid_legacy_records(self):
         stdio = core.parse_mcp_server_config(
             {

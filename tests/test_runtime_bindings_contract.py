@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class RuntimeBindingsContractTests(AgentCoreTestCase):
+class RuntimeBindingsContractTests(TessCoreTestCase):
     def test_invalid_bindings_fail_before_any_execution_boundary(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-bindings-invalid-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-bindings-invalid-") as cwd:
             session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",
@@ -107,7 +107,7 @@ class RuntimeBindingsContractTests(AgentCoreTestCase):
             self.assertEqual(list(Path(cwd).iterdir()), [])
 
     def test_current_unavailable_binding_preserves_foreground_turn(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-bindings-current-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-bindings-current-") as cwd:
             session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",

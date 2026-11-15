@@ -6,10 +6,10 @@ Every test is one coroutine: a runtime belongs to the loop that started it.
 """
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core import SessionBusy, SessionOptions, start_runtime
-from agent_core.runtime import host as host_module
+from tess_core import SessionBusy, SessionOptions, start_runtime
+from tess_core.runtime import host as host_module
 
 
 class Listener:
@@ -76,7 +76,7 @@ async def _wait(predicate, timeout=10.0, label=""):
     raise AssertionError(f"timeout waiting for {label}")
 
 
-class SessionTurnTests(AgentCoreTestCase):
+class SessionTurnTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 

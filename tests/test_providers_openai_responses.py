@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class OpenAIResponsesProviderTests(AgentCoreTestCase):
+class OpenAIResponsesProviderTests(TessCoreTestCase):
     def test_openai_response_and_chat_params_keep_image_inputs(self):
         message = {
             "role": "user",
@@ -106,7 +106,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         self.assertEqual(codex_captured["params"]["reasoning"], {"effort": "high"})
         self.assertEqual(codex_captured["params"]["store"], False)
         self.assertEqual(codex_captured["params"]["stream"], True)
-        self.assertTrue(codex_captured["params"]["prompt_cache_key"].startswith("agent-core-"))
+        self.assertTrue(codex_captured["params"]["prompt_cache_key"].startswith("tess-core-"))
         self.assertNotIn("max_output_tokens", codex_captured["params"])
         self.assertEqual(codex_captured["params"]["tools"][0]["parameters"]["properties"]["path"], {"type": "string"})
 

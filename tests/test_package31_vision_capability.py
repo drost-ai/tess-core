@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-import agent_core._facade as core
-from agent_core.payloads.attachments import resolve_runtime_provider_capabilities
+import tess_core._facade as core
+from tess_core.payloads.attachments import resolve_runtime_provider_capabilities
 
 
 class Package31VisionCapabilityTests(unittest.TestCase):

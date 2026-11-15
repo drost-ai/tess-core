@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class ToolWorktreeNotebookTests(AgentCoreTestCase):
+class ToolWorktreeNotebookTests(TessCoreTestCase):
     def test_enter_worktree_fallback_uses_reference_branch_and_target_naming(self):
         if not shutil.which("git"):
             self.skipTest("git is required for worktree parity")
         root, home, workspace, previous = self.temp_context()
         try:
             subprocess.run(["git", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            subprocess.run(["git", "config", "user.email", "agent-core@example.test"], cwd=workspace, check=True)
-            subprocess.run(["git", "config", "user.name", "Agent Core"], cwd=workspace, check=True)
+            subprocess.run(["git", "config", "user.email", "tess-core@example.test"], cwd=workspace, check=True)
+            subprocess.run(["git", "config", "user.name", "Tess Core"], cwd=workspace, check=True)
             (workspace / "README.md").write_text("root\n", encoding="utf-8")
             subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
             subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
@@ -46,8 +46,8 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             subprocess.run(["git", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            subprocess.run(["git", "config", "user.email", "agent-core@example.test"], cwd=workspace, check=True)
-            subprocess.run(["git", "config", "user.name", "Agent Core"], cwd=workspace, check=True)
+            subprocess.run(["git", "config", "user.email", "tess-core@example.test"], cwd=workspace, check=True)
+            subprocess.run(["git", "config", "user.name", "Tess Core"], cwd=workspace, check=True)
             (workspace / "README.md").write_text("root\n", encoding="utf-8")
             subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
             subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-import agent_core.agent.provider_turn as agent_provider_turn_module
+from tests.support.tess_core_case import *
+import tess_core.agent.provider_turn as agent_provider_turn_module
 
 
-class ProviderErrorTests(AgentCoreTestCase):
+class ProviderErrorTests(TessCoreTestCase):
     def test_provider_request_watchdog_parity_surface(self):
-        import agent_core.providers.watchdog as provider_watchdog
+        import tess_core.providers.watchdog as provider_watchdog
 
         watchdog = provider_watchdog.create_provider_request_watchdog(
             {"initialTimeoutMs": 1, "buildTimeoutError": lambda: TimeoutError("timed out")}

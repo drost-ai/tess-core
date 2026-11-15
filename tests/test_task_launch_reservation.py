@@ -6,7 +6,7 @@ import signal
 import subprocess
 import sys
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 async def _wait_dead(pid: int, timeout: float = 5.0) -> None:
@@ -21,7 +21,7 @@ async def _wait_dead(pid: int, timeout: float = 5.0) -> None:
         await asyncio.sleep(0.02)
 
 
-class TaskLaunchReservationTests(AgentCoreTestCase):
+class TaskLaunchReservationTests(TessCoreTestCase):
     def test_reservation_is_durable_before_spawn_and_identity_attaches_before_return(self):
         async def scenario():
             trace = []

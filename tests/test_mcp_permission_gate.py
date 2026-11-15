@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 from tests.test_mcp_interop_quickwins import _stdio_error_config, _write_error_fixture
 
-from agent_core.authority.permission_rules import clear_permission_rules_cache
-from agent_core.tools.permissions import _resolve_tool_permission
+from tess_core.authority.permission_rules import clear_permission_rules_cache
+from tess_core.tools.permissions import _resolve_tool_permission
 
 
-class McpPermissionResolutionTests(AgentCoreTestCase):
+class McpPermissionResolutionTests(TessCoreTestCase):
     def test_mcp_category_resolution_by_mode(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -66,7 +66,7 @@ class McpPermissionResolutionTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class McpPermissionGateIntegrationTests(AgentCoreTestCase):
+class McpPermissionGateIntegrationTests(TessCoreTestCase):
     def _runtime_and_tool(self, workspace: Path):
         fixture = _write_error_fixture(workspace)
         runtime = run(

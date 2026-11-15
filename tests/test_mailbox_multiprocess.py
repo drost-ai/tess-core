@@ -7,12 +7,12 @@ import time
 import unittest
 from pathlib import Path
 
-import agent_core._facade as core
-from agent_core.tasks.communication import (
+import tess_core._facade as core
+from tess_core.tasks.communication import (
     _deliver_mailbox_transaction,
     mark_task_message_delivered,
 )
-from tests.support.agent_core_case import AgentCoreTestCase, run
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 TASK_ID = "task-mp-mailbox"
 PARENT_ID = "80000000-0000-4000-8000-000000000001"
@@ -62,7 +62,7 @@ def _claimer(home: str, claimer_id: str, barrier_dir: str, results_dir: str) -> 
     Path(results_dir, f"claimed-{claimer_id}.json").write_text(json.dumps(claimed), encoding="utf-8")
 
 
-class MultiProcessMailboxTests(AgentCoreTestCase):
+class MultiProcessMailboxTests(TessCoreTestCase):
     def test_concurrent_process_drains_deliver_each_message_exactly_once(self):
         """The suite tested exactly-once delivery only via asyncio.gather,
         where the in-process lock trivially passes it. This is the real

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers.timeouts import resolveProviderTimeoutPolicy
-import agent_core.agent.providers as loop_providers
+from tess_core.providers.timeouts import resolveProviderTimeoutPolicy
+import tess_core.agent.providers as loop_providers
 
 
-class ProviderTimeoutPolicyTests(AgentCoreTestCase):
+class ProviderTimeoutPolicyTests(TessCoreTestCase):
     def test_subagent_runtime_contract_supplies_provider_deadlines(self):
         policy = resolveProviderTimeoutPolicy(
             {

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 # A real file that exists outside every test session's allowed roots (the
@@ -9,7 +9,7 @@ OUTSIDE_FILE = os.path.abspath(__file__)
 OUTSIDE_DIR = os.path.dirname(OUTSIDE_FILE)
 
 
-class ToolPathConfinementTests(AgentCoreTestCase):
+class ToolPathConfinementTests(TessCoreTestCase):
     def _context(self, home, workspace, *, mode="default", interactive=False, ask=None, add_dirs=None):
         options = {"provider": "openai", "runtimeHome": str(home), "permissionMode": mode}
         if add_dirs:

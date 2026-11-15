@@ -6,16 +6,16 @@ ceiling; never a number chosen in code).
 """
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core import SessionOptions, Unavailable, start_runtime
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.runtime.session_wake import background_limits
+from tess_core import SessionOptions, Unavailable, start_runtime
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.runtime.session_wake import background_limits
 
-RETRY = "AGENT_CORE_SESSIONS_PENDING_RETRY_MS"
-FAIR = "AGENT_CORE_SESSIONS_BACKGROUND_MAX_WAIT_MS"
-CALLS = "AGENT_CORE_SESSIONS_BACKGROUND_MAX_PROVIDER_CALLS"
+RETRY = "TESS_CORE_SESSIONS_PENDING_RETRY_MS"
+FAIR = "TESS_CORE_SESSIONS_BACKGROUND_MAX_WAIT_MS"
+CALLS = "TESS_CORE_SESSIONS_BACKGROUND_MAX_PROVIDER_CALLS"
 
 
 class Listener:
@@ -52,7 +52,7 @@ def _provider(order, label, gate=None):
     return {"send": send}
 
 
-class SessionBackgroundTests(AgentCoreTestCase):
+class SessionBackgroundTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 

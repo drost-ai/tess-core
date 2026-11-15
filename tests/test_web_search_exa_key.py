@@ -9,11 +9,11 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from agent_core.runtime import encrypted_credentials as encrypted
-from agent_core.runtime.credentials import CredentialStore
-from agent_core.runtime.encrypted_credentials import UnlockSecret
-from agent_core.tools import web_search_api
-from agent_core.tools.web import FetchResponse, search_web_response
+from tess_core.runtime import encrypted_credentials as encrypted
+from tess_core.runtime.credentials import CredentialStore
+from tess_core.runtime.encrypted_credentials import UnlockSecret
+from tess_core.tools import web_search_api
+from tess_core.tools.web import FetchResponse, search_web_response
 
 KEY = "exa-synthetic-" + uuid.uuid4().hex
 

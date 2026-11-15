@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class OpenAISdkTransportTests(AgentCoreTestCase):
+class OpenAISdkTransportTests(TessCoreTestCase):
     def test_openai_sdk_transport_used_on_explicit_opt_in(self):
         captured: dict[str, Any] = {}
 
@@ -34,7 +34,7 @@ class OpenAISdkTransportTests(AgentCoreTestCase):
                 self.chat = SimpleNamespace(completions=FakeChatCompletions())
 
         with mock.patch(
-            "agent_core.providers.openai.transport.importlib.import_module",
+            "tess_core.providers.openai.transport.importlib.import_module",
             return_value=SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
         ):
             response = run(

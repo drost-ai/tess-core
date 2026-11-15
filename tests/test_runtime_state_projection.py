@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class RuntimeStateProjectionTests(AgentCoreTestCase):
+class RuntimeStateProjectionTests(TessCoreTestCase):
     def test_runtime_state_matches_typed_event_projection_edges(self):
         state = core.create_initial_runtime_state()
         activated = core.create_runtime_event(

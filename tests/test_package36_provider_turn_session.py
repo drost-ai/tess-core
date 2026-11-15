@@ -3,13 +3,13 @@ from __future__ import annotations
 import copy
 from types import SimpleNamespace
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers.openai_turn_session import (
+from tess_core.providers.openai_turn_session import (
     OpenAiProviderTurnSession,
     PreparedOpenAiRequest,
 )
-from agent_core.providers.turn_session import ProviderTurnSession
+from tess_core.providers.turn_session import ProviderTurnSession
 
 
 class _WebSocketFailure(RuntimeError):
@@ -92,7 +92,7 @@ def _config(cwd: str, *, incremental: bool = True) -> dict[str, object]:
     }
 
 
-class Package36ProviderTurnSessionTests(AgentCoreTestCase):
+class Package36ProviderTurnSessionTests(TessCoreTestCase):
     def test_cancel_closes_the_exact_stream_and_activity_task(self):
         async def exercise() -> tuple[bool, int]:
             closed = 0

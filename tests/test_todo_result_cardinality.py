@@ -8,10 +8,10 @@ from functools import wraps
 
 import pytest
 
-import agent_core._facade as core
-from agent_core.payloads.agent_results import finalize_tool_dispatch_result
-from agent_core.shell_surface.status import build_todos_report
-from agent_core.payloads.result_guard import (
+import tess_core._facade as core
+from tess_core.payloads.agent_results import finalize_tool_dispatch_result
+from tess_core.shell_surface.status import build_todos_report
+from tess_core.payloads.result_guard import (
     TOOL_RESULT_FINAL_BYTES,
     guard_tool_call_result,
     serialized_content_bytes,

@@ -4,7 +4,7 @@ import json
 from types import SimpleNamespace
 from typing import Any
 
-from tests.support.agent_core_case import AgentCoreTestCase, AsyncChunks, core, run, testing
+from tests.support.tess_core_case import TessCoreTestCase, AsyncChunks, core, run, testing
 
 
 class _Sink:
@@ -177,7 +177,7 @@ def _run_stream(
     )
 
 
-class Package131SinkProvenanceTests(AgentCoreTestCase):
+class Package131SinkProvenanceTests(TessCoreTestCase):
     def test_tool_only_response_skips_textual_sink_ops(self) -> None:
         sink = _Sink()
         raw = json.dumps({"path": "README.md"})
@@ -302,9 +302,9 @@ class Package131SinkProvenanceTests(AgentCoreTestCase):
         self.assertEqual(names.count("reconcile"), 1)
 
     def test_reasoning_only_tool_call_commits_and_does_not_block_the_next_call(self) -> None:
-        from agent_core.providers.openai.recovery import commit_openai_delivery
-        from agent_core.providers.partial_output import PartialOutputDelivery
-        from agent_core.providers.partial_output_state import (
+        from tess_core.providers.openai.recovery import commit_openai_delivery
+        from tess_core.providers.partial_output import PartialOutputDelivery
+        from tess_core.providers.partial_output_state import (
             create_partial_output_state_store,
             finalize_partial_output_state,
         )

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.agent._question_gate import (
+from tess_core.agent._question_gate import (
     inject_open_question_reminders,
     read_open_child_questions,
     resolve_open_questions_with_backstop,
 )
-from agent_core.tools.messaging import _send_message_tool
-from agent_core.tasks.communication import create_task_question, read_task_questions
+from tess_core.tools.messaging import _send_message_tool
+from tess_core.tasks.communication import create_task_question, read_task_questions
 
 
 def _context(session, workspace):
@@ -21,7 +21,7 @@ def _context(session, workspace):
     }
 
 
-class BlockingQuestionTests(AgentCoreTestCase):
+class BlockingQuestionTests(TessCoreTestCase):
     def _family(self, workspace):
         parent = core.create_empty_session(
             cwd=str(workspace), provider="openai", model="gpt-5.4",
@@ -54,7 +54,7 @@ class BlockingQuestionTests(AgentCoreTestCase):
         try:
             parent, child = self._family(workspace)
             tool = _send_message_tool()
-            os.environ["AGENT_CORE_COMMS_REPLY_POLL_MS"] = "50"
+            os.environ["TESS_CORE_COMMS_REPLY_POLL_MS"] = "50"
             try:
                 async def exercise():
                     async def parent_answers():
@@ -87,7 +87,7 @@ class BlockingQuestionTests(AgentCoreTestCase):
                 self.assertEqual((run(core.read_task_meta("bq-task")))["status"], "running")
                 self.assertEqual(run(read_open_child_questions(parent)), [])
             finally:
-                os.environ.pop("AGENT_CORE_COMMS_REPLY_POLL_MS", None)
+                os.environ.pop("TESS_CORE_COMMS_REPLY_POLL_MS", None)
         finally:
             self.restore_home(root, previous)
 
@@ -96,14 +96,14 @@ class BlockingQuestionTests(AgentCoreTestCase):
         try:
             parent, child = self._family(workspace)
             tool = _send_message_tool()
-            os.environ["AGENT_CORE_COMMS_REPLY_POLL_MS"] = "50"
+            os.environ["TESS_CORE_COMMS_REPLY_POLL_MS"] = "50"
             try:
                 result = run(tool.handler(
                     {"to": "parent", "message": "Anyone there?", "expects_reply": True, "timeout_ms": 300},
                     _context(child, workspace),
                 ))
             finally:
-                os.environ.pop("AGENT_CORE_COMMS_REPLY_POLL_MS", None)
+                os.environ.pop("TESS_CORE_COMMS_REPLY_POLL_MS", None)
             payload = json.loads(result["content"])
             self.assertEqual(payload["status"], "no_reply")
             questions = run(read_task_questions("bq-task"))

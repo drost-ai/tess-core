@@ -87,7 +87,7 @@
         "command": [
           "python3",
           "-c",
-          "import json, os\nfrom pathlib import Path\nsessions = sorted((Path(os.environ['AGENT_CORE_HOME']) / 'sessions').glob('*.json'))\nrecord = json.loads(sessions[0].read_text(encoding='utf-8'))\ntask_ids = record.get('metadata', {}).get('taskIds') or []\nprint(f'session-task-ids={len(task_ids)}')"
+          "import json, os\nfrom pathlib import Path\nsessions = sorted((Path(os.environ['TESS_CORE_HOME']) / 'sessions').glob('*.json'))\nrecord = json.loads(sessions[0].read_text(encoding='utf-8'))\ntask_ids = record.get('metadata', {}).get('taskIds') or []\nprint(f'session-task-ids={len(task_ids)}')"
         ]
       }
     },
@@ -136,7 +136,7 @@
         "command": [
           "python3",
           "-c",
-          "import json, os, time\nfrom pathlib import Path\ntime.sleep(0.6)\nchecks = sorted((Path(os.environ['AGENT_CORE_HOME']) / 'tasks').glob('*/health-check.json'))\nrecord = json.loads(checks[0].read_text(encoding='utf-8'))\nprint(f\"health-stop-sticky={record.get('status')}\")"
+          "import json, os, time\nfrom pathlib import Path\ntime.sleep(0.6)\nchecks = sorted((Path(os.environ['TESS_CORE_HOME']) / 'tasks').glob('*/health-check.json'))\nrecord = json.loads(checks[0].read_text(encoding='utf-8'))\nprint(f\"health-stop-sticky={record.get('status')}\")"
         ]
       }
     },

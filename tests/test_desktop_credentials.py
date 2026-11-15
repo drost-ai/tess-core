@@ -6,9 +6,9 @@ import uuid
 
 import pytest
 
-from agent_core.runtime.credentials import CredentialStore, CredentialStoreError, desktop_backend
-from agent_core.runtime.secrets import resolve_runtime_secret
-from agent_core.config import ProviderRegistry
+from tess_core.runtime.credentials import CredentialStore, CredentialStoreError, desktop_backend
+from tess_core.runtime.secrets import resolve_runtime_secret
+from tess_core.config import ProviderRegistry
 
 
 class FakeBackend:

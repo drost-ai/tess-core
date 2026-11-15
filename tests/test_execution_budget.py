@@ -2,15 +2,15 @@ import asyncio
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
-from agent_core import ExecutionBudget, ExecutionBudgetExceeded
-from agent_core.runtime.execution_budget import active_execution_budget, budget_provider_payload
-from agent_core.runtime.session_turns import _narrowed_tools
-from agent_core.storage.message_origin import turn_request_message, get_message_origin, is_genuine_user_request
+from tess_core import ExecutionBudget, ExecutionBudgetExceeded
+from tess_core.runtime.execution_budget import active_execution_budget, budget_provider_payload
+from tess_core.runtime.session_turns import _narrowed_tools
+from tess_core.storage.message_origin import turn_request_message, get_message_origin, is_genuine_user_request
 
 
 class ExecutionBudgetTests(unittest.TestCase):
     def test_time_only_budget_counts_without_call_ceiling(self):
-        with patch('agent_core.runtime.execution_budget.time.monotonic', return_value=100) as clock:
+        with patch('tess_core.runtime.execution_budget.time.monotonic', return_value=100) as clock:
             b = ExecutionBudget(max_provider_calls=None, max_tool_calls=None, max_seconds=100)
             for _ in range(200):
                 b.consume_provider_call()
@@ -32,7 +32,7 @@ class ExecutionBudgetTests(unittest.TestCase):
             b.consume_provider_call()
 
     def test_sticky_wrapup(self):
-        with patch('agent_core.runtime.execution_budget.time.monotonic',return_value=100) as clock:
+        with patch('tess_core.runtime.execution_budget.time.monotonic',return_value=100) as clock:
             b=ExecutionBudget(max_seconds=100)
             clock.return_value=181
             self.assertEqual(b.snapshot()['phase'],'wrapup')
@@ -42,7 +42,7 @@ class ExecutionBudgetTests(unittest.TestCase):
             with self.assertRaises(ExecutionBudgetExceeded):b.consume_tool_call()
 
     def test_tightened_deadline_drives_context_without_resetting_usage(self):
-        with patch('agent_core.runtime.execution_budget.time.monotonic', return_value=100) as clock:
+        with patch('tess_core.runtime.execution_budget.time.monotonic', return_value=100) as clock:
             b = ExecutionBudget(max_seconds=1800)
             b.consume_provider_call()
             b.consume_tool_call()
@@ -62,7 +62,7 @@ class ExecutionBudgetTests(unittest.TestCase):
                     consume()
 
     def test_deadline_cannot_extend_or_reset_sticky_phase(self):
-        with patch('agent_core.runtime.execution_budget.time.monotonic', return_value=100) as clock:
+        with patch('tess_core.runtime.execution_budget.time.monotonic', return_value=100) as clock:
             b = ExecutionBudget(max_seconds=100)
             b.tighten_deadline(300)
             self.assertEqual(b.snapshot()['remaining_seconds'], 100)
@@ -80,7 +80,7 @@ class ExecutionBudgetTests(unittest.TestCase):
             self.assertEqual(b.snapshot()['remaining_seconds'], 0)
 
     def test_expired_and_invalid_deadlines(self):
-        with patch('agent_core.runtime.execution_budget.time.monotonic', return_value=100):
+        with patch('tess_core.runtime.execution_budget.time.monotonic', return_value=100):
             for deadline in (100, 99, -1):
                 b = ExecutionBudget()
                 b.tighten_deadline(deadline)
@@ -129,7 +129,7 @@ class ExecutionBudgetTests(unittest.TestCase):
 
     def test_transport_retries_each_consume_budget(self):
         from tests.test_openai_retry_policy import _OverloadedSdkError, _request
-        from tests.support.agent_core_case import testing
+        from tests.support.tess_core_case import testing
         sent=[]
         async def create(params):
             sent.append(params);raise _OverloadedSdkError()

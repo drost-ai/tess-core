@@ -11,7 +11,7 @@ import tempfile
 import time
 import unittest
 
-from agent_core.mcp.stdio_transport import StdioMcpClient
+from tess_core.mcp.stdio_transport import StdioMcpClient
 
 
 SERVER = r'''
@@ -32,7 +32,7 @@ time.sleep(60)  # Deliberately ignore stdin EOF as well as TERM.
 WORKER = r'''
 import asyncio, json, sys, time
 from pathlib import Path
-from agent_core.mcp.stdio_transport import StdioMcpClient
+from tess_core.mcp.stdio_transport import StdioMcpClient
 client = StdioMcpClient(json.loads(sys.argv[1]), sys.argv[2])
 asyncio.run(client.initialize())
 Path(sys.argv[3]).write_text(str(client.proc.pid))
@@ -111,7 +111,7 @@ class StdioContainmentTests(unittest.TestCase):
     def test_failed_spawn_releases_owner_and_status_descriptors(self):
         from unittest.mock import patch
         client = StdioMcpClient({'name': 'failed', 'commandOrUrl': 'unused'}, '.')
-        with patch('agent_core.mcp.stdio_transport.subprocess.Popen', side_effect=OSError('fixture')):
+        with patch('tess_core.mcp.stdio_transport.subprocess.Popen', side_effect=OSError('fixture')):
             with self.assertRaises(OSError):
                 client._start_process()
         self.assertIsNone(client.owner_write_fd)

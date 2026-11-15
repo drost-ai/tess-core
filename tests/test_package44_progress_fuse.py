@@ -5,13 +5,13 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-import agent_core._facade as core
-from agent_core.agent.progress import LogicalTurnProgressLedger, append_tool_result_batch
-from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
+import tess_core._facade as core
+from tess_core.agent.progress import LogicalTurnProgressLedger, append_tool_result_batch
+from tests.support.tess_core_case import TessCoreTestCase, bind_test_runtime, run
 from tests.test_package38_interactive_context_relief import _codex_config
 
 
-class Package44ProgressFuseTests(AgentCoreTestCase):
+class Package44ProgressFuseTests(TessCoreTestCase):
     def _session(self, workspace: Path) -> dict[str, Any]:
         return core.create_empty_session(
             cwd=str(workspace),
@@ -171,7 +171,7 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
 
             clock = iter(index * 3_600 for index in range(20_000))
             with patch(
-                "agent_core.agent._turn_state.time",
+                "tess_core.agent._turn_state.time",
                 SimpleNamespace(monotonic=lambda: next(clock)),
             ):
                 result = run(

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core_harness.executor import run_scenario
-from agent_core_harness.loader import load_scenario
+from tess_core_harness.executor import run_scenario
+from tess_core_harness.loader import load_scenario
 
 
-class HarnessExecutorTests(AgentCoreTestCase):
+class HarnessExecutorTests(TessCoreTestCase):
     def test_runs_smoke_scenario_successfully(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = run_scenario("smoke.basic-session", runs_dir=tmp)
@@ -37,5 +37,5 @@ class HarnessExecutorTests(AgentCoreTestCase):
             self.assertEqual(result.failure["category"], "assertion")
             debug_dir = Path(result.debugDir)
             self.assertTrue((debug_dir / "failure.json").exists())
-            self.assertIn("agent_core_harness run smoke.failing-session", (debug_dir / "replay.sh").read_text(encoding="utf-8"))
+            self.assertIn("tess_core_harness run smoke.failing-session", (debug_dir / "replay.sh").read_text(encoding="utf-8"))
 

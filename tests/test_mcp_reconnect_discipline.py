@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.mcp.state import _create_state, _ensure_connected
+from tess_core.mcp.state import _create_state, _ensure_connected
 
 
 def _noop_event(*_args, **_kwargs) -> None:
@@ -67,7 +67,7 @@ def _write_slow_start_fixture(workspace: Path) -> Path:
     return target
 
 
-class McpReconnectBackoffTests(AgentCoreTestCase):
+class McpReconnectBackoffTests(TessCoreTestCase):
     def test_failed_connects_back_off_exponentially_without_reattempting(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -98,7 +98,7 @@ class McpReconnectBackoffTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class McpReconnectRaceTests(AgentCoreTestCase):
+class McpReconnectRaceTests(TessCoreTestCase):
     def test_concurrent_ensure_connected_spawns_one_process(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -132,7 +132,7 @@ class McpReconnectRaceTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class McpResourceListingIsolationTests(AgentCoreTestCase):
+class McpResourceListingIsolationTests(TessCoreTestCase):
     def test_dead_server_does_not_fail_or_stall_the_sweep(self):
         root, home, workspace, previous = self.temp_context()
         runtime = None

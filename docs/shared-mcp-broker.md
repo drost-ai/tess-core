@@ -1,6 +1,6 @@
 # Host-owned shared MCP broker
 
-`agent_core.mcp.shared_broker_http.SharedMcpBroker` owns a loopback-only,
+`tess_core.mcp.shared_broker_http.SharedMcpBroker` owns a loopback-only,
 authenticated HTTP MCP endpoint and a pool of upstream connections. Session
 clients use the existing HTTP MCP transport; ordinary standalone stdio clients
 are unchanged. The host starts/closes the broker, not a session or child.
@@ -20,8 +20,8 @@ security principal are appropriate to share: the broker does not make an
 inherently session-private server safely multi-tenant.
 
 ```python
-from agent_core.mcp.shared_broker import BrokerGrant
-from agent_core.mcp.shared_broker_http import (
+from tess_core.mcp.shared_broker import BrokerGrant
+from tess_core.mcp.shared_broker_http import (
     SharedMcpBroker, delegate_shared_mcp_descriptor,
     revoke_shared_mcp_descriptor,
 )

@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 MODES = ("default", "acceptEdits", "bypassPermissions", "dontAsk", "auto")
@@ -48,7 +48,7 @@ def _seal_authority(root: str, **overrides):
     return authority
 
 
-class AgentAuthorityTests(AgentCoreTestCase):
+class AgentAuthorityTests(TessCoreTestCase):
     def test_permission_mode_meet_is_commutative_idempotent_and_bounded(self):
         for left in MODES:
             self.assertEqual(core.meet_permission_modes(left, left), left)

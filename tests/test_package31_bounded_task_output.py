@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-import agent_core.payloads.bounded_io as bounded_io_module
-from agent_core.payloads.bounded_io import read_file_prefix_bounded, read_file_tail_bounded
-from agent_core.payloads.utf8_bounds import utf8_byte_length
+import tess_core.payloads.bounded_io as bounded_io_module
+from tess_core.payloads.bounded_io import read_file_prefix_bounded, read_file_tail_bounded
+from tess_core.payloads.utf8_bounds import utf8_byte_length
 
 
 class _ObservedFile:
@@ -29,9 +29,9 @@ class _ObservedFile:
         return self._handle.read(size)
 
 
-class Package31BoundedTaskOutputTests(AgentCoreTestCase):
+class Package31BoundedTaskOutputTests(TessCoreTestCase):
     def test_tail_reader_never_reads_or_allocates_the_full_multimegabyte_file(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-bounded-tail-") as directory:
+        with tempfile.TemporaryDirectory(prefix="tess-core-bounded-tail-") as directory:
             path = Path(directory) / "large.log"
             raw = (b"prefix-" * 600_000) + ("最后🙂terminal\n".encode("utf-8"))
             path.write_bytes(raw)

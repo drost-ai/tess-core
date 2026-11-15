@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-from agent_core._utils import now_iso
+from tests.support.tess_core_case import *
+from tess_core._utils import now_iso
 
 
-class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
+class Package31MonitorTransitionConcurrencyTests(TessCoreTestCase):
     def _session(self, home: Path, workspace: Path):
         config = run(
             core.resolve_config(

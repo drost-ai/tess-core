@@ -5,12 +5,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-import agent_core._facade as core
-from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
+import tess_core._facade as core
+from tests.support.tess_core_case import TessCoreTestCase, bind_test_runtime, run
 
-from agent_core.providers.token_budget import resolve_interactive_context_policy
-from agent_core.agent.tool_result_budget import ToolResultBatchBudget
-from agent_core.payloads.result_guard import guard_tool_call_result, serialized_content_bytes
+from tess_core.providers.token_budget import resolve_interactive_context_policy
+from tess_core.agent.tool_result_budget import ToolResultBatchBudget
+from tess_core.payloads.result_guard import guard_tool_call_result, serialized_content_bytes
 
 
 def _codex_config(home: Path, workspace: Path) -> dict[str, Any]:
@@ -51,7 +51,7 @@ def _codex_config(home: Path, workspace: Path) -> dict[str, Any]:
     }
 
 
-class Package38InteractiveContextReliefTests(AgentCoreTestCase):
+class Package38InteractiveContextReliefTests(TessCoreTestCase):
     def test_hundreds_of_batches_keep_the_full_later_allowance(self):
         budget = ToolResultBatchBudget(
             {"profileName": "codex", "kind": "openai", "apiMode": "codex"}

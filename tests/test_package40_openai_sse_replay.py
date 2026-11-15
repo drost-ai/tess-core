@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from agent_core.providers.openai_turn_session import (
+from tess_core.providers.openai_turn_session import (
     OpenAiProviderTurnSession,
     PreparedOpenAiRequest,
     _complete_replay_output_items,
 )
-from tests.support.agent_core_case import AgentCoreTestCase, run
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
-class Package40OpenAiSseReplayTests(AgentCoreTestCase):
+class Package40OpenAiSseReplayTests(TessCoreTestCase):
     def test_full_replay_fills_tool_call_omitted_by_terminal_output(self) -> None:
         async def exercise() -> PreparedOpenAiRequest:
             class Client:

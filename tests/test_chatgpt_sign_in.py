@@ -14,7 +14,7 @@ pytest.importorskip("cryptography")
 from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric import padding, rsa  # noqa: E402
 
-from agent_core.providers.chatgpt_account import (  # noqa: E402
+from tess_core.providers.chatgpt_account import (  # noqa: E402
     OPENAI, PLAN_SCOPE, SCOPE, ChatGPTAccountError, SignIn, verify_id_token,
 )
 

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
+class TaskSupervisorRuntimeHomeTests(TessCoreTestCase):
     def test_background_subagent_worker_uses_explicit_runtime_home(self):
         root, home, workspace, previous = self.temp_context()
-        wrong_home = Path(root.name) / "wrong-agent-core-home"
+        wrong_home = Path(root.name) / "wrong-tess-core-home"
         supervisor = None
         try:
             settings_path = home / "settings.json"
@@ -20,7 +20,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
                                 "defaultModel": "gpt-5.5",
                                 "auth": {
                                     "kind": "openai_api_key",
-                                    "envVar": "AGENT_CORE_TEST_MISSING_OPENAI_KEY",
+                                    "envVar": "TESS_CORE_TEST_MISSING_OPENAI_KEY",
                                 },
                             }
                         },
@@ -28,7 +28,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
                 ),
                 encoding="utf-8",
             )
-            os.environ.pop("AGENT_CORE_TEST_MISSING_OPENAI_KEY", None)
+            os.environ.pop("TESS_CORE_TEST_MISSING_OPENAI_KEY", None)
             config = run(
                 core.resolve_config(
                     {
@@ -90,7 +90,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
                     }
                 )
             )
-            os.environ["AGENT_CORE_HOME"] = str(wrong_home)
+            os.environ["TESS_CORE_HOME"] = str(wrong_home)
 
             async def _start_with_scoped_home():
                 async with core.scoped_runtime_home(str(home)):
@@ -138,17 +138,17 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class SpawnEnvRuntimeHomeTests(AgentCoreTestCase):
+class SpawnEnvRuntimeHomeTests(TessCoreTestCase):
     """Every worker spawn env must carry the ACTIVE runtime home.
 
-    Workers resolve their store from AGENT_CORE_HOME; a client that
+    Workers resolve their store from TESS_CORE_HOME; a client that
     configured its home in-process (config option or scoped home) must not
     spawn workers that silently read the default store.
     """
 
     def test_spawn_envs_stamp_active_runtime_home(self):
-        from agent_core.tasks.supervisor_parts.processes import _worker_env
-        from agent_core.tools.processes import _background_runner_env
+        from tess_core.tasks.supervisor_parts.processes import _worker_env
+        from tess_core.tools.processes import _background_runner_env
 
         root, home, workspace, previous = self.temp_context()
         scoped = Path(root.name) / "scoped-home"
@@ -156,12 +156,12 @@ class SpawnEnvRuntimeHomeTests(AgentCoreTestCase):
         try:
             async def _capture():
                 async with core.scoped_runtime_home(str(scoped)):
-                    return _worker_env(), _worker_env({"AGENT_CORE_HOME": "explicit"}), _background_runner_env()
+                    return _worker_env(), _worker_env({"TESS_CORE_HOME": "explicit"}), _background_runner_env()
 
             worker, worker_explicit, background = run(_capture())
-            self.assertEqual(worker["AGENT_CORE_HOME"], str(scoped))
-            self.assertEqual(worker_explicit["AGENT_CORE_HOME"], "explicit")
-            self.assertEqual(background["AGENT_CORE_HOME"], str(scoped))
+            self.assertEqual(worker["TESS_CORE_HOME"], str(scoped))
+            self.assertEqual(worker_explicit["TESS_CORE_HOME"], "explicit")
+            self.assertEqual(background["TESS_CORE_HOME"], str(scoped))
         finally:
             self.restore_home(root, previous)
 

@@ -4,10 +4,10 @@ import asyncio
 from typing import Any
 from unittest import mock
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class Package46MailboxTransactionTests(AgentCoreTestCase):
+class Package46MailboxTransactionTests(TessCoreTestCase):
     def test_concurrent_delivery_commits_one_session_projection(self):
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -54,7 +54,7 @@ class Package46MailboxTransactionTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise() -> tuple[dict[str, Any], list[dict[str, Any]], int]:
-                import agent_core.tasks.communication as communication
+                import tess_core.tasks.communication as communication
 
                 session = core.create_empty_session(
                     cwd=str(workspace),
@@ -98,7 +98,7 @@ class Package46MailboxTransactionTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class MailboxDirectionTests(AgentCoreTestCase):
+class MailboxDirectionTests(TessCoreTestCase):
     def test_to_parent_messages_deliver_to_parent_not_child(self):
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -156,7 +156,7 @@ class MailboxDirectionTests(AgentCoreTestCase):
                     systemPrompt="child", permissionMode="default", sessionId="legacy-child",
                 )
                 child["metadata"]["subagentTaskId"] = "legacy-task"
-                from agent_core.tasks.communication import task_mailbox_path
+                from tess_core.tasks.communication import task_mailbox_path
 
                 await core.append_json_line(
                     task_mailbox_path("legacy-task"),

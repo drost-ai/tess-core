@@ -8,11 +8,11 @@ import uuid
 
 import pytest
 
-from agent_core.agent import providers as agent_providers
-from agent_core.config.registry import ProviderRegistry, ProviderRegistryError
-from agent_core.providers import chatgpt_account, connection
-from agent_core.providers.errors import ProviderRequestError
-from agent_core.providers.openai.params import build_responses_create_params
+from tess_core.agent import providers as agent_providers
+from tess_core.config.registry import ProviderRegistry, ProviderRegistryError
+from tess_core.providers import chatgpt_account, connection
+from tess_core.providers.errors import ProviderRequestError
+from tess_core.providers.openai.params import build_responses_create_params
 
 
 def oauth_ref(purpose="provider_oauth_token"):

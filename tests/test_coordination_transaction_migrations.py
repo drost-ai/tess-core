@@ -5,8 +5,8 @@ import multiprocessing
 import time
 from pathlib import Path
 
-import agent_core._facade as core
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 BRIDGE_ID = "30000000-0000-4000-8000-000000000001"
 PARENT_ID = "30000000-0000-4000-8000-000000000002"
@@ -70,7 +70,7 @@ def _reconciliation(parent_id: str, suffix: str) -> dict:
     }
 
 
-class CoordinationTransactionMigrationTests(AgentCoreTestCase):
+class CoordinationTransactionMigrationTests(TessCoreTestCase):
     def test_fifty_process_writers_retain_every_append_and_upsert(self):
         root, home, workspace, previous = self.temp_context()
         processes: list[multiprocessing.Process] = []

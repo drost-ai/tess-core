@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.runtime.wake import create_mailbox_wake_controller
-from agent_core.tasks.supervisor_parts.mailbox_watch import create_mailbox_watch_loop
+from tess_core.runtime.wake import create_mailbox_wake_controller
+from tess_core.tasks.supervisor_parts.mailbox_watch import create_mailbox_watch_loop
 
 
-class MailboxWatchSweepTests(AgentCoreTestCase):
+class MailboxWatchSweepTests(TessCoreTestCase):
     def test_sweep_reannounces_queued_messages_until_delivered(self):
         """Bug regression: the sweep used to announce each message once,
         EVER - if that single announcement landed while the parent's turn was
         in flight, the wake was dropped and the parent idled on a finished
         child's result until the user typed. Level-triggered: a still-queued
         message is re-announced (paced) until a drain claims it."""
-        from agent_core.tasks.communication import mark_task_message_delivered
-        from agent_core.tasks.supervisor_parts import mailbox_watch as watch_module
+        from tess_core.tasks.communication import mark_task_message_delivered
+        from tess_core.tasks.supervisor_parts import mailbox_watch as watch_module
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -114,7 +114,7 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_sweep_forwards_new_trace_events_exactly_once(self):
-        from agent_core.tasks.communication import append_task_event
+        from tess_core.tasks.communication import append_task_event
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -186,7 +186,7 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
         (one per reopened parent runtime) re-forwarded the whole trace history
         of every child, finished ones included. A host that journals what it
         receives showed a child with 59 real steps as 1,062."""
-        from agent_core.tasks.communication import append_task_event
+        from tess_core.tasks.communication import append_task_event
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -215,7 +215,7 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_child_seen_alive_has_its_dying_trace_forwarded(self):
-        from agent_core.tasks.communication import append_task_event
+        from tess_core.tasks.communication import append_task_event
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -241,7 +241,7 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
     def test_a_childs_stop_is_announced_once_with_its_reason(self):
         """A host learns that a child stopped (here: its idle time-to-live ran
         out) from the watch, not by re-reading the runtime home."""
-        from agent_core.tasks.communication import append_task_event
+        from tess_core.tasks.communication import append_task_event
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -278,7 +278,7 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
     def test_child_that_lived_and_died_between_two_sweeps_is_still_forwarded(self):
         from datetime import datetime, timezone
 
-        from agent_core.tasks.communication import append_task_event
+        from tess_core.tasks.communication import append_task_event
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -303,7 +303,7 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
     def test_live_child_replayed_by_a_new_watch_keeps_the_same_indices(self):
         """A child that is still alive when a new watch starts is forwarded
         again from the beginning; the indices let a consumer drop the repeats."""
-        from agent_core.tasks.communication import append_task_event
+        from tess_core.tasks.communication import append_task_event
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -328,7 +328,7 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_repeated_announcements_are_marked(self):
-        from agent_core.tasks.supervisor_parts import mailbox_watch as watch_module
+        from tess_core.tasks.supervisor_parts import mailbox_watch as watch_module
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -349,7 +349,7 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class WakeControllerTests(AgentCoreTestCase):
+class WakeControllerTests(TessCoreTestCase):
     def _runtime(self, in_flight):
         listeners = []
 
@@ -413,7 +413,7 @@ class WakeControllerTests(AgentCoreTestCase):
         self.assertFalse(controller["isTurnInFlight"]())
 
     def test_continuity_turn_runs_agent_prompt_with_empty_prompt(self):
-        import agent_core.agent.continuity as continuity_module
+        import tess_core.agent.continuity as continuity_module
 
         captured = {}
 

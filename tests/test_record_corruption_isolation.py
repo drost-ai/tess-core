@@ -7,8 +7,8 @@ import threading
 import time
 from pathlib import Path
 
-from tests.support.agent_core_case import *
-from agent_core.storage.persisted_record_scanner import (
+from tests.support.tess_core_case import *
+from tess_core.storage.persisted_record_scanner import (
     DEFAULT_MAX_SCAN_BYTES,
     DEFAULT_MAX_SCAN_ENTRIES,
     DEFAULT_READ_CONCURRENCY,
@@ -21,7 +21,7 @@ from agent_core.storage.persisted_record_scanner import (
 )
 
 
-class PersistedRecordScannerTests(AgentCoreTestCase):
+class PersistedRecordScannerTests(TessCoreTestCase):
     def test_scalar_record_reads_retry_concurrent_atomic_replacement(self):
         root, home, _workspace, previous = self.temp_context()
         try:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class CompactionModelFetchTests(AgentCoreTestCase):
+class CompactionModelFetchTests(TessCoreTestCase):
     def test_fetch_proxy_and_compaction_model_defaults(self):
         self.assertEqual(core.resolve_environment_proxy_for_url("https://api.openai.com/v1/responses", {"HTTPS_PROXY": "https-proxy", "HTTP_PROXY": "http-proxy"}), "https-proxy")
         self.assertEqual(core.resolve_environment_proxy_for_url("https://api.openai.com/v1/responses", {"HTTP_PROXY": "http-proxy"}), "http-proxy")
@@ -96,7 +96,7 @@ class CompactionModelFetchTests(AgentCoreTestCase):
         )
 
     def test_compaction_requests_carry_config_and_session_identity(self):
-        from agent_core.context.compaction_transport import create_default_compaction_model_client
+        from tess_core.context.compaction_transport import create_default_compaction_model_client
 
         captured = {}
 

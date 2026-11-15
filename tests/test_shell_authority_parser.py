@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-from agent_core.authority.permission_rules import matches_bash_rule_pattern
-from agent_core.tools.permissions import _matches_command_policy
+from tests.support.tess_core_case import *
+from tess_core.authority.permission_rules import matches_bash_rule_pattern
+from tess_core.tools.permissions import _matches_command_policy
 
 
 class ShellAuthorityParserTests(unittest.TestCase):

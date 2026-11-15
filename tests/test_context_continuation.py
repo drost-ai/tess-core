@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-import agent_core.agent.context as agent_context_module
+from tests.support.tess_core_case import *
+import tess_core.agent.context as agent_context_module
 
 
-class ContextContinuationTests(AgentCoreTestCase):
+class ContextContinuationTests(TessCoreTestCase):
     def test_continuation_relief_modes_match_reference_policy(self):
         session = core.create_empty_session(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
         session["updatedAt"] = "2026-01-01T00:00:00Z"
@@ -57,9 +57,9 @@ class ContextContinuationTests(AgentCoreTestCase):
         retrieved = {
             "records": [
                 {"kind": "workflow", "source": "compaction", "text": "Use pytest for focused parity validation."},
-                {"kind": "repo_fact", "source": "compaction", "text": "Continuation lives in agent_core/continuation.py."},
+                {"kind": "repo_fact", "source": "compaction", "text": "Continuation lives in tess_core/continuation.py."},
                 {"kind": "constraint", "source": "compaction", "text": "Preserve active plan and todo state."},
-                {"kind": "environment", "source": "manual", "text": "Workspace uses AGENT_CORE_HOME for test isolation."},
+                {"kind": "environment", "source": "manual", "text": "Workspace uses TESS_CORE_HOME for test isolation."},
             ],
             "tokenEstimate": 650,
         }
@@ -197,7 +197,7 @@ class ContextContinuationTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_agent_prompt_retries_context_window_failure_with_reactive_relief(self):
-        import agent_core.agent as agent_module
+        import tess_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
         original_measure = agent_context_module.measure_request_input_tokens
@@ -248,7 +248,7 @@ class ContextContinuationTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_agent_prompt_cancels_while_rebuilding_reactive_relief_request(self):
-        import agent_core.agent as agent_module
+        import tess_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
         original_measure = agent_context_module.measure_request_input_tokens

@@ -16,7 +16,7 @@
         "command": [
           "python3",
           "-m",
-          "agent_core",
+          "tess_core",
           "run",
           "-p",
           "Say hello from the headless stream.",
@@ -34,7 +34,7 @@
           "Read"
         ],
         "env": {
-          "AGENT_CORE_HEADLESS_PROVIDER_RESPONSES": "{\"model\":\"gpt-5.4\",\"stopReason\":\"end_turn\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2},\"content\":[{\"type\":\"text\",\"text\":\"hello from stream\"}]}"
+          "TESS_CORE_HEADLESS_PROVIDER_RESPONSES": "{\"model\":\"gpt-5.4\",\"stopReason\":\"end_turn\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2},\"content\":[{\"type\":\"text\",\"text\":\"hello from stream\"}]}"
         }
       }
     },

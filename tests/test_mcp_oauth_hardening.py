@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 from urllib.parse import parse_qs, urlsplit
 
-from agent_core.mcp.auth import (
+from tess_core.mcp.auth import (
     McpOAuthRuntime,
     _assert_oauth_url,
     _canonical_resource_uri,
 )
-from agent_core.mcp.token_store import FileMcpTokenStore, mcp_token_store_key
+from tess_core.mcp.token_store import FileMcpTokenStore, mcp_token_store_key
 
 
 class _AuthServer:
@@ -100,7 +100,7 @@ def _runtime(server: _AuthServer, store: FileMcpTokenStore, callback) -> McpOAut
     )
 
 
-class OAuthDiscoveryHardeningTests(AgentCoreTestCase):
+class OAuthDiscoveryHardeningTests(TessCoreTestCase):
     def test_endpoint_urls_must_be_https_or_loopback(self):
         _assert_oauth_url("https://auth.example/authorize")
         _assert_oauth_url("http://127.0.0.1:8000/authorize")
@@ -196,7 +196,7 @@ class OAuthDiscoveryHardeningTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class TokenStoreReadHardeningTests(AgentCoreTestCase):
+class TokenStoreReadHardeningTests(TessCoreTestCase):
     def test_read_rejects_widened_symlinked_and_oversized_records(self):
         root, home, workspace, previous = self.temp_context()
         try:

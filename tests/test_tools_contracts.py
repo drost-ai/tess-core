@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class ToolContractTests(AgentCoreTestCase):
+class ToolContractTests(TessCoreTestCase):
     def test_builtin_tool_contract_snapshot_matches_reference_fixture(self):
         expected = load_builtin_tool_contract_fixture()
         snapshot = core.create_builtin_tool_contract_snapshot()

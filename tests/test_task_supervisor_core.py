@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class TaskSupervisorCoreTests(AgentCoreTestCase):
+class TaskSupervisorCoreTests(TessCoreTestCase):
     def test_background_task_supervisor_and_task_output(self):
         root, home, workspace, previous = self.temp_context()
         try:

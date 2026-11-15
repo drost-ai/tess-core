@@ -4,29 +4,29 @@ import copy
 import os
 from pathlib import Path
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-import agent_core.providers.prompt_cache_state as prompt_cache_state_module
-from agent_core.providers.prompt_cache_state import (
+import tess_core.providers.prompt_cache_state as prompt_cache_state_module
+from tess_core.providers.prompt_cache_state import (
     commit_prompt_cache_observation,
     create_prompt_cache_dispatch_order,
     mark_prompt_cache_eviction_intent,
     prompt_cache_state_path,
     read_prompt_cache_state,
 )
-from agent_core.providers.anthropic.payloads import plan_anthropic_cache_breakpoints
-from agent_core.providers.prompt_cache_diagnostics import (
+from tess_core.providers.anthropic.payloads import plan_anthropic_cache_breakpoints
+from tess_core.providers.prompt_cache_diagnostics import (
     MAX_PROMPT_CACHE_STATE_BYTES,
     build_prompt_cache_request_snapshot,
 )
-from agent_core.runtime.paths import (
+from tess_core.runtime.paths import (
     configure_active_runtime_paths,
     reset_active_runtime_paths,
     resolve_runtime_paths,
 )
 
 
-class PromptCacheStateTests(AgentCoreTestCase):
+class PromptCacheStateTests(TessCoreTestCase):
     def setUp(self):
         self.root, self.home, _, self.previous = self.temp_context()
         self.paths = resolve_runtime_paths(candidate=str(self.home))

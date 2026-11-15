@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from agent_core.providers.prompt_cache_state import commit_prompt_cache_observation
-from agent_core.runtime.paths import resolve_runtime_paths
+from tess_core.providers.prompt_cache_state import commit_prompt_cache_observation
+from tess_core.runtime.paths import resolve_runtime_paths
 
 
 async def main() -> None:

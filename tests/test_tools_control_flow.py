@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import agent_core.authority.mcp_origin_policy as mcp_origin_policy_module
+import tess_core.authority.mcp_origin_policy as mcp_origin_policy_module
 
-from tests.support.agent_core_case import *
-import agent_core.tools.web as web_module
+from tests.support.tess_core_case import *
+import tess_core.tools.web as web_module
 
 
-class ToolControlFlowTests(AgentCoreTestCase):
+class ToolControlFlowTests(TessCoreTestCase):
     def test_mcp_introspection_tool_does_not_dispatch_tool_calls(self):
         root, home, workspace, previous = self.temp_context()
         try:

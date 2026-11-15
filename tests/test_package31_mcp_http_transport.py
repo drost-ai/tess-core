@@ -3,20 +3,20 @@ from __future__ import annotations
 import gzip
 import socket
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.test_package31_mcp_transport import _Response
 
-from agent_core.mcp.http_body import (
+from tess_core.mcp.http_body import (
     _bounded_header_reader,
     _close_http_response,
     _parse_declared_length,
     iterate_mcp_body,
     validate_mcp_response_headers,
 )
-from agent_core.mcp.http_transport import HttpMcpClient
-from agent_core.mcp.auth import McpOAuthRuntime
-from agent_core.mcp.sse_transport import SseMcpClient
-from agent_core.mcp.transport_policy import (
+from tess_core.mcp.http_transport import HttpMcpClient
+from tess_core.mcp.auth import McpOAuthRuntime
+from tess_core.mcp.sse_transport import SseMcpClient
+from tess_core.mcp.transport_policy import (
     MCP_DECODED_BODY_MAX_BYTES,
     MCP_FRAME_MAX_BYTES,
     MCP_HEADER_MAX_BYTES,
@@ -27,7 +27,7 @@ from agent_core.mcp.transport_policy import (
 )
 
 
-class Package31McpHttpTransportTests(AgentCoreTestCase):
+class Package31McpHttpTransportTests(TessCoreTestCase):
     def test_http_header_acquisition_and_declared_length_are_bounded(self):
         reader = _bounded_header_reader(
             io.BytesIO(
@@ -336,7 +336,7 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
                     self.closed = True
 
             with mock.patch(
-                "agent_core.mcp.http_body.HTTPConnection",
+                "tess_core.mcp.http_body.HTTPConnection",
                 DeadlineConnection,
             ):
                 for mode, code in (("connect", "connect_timeout"), ("headers", "headers_timeout")):
@@ -445,7 +445,7 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
             )
             oauth._ensure_client = mock.AsyncMock(return_value={"clientId": "client"})
             with mock.patch(
-                "agent_core.mcp.auth.LoopbackListener",
+                "tess_core.mcp.auth.LoopbackListener",
                 Listener,
             ):
                 task = asyncio.create_task(

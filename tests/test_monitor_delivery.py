@@ -9,10 +9,10 @@ import sys
 from unittest.mock import patch
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
-from agent_core.tasks.supervisor_parts.monitor_watch import tick_daemon_monitors
-from agent_core import MonitorDeliveryController, MonitorDeliveryError
-from agent_core._utils import parse_iso_ms
+from tests.support.tess_core_case import TessCoreTestCase, core, run
+from tess_core.tasks.supervisor_parts.monitor_watch import tick_daemon_monitors
+from tess_core import MonitorDeliveryController, MonitorDeliveryError
+from tess_core._utils import parse_iso_ms
 
 
 def _progress_fixture_time(now, acknowledged_ms):
@@ -21,7 +21,7 @@ def _progress_fixture_time(now, acknowledged_ms):
     return max(now, math.ceil(acknowledged_ms)) + 20001
 
 
-class MonitorDeliveryTests(AgentCoreTestCase):
+class MonitorDeliveryTests(TessCoreTestCase):
     def setUp(self):
         super().setUp()
         self.root, self.home, self.workspace, self.previous = self.temp_context()
@@ -43,7 +43,7 @@ class MonitorDeliveryTests(AgentCoreTestCase):
 
     async def tick(self):
         self.now += 10
-        with patch("agent_core.tasks.supervisor_parts.monitor_watch.time.time", return_value=self.now / 1000):
+        with patch("tess_core.tasks.supervisor_parts.monitor_watch.time.time", return_value=self.now / 1000):
             await tick_daemon_monitors(lambda *_: None)
 
     async def claim(self, monitor, owner="host"):
@@ -138,7 +138,7 @@ class MonitorDeliveryTests(AgentCoreTestCase):
             journal = {}
             def publish(payload):
                 return journal.setdefault(payload["deliveryId"], self.receipt(payload))
-            with patch("agent_core.tasks.monitor_transactions.save_monitor", side_effect=OSError("crash before ack")):
+            with patch("tess_core.tasks.monitor_transactions.save_monitor", side_effect=OSError("crash before ack")):
                 with self.assertRaises(OSError):
                     await self.controller.publish(claim, publish)
             saved = await core.load_monitor(monitor["id"])
@@ -182,7 +182,7 @@ class MonitorDeliveryTests(AgentCoreTestCase):
                 stop_entered.set()
                 await self.controller.stop(monitor["id"], self.session_id)
 
-            with patch("agent_core.tasks.monitor_transactions.save_monitor", save_with_barrier):
+            with patch("tess_core.tasks.monitor_transactions.save_monitor", save_with_barrier):
                 publish = asyncio.create_task(self.controller.publish(claim, publisher))
                 stop = None
                 try:
@@ -358,7 +358,7 @@ class MonitorDeliveryTests(AgentCoreTestCase):
             barrier = self.workspace / "go"
             code = '''import asyncio, json, sys
 from pathlib import Path
-from agent_core import MonitorDeliveryController
+from tess_core import MonitorDeliveryController
 async def main():
     home, monitor, session, ready, barrier = sys.argv[1:]
     Path(ready).write_text('ready')

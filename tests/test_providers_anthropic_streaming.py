@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class AnthropicProviderStreamingTests(AgentCoreTestCase):
+class AnthropicProviderStreamingTests(TessCoreTestCase):
     def test_anthropic_streaming_eof_before_message_stop_rejects_partial_content(self):
         calls = {"count": 0}
 

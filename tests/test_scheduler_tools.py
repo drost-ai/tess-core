@@ -5,15 +5,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.support.session_monitors import Listener, ScriptedProvider, SilentListener, tool_reply
 
-from agent_core import SessionOptions, start_runtime
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.scheduler import rules
-from agent_core.scheduler.store import list_jobs, load_job
-from agent_core.tools.schedule import NAMES, schedule_tools
+from tess_core import SessionOptions, start_runtime
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.scheduler import rules
+from tess_core.scheduler.store import list_jobs, load_job
+from tess_core.tools.schedule import NAMES, schedule_tools
 
 LA = "America/Los_Angeles"
 
@@ -36,7 +36,7 @@ async def call(name, payload, ctx=None):
     return json.loads(result["content"]), bool(result.get("isError"))
 
 
-class SchedulerToolTests(AgentCoreTestCase):
+class SchedulerToolTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 

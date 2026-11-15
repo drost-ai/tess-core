@@ -9,9 +9,9 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core import (
+from tess_core import (
     SessionBusy,
     SessionOptions,
     SessionUnavailableError,
@@ -19,10 +19,10 @@ from agent_core import (
     UnknownSessionError,
     start_runtime,
 )
-from agent_core._utils import is_process_alive
-from agent_core.runtime import host as host_module
-from agent_core.storage import load_daemon_state
-from agent_core_harness.mcp_fakes import _server_config, _server_payload, _stdio_server_script
+from tess_core._utils import is_process_alive
+from tess_core.runtime import host as host_module
+from tess_core.storage import load_daemon_state
+from tess_core_harness.mcp_fakes import _server_config, _server_payload, _stdio_server_script
 
 
 class Listener:
@@ -76,7 +76,7 @@ async def _start(home, workspace, options_for=None, listener=None, **kwargs):
     return await start_runtime(str(home), cwd=str(workspace), session_options=options_for, listener=listener or Listener(), startup_timeout_seconds=20, **kwargs)
 
 
-class SessionManagerTests(AgentCoreTestCase):
+class SessionManagerTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 
@@ -389,7 +389,7 @@ class SessionManagerTests(AgentCoreTestCase):
     def test_sessions_follow_the_daemon_across_a_recovery(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            os.environ["AGENT_CORE_DAEMON_HEARTBEAT_MS"] = "300"
+            os.environ["TESS_CORE_DAEMON_HEARTBEAT_MS"] = "300"
 
             async def scenario():
                 listener = Listener()
@@ -408,5 +408,5 @@ class SessionManagerTests(AgentCoreTestCase):
 
             run(scenario())
         finally:
-            os.environ.pop("AGENT_CORE_DAEMON_HEARTBEAT_MS", None)
+            os.environ.pop("TESS_CORE_DAEMON_HEARTBEAT_MS", None)
             self.restore_home(root, previous)

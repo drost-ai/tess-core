@@ -4,8 +4,8 @@ import unittest
 from types import SimpleNamespace
 from typing import Any
 
-from tests.support.agent_core_case import (
-    AgentCoreTestCase,
+from tests.support.tess_core_case import (
+    TessCoreTestCase,
     AsyncChunks,
     core,
     run,
@@ -14,7 +14,7 @@ from tests.support.agent_core_case import (
 from tests.test_package43_review_regressions import _Sink, _completed, _request
 
 
-class ReasoningProvenanceProjectionTests(AgentCoreTestCase):
+class ReasoningProvenanceProjectionTests(TessCoreTestCase):
     def test_projects_only_closed_reasoning_provenance(self):
         summary = core.create_runtime_event(
             {

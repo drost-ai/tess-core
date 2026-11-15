@@ -7,15 +7,15 @@ import sys
 import time
 from pathlib import Path
 
-from agent_core._utils import now_iso
-from agent_core.tasks.monitors import create_monitor_record
-from agent_core.storage import configure_runtime_home
-from agent_core.tasks.monitor_observation import apply_monitor_observation
-from agent_core.tasks.monitor_transactions import (
+from tess_core._utils import now_iso
+from tess_core.tasks.monitors import create_monitor_record
+from tess_core.storage import configure_runtime_home
+from tess_core.tasks.monitor_observation import apply_monitor_observation
+from tess_core.tasks.monitor_transactions import (
     commit_monitor_mutation,
     start_monitor_once,
 )
-from agent_core.tasks.monitor_transitions import stop_monitor_record
+from tess_core.tasks.monitor_transitions import stop_monitor_record
 
 
 async def main() -> None:

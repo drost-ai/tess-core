@@ -3,14 +3,14 @@ from __future__ import annotations
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from agent_core.providers.turn_session import create_provider_turn_session
-from agent_core.providers.watchdog import AbortSignal
-from agent_core_harness.fake_providers.server import FakeProviderHttpServer
-from agent_core_harness.performance import (
+from tess_core.providers.turn_session import create_provider_turn_session
+from tess_core.providers.watchdog import AbortSignal
+from tess_core_harness.fake_providers.server import FakeProviderHttpServer
+from tess_core_harness.performance import (
     ANTHROPIC_TRANSPORT_BENCHMARK,
     runAnthropicTransportBenchmark,
 )
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 def _config(server, *, keep_alive=False):
@@ -56,7 +56,7 @@ async def _send(config, runtime, turn, **kwargs):
 class Package45CancellationTests(unittest.TestCase):
     def test_cancel_during_dns_settles_without_non_daemon_transport_worker(self):
         async def exercise():
-            import agent_core.providers.anthropic_async_transport as transport_module
+            import tess_core.providers.anthropic_async_transport as transport_module
 
             started = threading.Event()
             release = threading.Event()
@@ -93,7 +93,7 @@ class Package45CancellationTests(unittest.TestCase):
                     resolver_threads = [
                         thread
                         for thread in threading.enumerate()
-                        if thread.name == "agent-core-anthropic-dns"
+                        if thread.name == "tess-core-anthropic-dns"
                     ]
             finally:
                 release.set()

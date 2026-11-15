@@ -1,14 +1,14 @@
 from __future__ import annotations
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.agent.tool_dispatch import (
+from tess_core.agent.tool_dispatch import (
     create_serial_queue,
     resolve_tool_concurrency,
     run_tool_dispatch_batch,
 )
 
 
-class Package28DispatchTests(AgentCoreTestCase):
+class Package28DispatchTests(TessCoreTestCase):
     def test_every_builtin_has_a_reviewed_concurrency_contract(self):
         tools = {tool.name: tool.concurrency for tool in core.create_builtin_tools()}
         self.assertEqual(

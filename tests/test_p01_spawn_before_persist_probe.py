@@ -10,9 +10,9 @@ import sys
 import time
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from tests.support.tess_core_case import TessCoreTestCase, core, run
 
-from agent_core.process.owned_launch import (
+from tess_core.process.owned_launch import (
     activate_owned_process_runner,
     create_owned_process_activation,
 )
@@ -104,7 +104,7 @@ def _crashing_launch_worker(
 
         def spawn() -> subprocess.Popen[bytes]:
             env = os.environ.copy()
-            env["AGENT_CORE_HOME"] = runtime_home
+            env["TESS_CORE_HOME"] = runtime_home
             process = subprocess.Popen(
                 activation["argv"],
                 cwd=workspace,
@@ -228,7 +228,7 @@ def _wait_pid_dead(pid: int, timeout: float = 8.0) -> None:
         time.sleep(0.02)
 
 
-class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
+class P01SpawnBeforePersistProbeTests(TessCoreTestCase):
     def test_real_daemon_crashes_reconcile_every_launch_boundary_exactly_once(self):
         root, home, workspace, previous = self.temp_context()
         supervisor = None

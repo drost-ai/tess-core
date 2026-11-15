@@ -4,11 +4,11 @@ import asyncio
 import os
 import unittest
 
-import agent_core._facade as core
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
-class StaleFullSaveTests(AgentCoreTestCase):
+class StaleFullSaveTests(TessCoreTestCase):
     def test_stale_full_session_save_preserves_concurrent_metadata_mutation(self):
         root, home, workspace, previous = self.temp_context()
         try:

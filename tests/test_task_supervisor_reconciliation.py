@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class TaskSupervisorReconciliationTests(AgentCoreTestCase):
+class TaskSupervisorReconciliationTests(TessCoreTestCase):
     def test_reconcile_marks_lost_process_without_overwriting_detail_status(self):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
@@ -321,7 +321,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             # leave it alone, and the deliberate stop below still works
             # because stopping goes through process identity, not the
             # in-memory registry.
-            from agent_core.storage.daemon import save_daemon_state
+            from tess_core.storage.daemon import save_daemon_state
 
             run(
                 save_daemon_state(

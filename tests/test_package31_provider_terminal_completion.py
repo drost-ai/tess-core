@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 OPENAI_REQUEST = {
@@ -65,7 +65,7 @@ def _send_responses(events):
     )
 
 
-class Package31ProviderTerminalCompletionTests(AgentCoreTestCase):
+class Package31ProviderTerminalCompletionTests(TessCoreTestCase):
     def assert_incomplete(self, error, mode, assistant_bytes):
         self.assertIsInstance(error, core.ProviderIncompleteResponseError)
         self.assertEqual(error.name, "ProviderIncompleteResponseError")

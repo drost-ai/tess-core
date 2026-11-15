@@ -10,17 +10,17 @@ import time
 from pathlib import Path
 from typing import Any
 
-import agent_core._facade as core
-from agent_core import SessionOptions, start_runtime
-from agent_core._utils import now_iso
-from agent_core.storage import list_monitors, save_monitor, task_output_path, write_task_meta
+import tess_core._facade as core
+from tess_core import SessionOptions, start_runtime
+from tess_core._utils import now_iso
+from tess_core.storage import list_monitors, save_monitor, task_output_path, write_task_meta
 
 MARKER = "UNIQUE_MONITOR_MARKER"
-LEASE = "AGENT_CORE_SESSIONS_MONITOR_CLAIM_LEASE_MS"
-DEADLINE = "AGENT_CORE_SESSIONS_MONITOR_TOTAL_DEADLINE_MS"
-CLEANUP = "AGENT_CORE_SESSIONS_MONITOR_CLEANUP_MS"
-POLL = "AGENT_CORE_SESSIONS_MONITOR_POLL_MS"
-IDLE = "AGENT_CORE_SESSIONS_IDLE_CLOSE_MS"
+LEASE = "TESS_CORE_SESSIONS_MONITOR_CLAIM_LEASE_MS"
+DEADLINE = "TESS_CORE_SESSIONS_MONITOR_TOTAL_DEADLINE_MS"
+CLEANUP = "TESS_CORE_SESSIONS_MONITOR_CLEANUP_MS"
+POLL = "TESS_CORE_SESSIONS_MONITOR_POLL_MS"
+IDLE = "TESS_CORE_SESSIONS_IDLE_CLOSE_MS"
 MONITOR_ENV = (LEASE, DEADLINE, CLEANUP, POLL, IDLE)
 
 

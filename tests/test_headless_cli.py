@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class HeadlessCliTests(AgentCoreTestCase):
+class HeadlessCliTests(TessCoreTestCase):
     def _run_cli(self, args, *, home, workspace, responses=None, error=None):
         env = os.environ.copy()
-        env["AGENT_CORE_HOME"] = str(home)
+        env["TESS_CORE_HOME"] = str(home)
         env["PYTHONPATH"] = str(Path.cwd()) if not env.get("PYTHONPATH") else f"{Path.cwd()}{os.pathsep}{env['PYTHONPATH']}"
         if responses is not None:
-            env["AGENT_CORE_HEADLESS_PROVIDER_RESPONSES"] = json.dumps(responses)
+            env["TESS_CORE_HEADLESS_PROVIDER_RESPONSES"] = json.dumps(responses)
         if error is not None:
-            env["AGENT_CORE_HEADLESS_PROVIDER_ERROR"] = error
+            env["TESS_CORE_HEADLESS_PROVIDER_ERROR"] = error
         return subprocess.run(
-            [sys.executable, "-m", "agent_core", "run", *args],
+            [sys.executable, "-m", "tess_core", "run", *args],
             cwd=str(workspace),
             env=env,
             text=True,
@@ -180,7 +180,7 @@ class HeadlessCliTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_stream_redacts_large_media_payloads(self):
-        from agent_core.headless import JsonStreamSink
+        from tess_core.headless import JsonStreamSink
 
         stream = io.StringIO()
         sink = JsonStreamSink(stream)

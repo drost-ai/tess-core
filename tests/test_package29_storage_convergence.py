@@ -9,14 +9,14 @@ import time
 from pathlib import Path
 from unittest import mock
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from tests.support.tess_core_case import TessCoreTestCase, core, run
 
 
-sessions_module = importlib.import_module("agent_core.storage.sessions")
-projection_module = importlib.import_module("agent_core.tasks.supervisor_parts.projection")
+sessions_module = importlib.import_module("tess_core.storage.sessions")
+projection_module = importlib.import_module("tess_core.tasks.supervisor_parts.projection")
 
 
-class Package29StorageConvergenceTests(AgentCoreTestCase):
+class Package29StorageConvergenceTests(TessCoreTestCase):
     def _session(self, workspace: Path, session_id: str) -> dict:
         session = core.create_empty_session(
             cwd=str(workspace),

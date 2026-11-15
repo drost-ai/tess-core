@@ -5,11 +5,11 @@ import json
 import tempfile
 from pathlib import Path
 
-import agent_core._facade as core
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
-class RuntimeHomeScopeTests(AgentCoreTestCase):
+class RuntimeHomeScopeTests(TessCoreTestCase):
     def test_git_root_walk_handles_repository_and_worktree_markers(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

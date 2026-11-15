@@ -3,10 +3,10 @@ from __future__ import annotations
 import base64
 import unittest
 
-from tests.support.agent_core_case import run
+from tests.support.tess_core_case import run
 
-import agent_core._facade as core
-from agent_core.context.compaction.utils import estimate_message_tokens
+import tess_core._facade as core
+from tess_core.context.compaction.utils import estimate_message_tokens
 
 
 MIB = 1024 * 1024

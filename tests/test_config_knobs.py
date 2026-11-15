@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-from agent_core.config._knobs import (
+from tess_core.config._knobs import (
     KNOB_REGISTRY,
     configure_knobs,
     knob_value,
     render_knobs_example,
     reset_configured_knobs,
 )
-from agent_core.config._yaml import parse_yaml_subset
-from tests.support.agent_core_case import *
+from tess_core.config._yaml import parse_yaml_subset
+from tests.support.tess_core_case import *
 
 
 class KnobRegistryTests(unittest.TestCase):
     def tearDown(self):
         reset_configured_knobs()
         for name in list(os.environ):
-            if name.startswith("AGENT_CORE_SUBAGENTS_") or name.startswith("AGENT_CORE_PROVIDER_"):
+            if name.startswith("TESS_CORE_SUBAGENTS_") or name.startswith("TESS_CORE_PROVIDER_"):
                 del os.environ[name]
 
     def test_defaults_resolve_without_configuration(self):
@@ -35,7 +35,7 @@ class KnobRegistryTests(unittest.TestCase):
                 configure_knobs({"provider": {"openai_retry_delays_ms": bad}})
 
     def test_int_list_environment_override_comma_separated(self):
-        os.environ["AGENT_CORE_PROVIDER_OPENAI_RETRY_DELAYS_MS"] = "10, 20,30"
+        os.environ["TESS_CORE_PROVIDER_OPENAI_RETRY_DELAYS_MS"] = "10, 20,30"
         self.assertEqual(knob_value("provider.openai_retry_delays_ms"), (10, 20, 30))
 
     def test_configure_from_nested_mapping_and_reset(self):
@@ -61,13 +61,13 @@ class KnobRegistryTests(unittest.TestCase):
             configure_knobs({"subagents": {"max_live": True}})
 
     def test_environment_overrides_file_and_defaults(self):
-        os.environ["AGENT_CORE_SUBAGENTS_MAX_LIVE"] = "3"
+        os.environ["TESS_CORE_SUBAGENTS_MAX_LIVE"] = "3"
         self.assertEqual(knob_value("subagents.max_live"), 3)
         configure_knobs({"subagents": {"max_live": 5}})
         self.assertEqual(knob_value("subagents.max_live"), 3)
 
     def test_invalid_environment_value_rejected(self):
-        os.environ["AGENT_CORE_SUBAGENTS_MAX_LIVE"] = "lots"
+        os.environ["TESS_CORE_SUBAGENTS_MAX_LIVE"] = "lots"
         with self.assertRaises(ValueError):
             knob_value("subagents.max_live")
 
@@ -93,12 +93,12 @@ class KnobWiringTests(unittest.TestCase):
     def tearDown(self):
         reset_configured_knobs()
         for name in list(os.environ):
-            if name.startswith("AGENT_CORE_PROVIDER_"):
+            if name.startswith("TESS_CORE_PROVIDER_"):
                 del os.environ[name]
 
     def test_image_capability_knobs_reach_resolved_builtin_profiles(self):
-        from agent_core.config.providers import resolve_provider_profile
-        from agent_core.config.shared import BUILTIN_PROVIDER_PROFILES
+        from tess_core.config.providers import resolve_provider_profile
+        from tess_core.config.shared import BUILTIN_PROVIDER_PROFILES
 
         configure_knobs({"images": {"max_count": 3}})
         try:
@@ -119,7 +119,7 @@ class KnobWiringTests(unittest.TestCase):
         self.assertTrue(7 <= delay(3) <= 126, delay(3))
 
     def test_anthropic_quick_retry_reads_knob_with_jitter(self):
-        from agent_core.providers.errors import anthropic_retry_delay_ms
+        from tess_core.providers.errors import anthropic_retry_delay_ms
 
         first, second = anthropic_retry_delay_ms(1), anthropic_retry_delay_ms(2)
         self.assertTrue(350 <= first <= 469, first)
@@ -128,7 +128,7 @@ class KnobWiringTests(unittest.TestCase):
         self.assertTrue(0 <= anthropic_retry_delay_ms(3) <= 119)
 
     def test_turn_deadline_context_timeout_fallbacks_read_knobs(self):
-        from agent_core.providers.timeouts import createTurnDeadlineContext
+        from tess_core.providers.timeouts import createTurnDeadlineContext
 
         context = createTurnDeadlineContext(config={})
         try:
@@ -152,7 +152,7 @@ class KnobWiringTests(unittest.TestCase):
             context.dispose()
 
     def test_request_max_output_tokens_fallback_reads_knob(self):
-        from agent_core.providers.token_budget import resolve_request_max_output_tokens
+        from tess_core.providers.token_budget import resolve_request_max_output_tokens
 
         self.assertEqual(resolve_request_max_output_tokens({"maxOutputTokens": 128_000}), 128_000)
         self.assertEqual(resolve_request_max_output_tokens({"max_tokens": "2048"}), 2_048)
@@ -168,11 +168,11 @@ class DaemonKnobWiringTests(unittest.TestCase):
     def tearDown(self):
         reset_configured_knobs()
         for name in list(os.environ):
-            if name.startswith(("AGENT_CORE_DAEMON_", "AGENT_CORE_STORAGE_", "AGENT_CORE_RUNTIME_")):
+            if name.startswith(("TESS_CORE_DAEMON_", "TESS_CORE_STORAGE_", "TESS_CORE_RUNTIME_")):
                 del os.environ[name]
 
     def test_daemon_rpc_and_auth_timeouts_read_knobs_and_legacy_env(self):
-        from agent_core.daemon.protocol import resolve_daemon_auth_timeout_ms, resolve_daemon_rpc_timeout_ms
+        from tess_core.daemon.protocol import resolve_daemon_auth_timeout_ms, resolve_daemon_rpc_timeout_ms
 
         self.assertEqual(resolve_daemon_rpc_timeout_ms(), 30_000)
         self.assertEqual(resolve_daemon_auth_timeout_ms(), 2_000)
@@ -183,11 +183,11 @@ class DaemonKnobWiringTests(unittest.TestCase):
         reset_configured_knobs()
         # The legacy env names ARE the canonical knob env overrides and
         # apply even without configure_knobs (bare library use).
-        os.environ["AGENT_CORE_DAEMON_RPC_TIMEOUT_MS"] = "5000"
+        os.environ["TESS_CORE_DAEMON_RPC_TIMEOUT_MS"] = "5000"
         self.assertEqual(resolve_daemon_rpc_timeout_ms(), 5_000)
 
     def test_daemon_startup_and_instance_lock_timeouts_read_knobs(self):
-        from agent_core.daemon.lifecycle import _daemon_instance_wait_ms, _resolve_startup_timeout_seconds
+        from tess_core.daemon.lifecycle import _daemon_instance_wait_ms, _resolve_startup_timeout_seconds
 
         self.assertEqual(_resolve_startup_timeout_seconds({}), 30.0)
         self.assertEqual(_resolve_startup_timeout_seconds({"startTimeoutMs": 1_500}), 1.5)
@@ -195,14 +195,14 @@ class DaemonKnobWiringTests(unittest.TestCase):
         configure_knobs({"daemon": {"start_timeout_ms": 8_000, "instance_lock_timeout_ms": 750}})
         self.assertEqual(_resolve_startup_timeout_seconds({}), 8.0)
         self.assertEqual(_daemon_instance_wait_ms(), 750)
-        os.environ["AGENT_CORE_DAEMON_START_TIMEOUT_MS"] = "2000"
+        os.environ["TESS_CORE_DAEMON_START_TIMEOUT_MS"] = "2000"
         configure_knobs({})
         # Legacy env keeps beating per-call args, as it always has.
         self.assertEqual(_resolve_startup_timeout_seconds({"startTimeoutMs": 9_000}), 2.0)
 
     def test_boot_grace_dead_work_and_cache_ttl_read_knobs(self):
-        from agent_core.daemon.lifecycle import _daemon_state_is_still_booting
-        from agent_core.tasks.supervisor_parts.live_work import _create_live_work_verdict_cache
+        from tess_core.daemon.lifecycle import _daemon_state_is_still_booting
+        from tess_core.tasks.supervisor_parts.live_work import _create_live_work_verdict_cache
 
         import datetime
 
@@ -218,7 +218,7 @@ class DaemonKnobWiringTests(unittest.TestCase):
         self.assertEqual(_create_live_work_verdict_cache(5_000)["getStats"]()["ttlMs"], 100)  # knob caps explicit ttl
 
     def test_storage_lock_timeout_reads_knob(self):
-        from agent_core.storage.json_io import _storage_lock_timeout_ms
+        from tess_core.storage.json_io import _storage_lock_timeout_ms
 
         self.assertEqual(_storage_lock_timeout_ms(), 5_000)
         configure_knobs({"storage": {"lock_timeout_ms": 1_500}})
@@ -234,7 +234,7 @@ class ContextKnobWiringTests(unittest.TestCase):
             os.environ.pop(name, None)
 
     def test_compaction_model_timeouts_read_knob_with_legacy_tess_alias(self):
-        from agent_core.context.compaction_transport import _resolve_compaction_timeout_ms
+        from tess_core.context.compaction_transport import _resolve_compaction_timeout_ms
 
         self.assertEqual(_resolve_compaction_timeout_ms("synthesis"), 300_000)
         configure_knobs({"compaction": {"synthesis_timeout_ms": 45_000, "verification_timeout_ms": 55_000}})
@@ -244,9 +244,9 @@ class ContextKnobWiringTests(unittest.TestCase):
         self.assertEqual(_resolve_compaction_timeout_ms("synthesis"), 77_000)  # legacy env stays an alias
 
     def test_compaction_relief_and_memory_budgets_read_knobs(self):
-        from agent_core.context.compaction.shared import compaction_evidence_fallback_budgets, compaction_knob
-        from agent_core.context.continuation.shared import relief_knob
-        from agent_core.context.durable_memory import _memory_knob
+        from tess_core.context.compaction.shared import compaction_evidence_fallback_budgets, compaction_knob
+        from tess_core.context.continuation.shared import relief_knob
+        from tess_core.context.durable_memory import _memory_knob
 
         self.assertEqual(compaction_knob("compaction.min_recent_messages"), 20)
         self.assertEqual(compaction_evidence_fallback_budgets(), [90_000, 60_000, 40_000])
@@ -269,12 +269,12 @@ class ProviderKnobWiringTests(unittest.TestCase):
     def tearDown(self):
         reset_configured_knobs()
         for name in list(os.environ):
-            if name.startswith("AGENT_CORE_PROVIDER_"):
+            if name.startswith("TESS_CORE_PROVIDER_"):
                 del os.environ[name]
 
     def test_provider_defaults_and_float_ratios_read_knobs(self):
-        from agent_core.providers._knob_reader import provider_knob
-        from agent_core.providers.token_budget import resolve_compaction_threshold_tokens, resolve_provider_token_limits
+        from tess_core.providers._knob_reader import provider_knob
+        from tess_core.providers.token_budget import resolve_compaction_threshold_tokens, resolve_provider_token_limits
 
         self.assertEqual(provider_knob("provider.openai_max_attempts"), 6)
         self.assertEqual(provider_knob("provider.anthropic_max_attempts"), 2)
@@ -293,7 +293,7 @@ class ProviderKnobWiringTests(unittest.TestCase):
         # Profile values still beat the knob default layer.
         self.assertEqual(resolve_provider_token_limits({"maxContextLength": 32_000})["maxContextLength"], 32_000)
 
-        os.environ["AGENT_CORE_PROVIDER_COMPACTION_HEADROOM_RATIO"] = "0.5"
+        os.environ["TESS_CORE_PROVIDER_COMPACTION_HEADROOM_RATIO"] = "0.5"
         configure_knobs({})
         self.assertAlmostEqual(provider_knob("provider.compaction_headroom_ratio"), 0.5)  # float env coercion
 
@@ -305,9 +305,9 @@ class PayloadKnobWiringTests(unittest.TestCase):
         reset_configured_knobs()
 
     def test_payload_web_and_image_defaults_read_knobs(self):
-        from agent_core.acquisition.bounded_web_fetch import _knob as web_knob
-        from agent_core.config.shared import default_max_image_input_bytes, default_max_image_input_count
-        from agent_core.payloads.result_guard import non_artifact_tool_result_max_bytes
+        from tess_core.acquisition.bounded_web_fetch import _knob as web_knob
+        from tess_core.config.shared import default_max_image_input_bytes, default_max_image_input_count
+        from tess_core.payloads.result_guard import non_artifact_tool_result_max_bytes
 
         self.assertEqual(non_artifact_tool_result_max_bytes(), 32_000)
         self.assertEqual(int(web_knob("web.fetch_total_timeout_ms")), 30_000)
@@ -329,13 +329,13 @@ class ClosingWaveKnobWiringTests(unittest.TestCase):
 
     def tearDown(self):
         reset_configured_knobs()
-        for name in ("TESS_SUBAGENT_MAX_CONCURRENCY", "TESS_COMPACTION_SYNTHESIS_TIMEOUT_MS", "AGENT_CORE_MCP_BLOB_KEEP"):
+        for name in ("TESS_SUBAGENT_MAX_CONCURRENCY", "TESS_COMPACTION_SYNTHESIS_TIMEOUT_MS", "TESS_CORE_MCP_BLOB_KEEP"):
             os.environ.pop(name, None)
 
     def test_monitor_agent_mcp_and_process_knobs_drive_machinery(self):
-        from agent_core.authority.hooks import _knob as hooks_knob
-        from agent_core.subagents.depth_policy import check_subagent_depth_allowed
-        from agent_core.tasks.monitors import default_monitor_check_interval_ms
+        from tess_core.authority.hooks import _knob as hooks_knob
+        from tess_core.subagents.depth_policy import check_subagent_depth_allowed
+        from tess_core.tasks.monitors import default_monitor_check_interval_ms
 
         self.assertEqual(default_monitor_check_interval_ms(None), 5_000)
         self.assertEqual(int(hooks_knob("agent.hook_timeout_ms")), 60_000)
@@ -351,17 +351,17 @@ class ClosingWaveKnobWiringTests(unittest.TestCase):
         self.assertTrue(check_subagent_depth_allowed(deep_session, {})["allowed"])
 
     def test_mcp_blob_keep_env_absorption_is_canonical(self):
-        from agent_core.mcp.blobs import _knob as mcp_knob
+        from tess_core.mcp.blobs import _knob as mcp_knob
 
         self.assertEqual(int(mcp_knob("mcp.blob_keep")), 64)
-        os.environ["AGENT_CORE_MCP_BLOB_KEEP"] = "5"  # the legacy name IS the knob env
+        os.environ["TESS_CORE_MCP_BLOB_KEEP"] = "5"  # the legacy name IS the knob env
         self.assertEqual(int(mcp_knob("mcp.blob_keep")), 5)
 
     def test_legacy_env_aliases_warn_once_naming_the_canonical_form(self):
         import io
         from contextlib import redirect_stderr
 
-        from agent_core.config._knobs import _warned_legacy_env, warn_legacy_env_alias
+        from tess_core.config._knobs import _warned_legacy_env, warn_legacy_env_alias
 
         _warned_legacy_env.discard("TESS_SUBAGENT_MAX_CONCURRENCY")
         os.environ["TESS_SUBAGENT_MAX_CONCURRENCY"] = "4"
@@ -371,7 +371,7 @@ class ClosingWaveKnobWiringTests(unittest.TestCase):
             warn_legacy_env_alias("TESS_SUBAGENT_MAX_CONCURRENCY", "subagents.max_live")
         output = captured.getvalue()
         self.assertEqual(output.count("deprecated"), 1)  # once, ever
-        self.assertIn("AGENT_CORE_SUBAGENTS_MAX_LIVE", output)
+        self.assertIn("TESS_CORE_SUBAGENTS_MAX_LIVE", output)
 
 
 class PayloadClassKnobTests(unittest.TestCase):
@@ -381,7 +381,7 @@ class PayloadClassKnobTests(unittest.TestCase):
         reset_configured_knobs()
 
     def test_profile_payload_class_beats_the_name_heuristic(self):
-        from agent_core.payloads.tools import derive_tool_payload_class
+        from tess_core.payloads.tools import derive_tool_payload_class
 
         sniffed = {"providerKind": "openai", "openaiBaseUrl": "https://api.example.test", "model": "deepseek-v4-flash"}
         self.assertEqual(derive_tool_payload_class(sniffed), "small")  # heuristic fallback
@@ -391,8 +391,8 @@ class PayloadClassKnobTests(unittest.TestCase):
         self.assertEqual(derive_tool_payload_class(junk), "small")  # invalid values fall through
 
     def test_payload_budget_knobs_drive_policy_and_derived_line_caps(self):
-        from agent_core.payloads.result_guard import get_tool_result_max_bytes
-        from agent_core.payloads.tools import get_tool_payload_policy
+        from tess_core.payloads.result_guard import get_tool_result_max_bytes
+        from tess_core.payloads.tools import get_tool_payload_policy
 
         small = {"providerKind": "openai", "openaiBaseUrl": "https://x.test", "model": "deepseek-v4-flash"}
         policy = get_tool_payload_policy(small)
@@ -408,7 +408,7 @@ class PayloadClassKnobTests(unittest.TestCase):
         self.assertEqual(get_tool_result_max_bytes(small), 20_000)
 
 
-class KnobResolutionIntegrationTests(AgentCoreTestCase):
+class KnobResolutionIntegrationTests(TessCoreTestCase):
     def test_resolve_config_installs_knobs_from_settings_folder(self):
         root, home, workspace, previous = self.temp_context()
         try:

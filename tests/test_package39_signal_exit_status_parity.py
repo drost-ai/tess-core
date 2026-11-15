@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from agent_core.tasks.terminal_transitions import normalize_task_process_outcome
-from tests.support.agent_core_case import AgentCoreTestCase
+from tess_core.tasks.terminal_transitions import normalize_task_process_outcome
+from tests.support.tess_core_case import TessCoreTestCase
 
 
-class Package39SignalExitStatusParityTests(AgentCoreTestCase):
+class Package39SignalExitStatusParityTests(TessCoreTestCase):
     def test_process_outcome_normalizes_posix_signal_encoding(self):
         self.assertEqual(
             normalize_task_process_outcome(-15, None),

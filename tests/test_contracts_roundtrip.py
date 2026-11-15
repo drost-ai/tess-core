@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import agent_core._facade as core
-from agent_core.contracts import (
+import tess_core._facade as core
+from tess_core.contracts import (
     ChildAgentRecord,
     MonitorRecord,
     SessionRecord,
     TaskMeta,
     validate,
 )
-from tests.support.agent_core_case import AgentCoreTestCase, run
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
 def _read_bytes(path: str) -> bytes:
@@ -104,7 +104,7 @@ def _dual_spelling_task_meta() -> dict:
         "session_id": "child-session-1",
         "parent_session_id": "parent-session-1",
         "parent_task_id": None,
-        "command": "python -m agent_core.tasks.runners.subagent",
+        "command": "python -m tess_core.tasks.runners.subagent",
         "cwd": "/tmp/workspace",
         "pid": 4242,
         "startedAt": "2026-06-10T00:00:00.000Z",
@@ -167,7 +167,7 @@ def _monitor_record() -> dict:
     }
 
 
-class ContractsRoundTripTests(AgentCoreTestCase):
+class ContractsRoundTripTests(TessCoreTestCase):
     """Persisted records pass through annotated load/save paths byte-identically."""
 
     def _roundtrip(self, save, load, path_for, record, schema, label, key):

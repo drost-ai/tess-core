@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers.openai.transport import (
+from tess_core.providers.openai.transport import (
     _acquire_openai_client,
     _create_openai_client,
 )
-from agent_core.providers.openai._wire import OpenAiWireClient
-from agent_core.providers.turn_session import create_provider_turn_session
-from agent_core.providers.watchdog import AbortSignal
-from agent_core_harness.fake_providers.server import (
+from tess_core.providers.openai._wire import OpenAiWireClient
+from tess_core.providers.turn_session import create_provider_turn_session
+from tess_core.providers.watchdog import AbortSignal
+from tess_core_harness.fake_providers.server import (
     openaiChatSseBody,
     openaiResponsesSseBody,
 )
@@ -97,7 +97,7 @@ class OpenAiWireClientSelectionTests(unittest.TestCase):
                 self.chat = SimpleNamespace(completions=SimpleNamespace())
 
         with mock.patch(
-            "agent_core.providers.openai.transport.importlib.import_module",
+            "tess_core.providers.openai.transport.importlib.import_module",
             return_value=SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
         ):
             client = _create_openai_client(
@@ -179,7 +179,7 @@ class OpenAiWireClientSelectionTests(unittest.TestCase):
 
 class FakeProviderRuntimeWireModeTests(unittest.TestCase):
     def test_scenario_runtime_wire_mode_drives_real_socket(self):
-        from agent_core_harness.fake_providers.runtime import FakeProviderRuntime
+        from tess_core_harness.fake_providers.runtime import FakeProviderRuntime
 
         provider_runtime = FakeProviderRuntime()
         try:
@@ -199,7 +199,7 @@ class FakeProviderRuntimeWireModeTests(unittest.TestCase):
         self.assertEqual(record["path"], "/v1/responses")
 
     def test_scenario_runtime_wire_mode_chat_completions(self):
-        from agent_core_harness.fake_providers.runtime import FakeProviderRuntime
+        from tess_core_harness.fake_providers.runtime import FakeProviderRuntime
 
         provider_runtime = FakeProviderRuntime()
         try:

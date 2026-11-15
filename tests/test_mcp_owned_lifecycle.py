@@ -11,9 +11,9 @@ import time
 
 import pytest
 
-from agent_core.mcp import stdio_transport
-from agent_core.mcp.stdio_transport import StdioMcpClient
-from agent_core.mcp.transport_policy import McpTransportError
+from tess_core.mcp import stdio_transport
+from tess_core.mcp.stdio_transport import StdioMcpClient
+from tess_core.mcp.transport_policy import McpTransportError
 
 
 RESPONDER = r'''
@@ -188,7 +188,7 @@ def test_concurrent_cancelled_close_settles_pending_once(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize('observe_status_first', [False, True])
 def test_unexpected_exit_cannot_remain_cached_healthy(tmp_path, monkeypatch, observe_status_first):
-    from agent_core.mcp.state import _create_state, _ensure_connected, _server_status
+    from tess_core.mcp.state import _create_state, _ensure_connected, _server_status
     client = client_for(tmp_path, monkeypatch,
         RESPONDER.replace('MODE', 'time.sleep(0.1); sys.exit(7)'))
     async def run():
@@ -237,7 +237,7 @@ def test_abrupt_owner_death_cleans_stubborn_server_and_descendant(tmp_path, monk
         + RESPONDER.replace('MODE', 'pass') + '\ntime.sleep(60)\n')
     client = client_for(tmp_path, monkeypatch, script)
     worker = ('import asyncio,json,pathlib,sys,time\n'
-        'from agent_core.mcp import stdio_transport\n'
+        'from tess_core.mcp import stdio_transport\n'
         'stdio_transport._knob = lambda name: 100 if name != "mcp.close_kill_wait_ms" else 2000\n'
         'client = stdio_transport.StdioMcpClient(json.loads(sys.argv[1]), sys.argv[2])\n'
         'asyncio.run(client.initialize())\n'

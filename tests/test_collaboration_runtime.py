@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class CollaborationRuntimeTests(AgentCoreTestCase):
+class CollaborationRuntimeTests(TessCoreTestCase):
     def test_collaboration_runtime_projects_workers_and_bridge_state(self):
         root, home, workspace, previous = self.temp_context()
         try:

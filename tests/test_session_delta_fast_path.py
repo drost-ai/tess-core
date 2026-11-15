@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from unittest import mock
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class SessionDeltaFastPathTests(AgentCoreTestCase):
+class SessionDeltaFastPathTests(TessCoreTestCase):
     """Mid-batch tool persists must ride the head/delta commit, repair included."""
 
     def _session(self, workspace, session_id):
@@ -23,7 +23,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
         return session
 
     def test_mid_batch_repair_persist_and_followup_stay_on_delta_path(self):
-        import agent_core.session.persistence as persistence_module
+        import tess_core.session.persistence as persistence_module
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -63,7 +63,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_truncated_copy_confines_lineage_to_the_unpersisted_tail(self):
-        from agent_core.storage.message_history import SessionMessageList
+        from tess_core.storage.message_history import SessionMessageList
 
         source = SessionMessageList(
             [{"role": "user", "content": f"m{index}"} for index in range(4)]
@@ -104,7 +104,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_head_delta_transaction_contract_directly(self):
-        from agent_core.storage.session_transactions import mutate_session_head_delta_transaction
+        from tess_core.storage.session_transactions import mutate_session_head_delta_transaction
 
         root, _home, workspace, previous = self.temp_context()
         try:

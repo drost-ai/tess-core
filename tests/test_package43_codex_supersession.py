@@ -4,8 +4,8 @@ import asyncio
 from types import SimpleNamespace
 from typing import Any
 
-from tests.support.agent_core_case import AgentCoreTestCase, AsyncChunks, core, run, testing
-from agent_core.providers.partial_output import PartialOutputDelivery
+from tests.support.tess_core_case import TessCoreTestCase, AsyncChunks, core, run, testing
+from tess_core.providers.partial_output import PartialOutputDelivery
 
 
 class _Sink:
@@ -116,7 +116,7 @@ def _failed_after_text(text: str = "obsolete fragment") -> AsyncChunks:
     )
 
 
-class Package43CodexSupersessionTests(AgentCoreTestCase):
+class Package43CodexSupersessionTests(TessCoreTestCase):
     def test_partial_text_is_replaced_only_after_ack_and_full_replay_is_stable(self) -> None:
         sink = _Sink()
         calls: list[dict[str, Any]] = []

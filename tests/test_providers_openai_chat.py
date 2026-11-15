@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class OpenAIChatProviderTests(AgentCoreTestCase):
+class OpenAIChatProviderTests(TessCoreTestCase):
     def test_openai_chat_completions_params_and_streaming(self):
         params = testing.build_chat_completions_create_params(
             {

@@ -1,11 +1,11 @@
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.test_session_turns import Listener, _start, _reply
-from agent_core import SessionOptions, ToolDefinition, ExecutionBudget
-from agent_core.runtime import host as host_module
-from agent_core.storage.message_origin import get_message_origin
+from tess_core import SessionOptions, ToolDefinition, ExecutionBudget
+from tess_core.runtime import host as host_module
+from tess_core.storage.message_origin import get_message_origin
 
 
-class HostToolsBudgetTests(AgentCoreTestCase):
+class HostToolsBudgetTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 

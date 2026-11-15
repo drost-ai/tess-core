@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class PlatformSurfaceTests(AgentCoreTestCase):
+class PlatformSurfaceTests(TessCoreTestCase):
     def test_platform_detection_tmux_ide_chrome_and_doctor(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -95,7 +95,7 @@ class PlatformSurfaceTests(AgentCoreTestCase):
             chrome_server = run(core.resolve_chrome_companion_server({"runner": runner, "platform": "linux"}))
             self.assertTrue(chrome_server["available"])
             self.assertTrue(chrome_server["enabled"])
-            self.assertEqual(chrome_server["server"]["args"][:2], ["-m", "agent_core.platform_support.chrome_companion"])
+            self.assertEqual(chrome_server["server"]["args"][:2], ["-m", "tess_core.platform_support.chrome_companion"])
             rpc_status = run(core.handle_chrome_companion_rpc_payload(json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "chrome_status"}})))
             self.assertEqual(rpc_status["id"], 7)
             self.assertEqual(rpc_status["result"]["content"][0]["type"], "text")
@@ -118,14 +118,14 @@ class PlatformSurfaceTests(AgentCoreTestCase):
             self.assertEqual(install_result["steps"][0]["step"], "link")
             self.assertEqual(install_result["steps"][0]["status"], "run")
             self.assertTrue(any(call[0] == "exec" and call[1] == "/usr/bin/python3" and call[2][:4] == ("-m", "pip", "install", "-e") for call in calls))
-            linked_install = run(core.run_repo_install({"runner": runner, "python": "/usr/bin/python3", "globalPackagePath": str(core.REPO_ROOT), "globalBinPath": "/usr/local/bin/agent-core"}))
+            linked_install = run(core.run_repo_install({"runner": runner, "python": "/usr/bin/python3", "globalPackagePath": str(core.REPO_ROOT), "globalBinPath": "/usr/local/bin/tess-core"}))
             self.assertEqual(linked_install["steps"][0]["status"], "skipped")
             self.assertEqual(run(core.run_repo_update({"runner": runner}))["upstreamStatus"], "skipped")
             with self.assertRaises(RuntimeError):
                 run(core.run_repo_install({"runner": runner, "target": "nightly"}))
 
             fake_repo = workspace / "platform-repo"
-            (fake_repo / "agent_core").mkdir(parents=True)
+            (fake_repo / "tess_core").mkdir(parents=True)
             (fake_repo / "pyproject.toml").write_text('[project]\nversion = "1.2.3"\n', encoding="utf-8")
             git_calls = []
             git_state = {"head": "aaa", "dirty": "", "has_upstream": True}
@@ -186,13 +186,13 @@ class PlatformSurfaceTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             fake_repo = workspace / "install-state"
-            source = fake_repo / "agent_core"
+            source = fake_repo / "tess_core"
             dist = fake_repo / "dist_pkg"
             bundled = fake_repo / "package"
             source.mkdir(parents=True)
             dist.mkdir(parents=True)
             bundled.mkdir(parents=True)
-            (fake_repo / "pyproject.toml").write_text('[project]\nname = "agent-core-python"\nversion = "1.2.3"\n', encoding="utf-8")
+            (fake_repo / "pyproject.toml").write_text('[project]\nname = "tess-core"\nversion = "1.2.3"\n', encoding="utf-8")
             (bundled / "pyproject.toml").write_text('[project]\nversion = "1.1.0"\n', encoding="utf-8")
             source_file = source / "new.py"
             dist_file = dist / "old.py"
@@ -203,12 +203,12 @@ class PlatformSurfaceTests(AgentCoreTestCase):
             calls = []
 
             def which(command):
-                return "/usr/local/bin/agent-core" if command == "agent-core" else None
+                return "/usr/local/bin/tess-core" if command == "tess-core" else None
 
             def exec_cmd(command, args, cwd=None):
                 calls.append((command, tuple(args), cwd))
                 if args[:3] == ["-m", "pip", "show"]:
-                    return f"Name: agent-core-python\nVersion: 1.2.3\nEditable-project-location: {fake_repo}\n"
+                    return f"Name: tess-core\nVersion: 1.2.3\nEditable-project-location: {fake_repo}\n"
                 return ""
 
             state = run(

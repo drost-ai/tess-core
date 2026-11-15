@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-import agent_core.agent.checkpoints as agent_checkpoints_module
-import agent_core.agent.context as agent_context_module
+from tests.support.tess_core_case import *
+import tess_core.agent.checkpoints as agent_checkpoints_module
+import tess_core.agent.context as agent_context_module
 
-from agent_core.agent.context_budget import assess_context_headroom
-from agent_core.providers.activity import ProviderActivityEmitter
-from agent_core.providers.token_budget import resolveCompactionPolicy
+from tess_core.agent.context_budget import assess_context_headroom
+from tess_core.providers.activity import ProviderActivityEmitter
+from tess_core.providers.token_budget import resolveCompactionPolicy
 
 
 def _working_context_fields() -> dict[str, Any]:
@@ -87,7 +87,7 @@ def _tool_tail(start: int, pairs: int, *, chars: int = 8_000) -> list[dict[str, 
     return messages
 
 
-class Package35CompactionLivenessTests(AgentCoreTestCase):
+class Package35CompactionLivenessTests(TessCoreTestCase):
     def test_two_budget_policy_derives_target_and_rejects_invalid_explicit_target(self):
         policy = resolveCompactionPolicy(
             {

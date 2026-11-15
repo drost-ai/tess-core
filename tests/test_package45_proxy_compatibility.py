@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from agent_core_harness.fake_providers.server import FakeProviderHttpServer
-from tests.support.agent_core_case import *
+from tess_core_harness.fake_providers.server import FakeProviderHttpServer
+from tests.support.tess_core_case import *
 from tests.test_package45_transport import _config, _send, _turn
 
 

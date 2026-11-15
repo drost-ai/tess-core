@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-import agent_core.tools.web as web_module
-import agent_core.tools.web_search_api as web_search_api_module
+from tests.support.tess_core_case import *
+import tess_core.tools.web as web_module
+import tess_core.tools.web_search_api as web_search_api_module
 
 
-class ToolPayloadSearchTests(AgentCoreTestCase):
+class ToolPayloadSearchTests(TessCoreTestCase):
     def test_default_glob_excludes_python_dependency_caches(self):
         excludes = core.get_default_glob_excludes()
         self.assertIn(".venv/**", excludes)

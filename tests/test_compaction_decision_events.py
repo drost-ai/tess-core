@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class CompactionDecisionEventTests(AgentCoreTestCase):
+class CompactionDecisionEventTests(TessCoreTestCase):
     def test_complete_request_measurement_survives_typed_projection(self):
         event = core.create_runtime_event(
             {

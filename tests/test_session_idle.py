@@ -11,16 +11,16 @@ import subprocess
 import sys
 import threading
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core import SessionOptions, start_runtime
-from agent_core._utils import is_process_alive
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.storage import load_daemon_state
-from agent_core_harness.mcp_fakes import _server_config, _server_payload, _stdio_server_script
+from tess_core import SessionOptions, start_runtime
+from tess_core._utils import is_process_alive
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.storage import load_daemon_state
+from tess_core_harness.mcp_fakes import _server_config, _server_payload, _stdio_server_script
 
-KNOB = "AGENT_CORE_SESSIONS_IDLE_CLOSE_MS"
+KNOB = "TESS_CORE_SESSIONS_IDLE_CLOSE_MS"
 
 
 class Listener:
@@ -85,7 +85,7 @@ def _open_fds() -> int:
     return len(os.listdir("/dev/fd"))
 
 
-class SessionIdleTests(AgentCoreTestCase):
+class SessionIdleTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 

@@ -14,13 +14,13 @@
         "HOME": "<runtime-home>",
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
-        "LOGNAME": "agent-core",
+        "LOGNAME": "tess-core",
         "PATH": "/bin:/usr/bin",
         "SHELL": "/bin/sh",
         "TERM": "dumb",
         "TMPDIR": "<runtime-home>/tmp",
         "TZ": "UTC",
-        "USER": "agent-core"
+        "USER": "tess-core"
       },
       "maxRedirects": 3,
       "permissionMode": "bypassPermissions",

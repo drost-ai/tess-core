@@ -4,7 +4,7 @@ import json
 from types import SimpleNamespace
 from typing import Any
 
-from tests.support.agent_core_case import AgentCoreTestCase, AsyncChunks, core, run, testing
+from tests.support.tess_core_case import TessCoreTestCase, AsyncChunks, core, run, testing
 
 
 class _Sink:
@@ -182,7 +182,7 @@ def _content_text(response: Any) -> str:
     )
 
 
-class Package131TerminalReconciliationTests(AgentCoreTestCase):
+class Package131TerminalReconciliationTests(TessCoreTestCase):
     def test_empty_terminal_preserves_accumulated_text(self) -> None:
         sink = _Sink()
         accumulated = "x" * 606

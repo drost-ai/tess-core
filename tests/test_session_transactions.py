@@ -7,8 +7,8 @@ import time
 import uuid
 from pathlib import Path
 
-import agent_core._facade as core
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
 def _session_mutation_worker(
@@ -46,7 +46,7 @@ def _session_mutation_worker(
     asyncio.run(mutate())
 
 
-class SessionTransactionTests(AgentCoreTestCase):
+class SessionTransactionTests(TessCoreTestCase):
     def test_twenty_five_cross_process_mutations_retain_every_task_id(self):
         root, home, workspace, previous = self.temp_context()
         processes: list[multiprocessing.Process] = []

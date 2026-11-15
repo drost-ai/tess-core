@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.authority.agent import filter_tools_for_agent_authority, assert_valid_agent_authority, AgentAuthorityError
-from agent_core.authority.executable_config import parse_mcp_server_config
-from agent_core.authority.executable_source_policy import executable_config_digest
-from agent_core.runtime.generation import create_runtime_session_binding
-from agent_core.tasks.runners.subagent_components import delegation_exclusion, prepare_subagent_components
+from tess_core.authority.agent import filter_tools_for_agent_authority, assert_valid_agent_authority, AgentAuthorityError
+from tess_core.authority.executable_config import parse_mcp_server_config
+from tess_core.authority.executable_source_policy import executable_config_digest
+from tess_core.runtime.generation import create_runtime_session_binding
+from tess_core.tasks.runners.subagent_components import delegation_exclusion, prepare_subagent_components
 
 
-class SubagentMcpTests(AgentCoreTestCase):
+class SubagentMcpTests(TessCoreTestCase):
     def test_descriptor_policy_is_pinned_and_invalid_values_fail_closed(self):
         raw = {"name": "bound", "transport": "stdio", "commandOrUrl": sys.executable}
         normal = parse_mcp_server_config(raw)
@@ -104,7 +104,7 @@ class SubagentMcpTests(AgentCoreTestCase):
 
     def test_worker_rehydrates_pinned_mcp_and_rejects_delegation_tampering(self):
         from tests.test_resident_subagent import ResidentSubagentTests
-        from agent_core.tasks.runners.subagent import _prepare_worker
+        from tess_core.tasks.runners.subagent import _prepare_worker
         root, home, workspace, previous = self.temp_context()
         try:
             config, parent, child = ResidentSubagentTests()._seed_family(home, workspace)
@@ -139,7 +139,7 @@ class SubagentMcpTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_outer_cleanup_on_one_shot_and_resident_cancellation(self):
-        import agent_core.tasks.runners.subagent as runner
+        import tess_core.tasks.runners.subagent as runner
         async def scenario():
             for entry in (runner._execute_background_subagent, runner._run_resident_subagent):
                 close = mock.AsyncMock()

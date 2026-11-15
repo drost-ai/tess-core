@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers.token_budget import (
+from tess_core.providers.token_budget import (
     computeProviderTokenBudget,
     resolveCompactionPolicy,
     resolveCompactionRequestOutputTokens,
@@ -10,7 +10,7 @@ from agent_core.providers.token_budget import (
 )
 
 
-class ProviderTokenBudgetTests(AgentCoreTestCase):
+class ProviderTokenBudgetTests(TessCoreTestCase):
     def test_model_family_limits_and_compaction_policy(self):
         codex = resolveProviderTokenLimits({"profileName": "codex", "kind": "openai", "apiMode": "codex", "model": "gpt-5.4"})
         self.assertEqual(codex, {"maxContextLength": 400_000, "maxOutputTokens": 128_000})
@@ -47,7 +47,7 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
         self.assertEqual(testing.build_anthropic_messages_payload({**request, "model": "claude-opus-4-8"})["max_tokens"], 4_321)
 
     def test_unmatched_profile_output_limit_falls_back_to_knob(self):
-        from agent_core.config._knobs import configure_knobs, reset_configured_knobs
+        from tess_core.config._knobs import configure_knobs, reset_configured_knobs
 
         try:
             limits = resolveProviderTokenLimits({"profileName": "custom", "kind": "openai", "model": "mystery-model"})
@@ -99,14 +99,14 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class ModelLimitRulesTests(AgentCoreTestCase):
+class ModelLimitRulesTests(TessCoreTestCase):
     def tearDown(self):
-        from agent_core.providers.token_budget import reset_configured_model_limit_rules
+        from tess_core.providers.token_budget import reset_configured_model_limit_rules
 
         reset_configured_model_limit_rules()
 
     def test_configured_rules_beat_builtin_inference_and_lose_to_explicit_fields(self):
-        from agent_core.providers.token_budget import (
+        from tess_core.providers.token_budget import (
             configure_model_limit_rules,
             resolve_provider_token_limits,
         )
@@ -129,7 +129,7 @@ class ModelLimitRulesTests(AgentCoreTestCase):
         self.assertEqual(partial["maxOutputTokens"], 16_384)  # provider.max_output_tokens knob default
 
     def test_malformed_rules_fail_loud(self):
-        from agent_core.providers.token_budget import configure_model_limit_rules
+        from tess_core.providers.token_budget import configure_model_limit_rules
 
         for bad in (
             [{"maxContextLength": 1000}],
@@ -154,7 +154,7 @@ class ModelLimitRulesTests(AgentCoreTestCase):
                 encoding="utf-8",
             )
             run(core.resolve_config({"provider": "openai"}, str(workspace)))
-            from agent_core.providers.token_budget import resolve_provider_token_limits
+            from tess_core.providers.token_budget import resolve_provider_token_limits
 
             limits = resolve_provider_token_limits({"kind": "openai", "profileName": "p", "model": "my-local-model-v1"})
             self.assertEqual(limits, {"maxContextLength": 48_000, "maxOutputTokens": 8_000})

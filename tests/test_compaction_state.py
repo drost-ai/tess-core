@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import copy
 
-from tests.support.agent_core_case import *
-import agent_core.agent.loop as agent_loop_module
+from tests.support.tess_core_case import *
+import tess_core.agent.loop as agent_loop_module
 
-from agent_core.context.compaction_state import refresh_compaction_state_from_manifest
+from tess_core.context.compaction_state import refresh_compaction_state_from_manifest
 
 
-class CompactionStateTests(AgentCoreTestCase):
+class CompactionStateTests(TessCoreTestCase):
     def _state(self, session, generation, created_at, archive_message_count=None):
         archive_count = len(session["messages"]) if archive_message_count is None else archive_message_count
         return {
@@ -27,10 +27,10 @@ class CompactionStateTests(AgentCoreTestCase):
         }
 
     def test_session_restore_preserves_newer_live_compaction_state(self):
-        import agent_core.agent as agent_module
+        import tess_core.agent as agent_module
 
         session = core.create_empty_session(
-            cwd="/tmp/agent-core-compaction-state",
+            cwd="/tmp/tess-core-compaction-state",
             provider="openai",
             model="test-model",
             systemPrompt="test",

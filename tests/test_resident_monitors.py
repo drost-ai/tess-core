@@ -3,13 +3,13 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
-from agent_core.tasks.runners.resident_monitors import ResidentMonitorConsumer, subprocess_monitor_owner
-from agent_core.runtime.session_monitors import MonitorIntake
-from agent_core import agent as agent_module
+from tests.support.tess_core_case import TessCoreTestCase, core, run
+from tess_core.tasks.runners.resident_monitors import ResidentMonitorConsumer, subprocess_monitor_owner
+from tess_core.runtime.session_monitors import MonitorIntake
+from tess_core import agent as agent_module
 
 
-class ResidentMonitorTests(AgentCoreTestCase):
+class ResidentMonitorTests(TessCoreTestCase):
     def setUp(self):
         super().setUp()
         self.root, self.home, self.workspace, previous = self.temp_context()
@@ -116,9 +116,9 @@ class ResidentMonitorTests(AgentCoreTestCase):
 
     def test_real_engine_continuation_evidence_limits_and_receipt(self, tool_budget=False, expired=False):
         from tests.support.session_monitors import ScriptedProvider
-        from agent_core.agent import run_agent_prompt as real_run
-        from agent_core.runtime.agent_bindings import create_agent_runtime_bindings
-        from agent_core.runtime.generation import create_runtime_session_binding
+        from tess_core.agent import run_agent_prompt as real_run
+        from tess_core.runtime.agent_bindings import create_agent_runtime_bindings
+        from tess_core.runtime.generation import create_runtime_session_binding
         async def scenario():
             session, _, consumer = await self.fixture("continuation")
             config = await core.resolve_config({"runtimeHome": str(self.home)}, str(self.workspace))
@@ -137,7 +137,7 @@ class ResidentMonitorTests(AgentCoreTestCase):
             provider = ScriptedProvider(reply if tool_budget else "verified by existing owner")
             if expired:
                 provider.gate.clear()
-            from agent_core import ExecutionBudget
+            from tess_core import ExecutionBudget
             inherited = ExecutionBudget(max_provider_calls=10, max_tool_calls=10, max_seconds=100)
             inherited.consume_provider_call()
             inherited.consume_tool_call()
@@ -150,7 +150,7 @@ class ResidentMonitorTests(AgentCoreTestCase):
                 requests.append(args)
                 return await real_run({**args, "providerOverride": provider.override})
             with patch.object(agent_module, "run_agent_prompt", side_effect=run_with_disposable_provider), patch(
-                "agent_core.runtime.session_wake.background_limits", return_value={"maxProviderCalls": 1, "maxToolCalls": 1, "timeoutMs": 20 if expired else 2000}):
+                "tess_core.runtime.session_wake.background_limits", return_value={"maxProviderCalls": 1, "maxToolCalls": 1, "timeoutMs": 20 if expired else 2000}):
                 outcome = await consumer.poll()
                 self.assertEqual(outcome, not expired, consumer.last_error)
             self.assertEqual(len(provider.requests), 1)
@@ -170,7 +170,7 @@ class ResidentMonitorTests(AgentCoreTestCase):
         run(scenario())
 
     def test_resident_loop_defers_notification_until_active_turn_finishes(self):
-        from agent_core.tasks.runners.subagent import _run_resident_worker
+        from tess_core.tasks.runners.subagent import _run_resident_worker
         async def scenario():
             session, _, consumer = await self.fixture()
             entered, release = asyncio.Event(), asyncio.Event()
@@ -178,9 +178,9 @@ class ResidentMonitorTests(AgentCoreTestCase):
                 entered.set()
                 await release.wait()
                 return {"text": "initial done", "stopReason": "end_turn"}
-            with patch("agent_core.tasks.runners.subagent.run_agent_prompt", side_effect=initial) as model, patch(
-                "agent_core.tasks.runners.subagent._publish_resident_turn_result", new_callable=AsyncMock), patch(
-                "agent_core.tasks.runners.subagent._mark_resident_status", new_callable=AsyncMock):
+            with patch("tess_core.tasks.runners.subagent.run_agent_prompt", side_effect=initial) as model, patch(
+                "tess_core.tasks.runners.subagent._publish_resident_turn_result", new_callable=AsyncMock), patch(
+                "tess_core.tasks.runners.subagent._mark_resident_status", new_callable=AsyncMock):
                 task = asyncio.create_task(_run_resident_worker(consumer.args, session, {}, {}))
                 try:
                     await asyncio.wait_for(entered.wait(), 2)
@@ -222,8 +222,8 @@ class ResidentMonitorTests(AgentCoreTestCase):
         self.test_real_engine_continuation_evidence_limits_and_receipt(expired=True)
 
     def test_budget_gate_unset_and_inherited_limits(self):
-        from agent_core import ExecutionBudget, ExecutionBudgetExceeded
-        from agent_core.tasks.runners.continuation_budget import ContinuationBudget
+        from tess_core import ExecutionBudget, ExecutionBudgetExceeded
+        from tess_core.tasks.runners.continuation_budget import ContinuationBudget
         unbounded = ContinuationBudget({})
         for _ in range(1000):
             unbounded.consume_provider_call()

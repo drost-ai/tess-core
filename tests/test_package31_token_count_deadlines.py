@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import agent_core.context.token_accounting as token_accounting_module
+import tess_core.context.token_accounting as token_accounting_module
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 def _config(root: str, *, count_timeout_ms: int, total_timeout_ms: int, exact: bool):
@@ -99,7 +99,7 @@ def _openai_config(root: str, *, count_timeout_ms: int, exact: bool, factory):
     return config
 
 
-class Package31TokenCountDeadlineTests(AgentCoreTestCase):
+class Package31TokenCountDeadlineTests(TessCoreTestCase):
     def setUp(self):
         self.original_count = token_accounting_module._measure_anthropic_count_tokens
 
@@ -114,7 +114,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
             await asyncio.Future()
 
         token_accounting_module._measure_anthropic_count_tokens = never_count
-        with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
+        with tempfile.TemporaryDirectory(prefix="tess-core-token-deadline-") as root:
             config = _config(root, count_timeout_ms=25, total_timeout_ms=250, exact=False)
             events = []
             started = time.monotonic()
@@ -152,7 +152,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
             await asyncio.Future()
 
         token_accounting_module._measure_anthropic_count_tokens = never_count
-        with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
+        with tempfile.TemporaryDirectory(prefix="tess-core-token-deadline-") as root:
             config = _config(root, count_timeout_ms=20, total_timeout_ms=250, exact=True)
             session = _session(root)
             events = []
@@ -197,7 +197,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
             return 37
 
         token_accounting_module._measure_anthropic_count_tokens = successful_count
-        with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
+        with tempfile.TemporaryDirectory(prefix="tess-core-token-deadline-") as root:
             measurement = run(
                 testing.measure_request_input_tokens(
                     {
@@ -229,7 +229,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
             factory_args.append(args)
             return {"responses": {"input_tokens": {"count": count}}}
 
-        with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
+        with tempfile.TemporaryDirectory(prefix="tess-core-token-deadline-") as root:
             measurement = run(
                 testing.measure_request_input_tokens(
                     {
@@ -268,7 +268,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
             signals.append(args["abortSignal"])
             return {"responses": {"input_tokens": {"count": count}}}
 
-        with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
+        with tempfile.TemporaryDirectory(prefix="tess-core-token-deadline-") as root:
             events = []
             measurement = run(
                 testing.measure_request_input_tokens(
@@ -297,7 +297,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
             return 12
 
         token_accounting_module._measure_anthropic_count_tokens = successful_count
-        with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
+        with tempfile.TemporaryDirectory(prefix="tess-core-token-deadline-") as root:
             config = _config(root, count_timeout_ms=100, total_timeout_ms=200, exact=False)
             session = _session(root)
             provider_calls = 0
@@ -329,7 +329,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
             return 12
 
         token_accounting_module._measure_anthropic_count_tokens = successful_count
-        with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
+        with tempfile.TemporaryDirectory(prefix="tess-core-token-deadline-") as root:
             config = _config(root, count_timeout_ms=100, total_timeout_ms=200, exact=False)
             session = _session(root)
             late_results = []

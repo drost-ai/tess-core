@@ -6,14 +6,14 @@ import subprocess
 import sys
 import textwrap
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core import Runtime, RuntimeOwnershipError, start_runtime
-from agent_core._utils import is_process_alive
-from agent_core.daemon.lifecycle import _is_daemon_run_process
-from agent_core.runtime import host as host_module
-from agent_core.runtime.owner_lease import owner_lease_path, read_owner_lease
-from agent_core.storage import load_daemon_state
+from tess_core import Runtime, RuntimeOwnershipError, start_runtime
+from tess_core._utils import is_process_alive
+from tess_core.daemon.lifecycle import _is_daemon_run_process
+from tess_core.runtime import host as host_module
+from tess_core.runtime.owner_lease import owner_lease_path, read_owner_lease
+from tess_core.storage import load_daemon_state
 
 
 def _daemon_pid(runtime: Runtime) -> int:
@@ -35,7 +35,7 @@ def _wait(predicate, timeout=20.0, label=""):
 HOST_SCRIPT = textwrap.dedent(
     """
     import asyncio, json, os, sys
-    from agent_core import RuntimeOwnershipError, start_runtime
+    from tess_core import RuntimeOwnershipError, start_runtime
 
     async def main():
         home, action = sys.argv[1], sys.argv[2]
@@ -57,14 +57,14 @@ HOST_SCRIPT = textwrap.dedent(
 
 
 def _host_process(home: str, workspace: str, action: str) -> subprocess.Popen[str]:
-    env = {**os.environ, "AGENT_CORE_HOME": str(home), "PYTHONPATH": str(Path(core.__file__).resolve().parents[1])}
+    env = {**os.environ, "TESS_CORE_HOME": str(home), "PYTHONPATH": str(Path(core.__file__).resolve().parents[1])}
     return subprocess.Popen(
         [sys.executable, "-c", HOST_SCRIPT, str(home), action],
         cwd=str(workspace), env=env, text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
 
 
-class RuntimeHostTests(AgentCoreTestCase):
+class RuntimeHostTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 
@@ -174,7 +174,7 @@ class RuntimeHostTests(AgentCoreTestCase):
     def test_lease_of_a_dead_host_is_reclaimed(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            from agent_core.process.identity import capture_process_birth_marker
+            from tess_core.process.identity import capture_process_birth_marker
 
             ghost = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
             try:
@@ -226,7 +226,7 @@ class RuntimeHostTests(AgentCoreTestCase):
     def test_lost_daemon_is_replaced_once_by_the_runtime_watchdog(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            os.environ["AGENT_CORE_DAEMON_HEARTBEAT_MS"] = "300"
+            os.environ["TESS_CORE_DAEMON_HEARTBEAT_MS"] = "300"
             events = []
 
             class Listener:
@@ -251,7 +251,7 @@ class RuntimeHostTests(AgentCoreTestCase):
                 run(runtime.stop())
             self.assertFalse(is_process_alive(second_pid))
         finally:
-            os.environ.pop("AGENT_CORE_DAEMON_HEARTBEAT_MS", None)
+            os.environ.pop("TESS_CORE_DAEMON_HEARTBEAT_MS", None)
             self.restore_home(root, previous)
 
     def test_daemon_disabled_runtime_has_no_daemon_and_takes_no_lease(self):

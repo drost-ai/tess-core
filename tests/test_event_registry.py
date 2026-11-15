@@ -4,7 +4,7 @@ import ast
 import unittest
 from pathlib import Path
 
-from agent_core.runtime.events.shared import KNOWN_RUNTIME_EVENTS
+from tess_core.runtime.events.shared import KNOWN_RUNTIME_EVENTS
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,7 +30,7 @@ def _callee_name(node: ast.Call) -> str | None:
 
 def _emitted_literals() -> dict[str, set[str]]:
     found: dict[str, set[str]] = {}
-    for path in sorted((ROOT / "agent_core").rglob("*.py")):
+    for path in sorted((ROOT / "tess_core").rglob("*.py")):
         if "__pycache__" in path.parts:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))

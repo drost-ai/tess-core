@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.storage.persistence_metrics import register_persistence_observer
-from agent_core_harness.executor import run_scenario
-from agent_core_harness.performance import (
+from tess_core.storage.persistence_metrics import register_persistence_observer
+from tess_core_harness.executor import run_scenario
+from tess_core_harness.performance import (
     PERSISTENCE_BENCHMARK,
     REPORT_SCHEMA,
     runPersistenceBenchmark,
@@ -12,7 +12,7 @@ from agent_core_harness.performance import (
 )
 
 
-class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
+class Package47APersistenceInstrumentationTests(TessCoreTestCase):
     def test_persist_session_reports_actual_calls_writes_and_bytes(self):
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -96,7 +96,7 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class Package47AMeasurementSubstrateTests(AgentCoreTestCase):
+class Package47AMeasurementSubstrateTests(TessCoreTestCase):
     def test_persistence_benchmark_uses_observed_functional_metrics(self):
         report = runPersistenceBenchmark(
             message_counts=[6, 12],
@@ -125,7 +125,7 @@ class Package47AMeasurementSubstrateTests(AgentCoreTestCase):
             )
 
 
-class Package47AAnthropicFaultMatrixTests(AgentCoreTestCase):
+class Package47AAnthropicFaultMatrixTests(TessCoreTestCase):
     def test_initial_fault_matrix_matches_committed_golden(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = run_scenario(

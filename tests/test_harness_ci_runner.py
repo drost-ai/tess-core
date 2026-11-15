@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core_harness.ci_runner import run_ci_suite, select_scenarios
-from agent_core_harness.loader import load_scenarios
+from tess_core_harness.ci_runner import run_ci_suite, select_scenarios
+from tess_core_harness.loader import load_scenarios
 
 
-class HarnessCiRunnerTests(AgentCoreTestCase):
+class HarnessCiRunnerTests(TessCoreTestCase):
     def test_ci_suite_runs_selected_smoke_and_writes_reports(self):
         with tempfile.TemporaryDirectory() as runs, tempfile.TemporaryDirectory() as reports:
             result = run_ci_suite(
@@ -26,7 +26,7 @@ class HarnessCiRunnerTests(AgentCoreTestCase):
             junit = ET.fromstring(Path(result.reports["junit"]).read_text(encoding="utf-8"))
 
             self.assertEqual(summary["records"][0]["scenarioId"], "smoke.basic-session")
-            self.assertIn("python3 -m agent_core_harness", markdown)
+            self.assertIn("python3 -m tess_core_harness", markdown)
             self.assertIn("--golden update", markdown)
             self.assertEqual(junit.attrib["tests"], "1")
             self.assertEqual(junit.attrib["failures"], "0")

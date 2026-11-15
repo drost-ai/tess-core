@@ -5,15 +5,15 @@ import json
 import re
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, core, run
-from agent_core._utils import pretty_json
+from tests.support.tess_core_case import TessCoreTestCase, bind_test_runtime, core, run
+from tess_core._utils import pretty_json
 
 
-diff_module = importlib.import_module("agent_core.tools.file_change_diff")
-payload_module = importlib.import_module("agent_core.tools.file_change_payloads")
+diff_module = importlib.import_module("tess_core.tools.file_change_diff")
+payload_module = importlib.import_module("tess_core.tools.file_change_payloads")
 
 
-class Package30FileChangePayloadTests(AgentCoreTestCase):
+class Package30FileChangePayloadTests(TessCoreTestCase):
     def _context(self, home: Path, workspace: Path):
         config = run(
             core.resolve_config(

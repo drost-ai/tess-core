@@ -4,8 +4,8 @@ import tempfile
 from types import SimpleNamespace
 from typing import Any
 
-from tests.support.agent_core_case import (
-    AgentCoreTestCase,
+from tests.support.tess_core_case import (
+    TessCoreTestCase,
     AsyncChunks,
     bind_test_runtime,
     core,
@@ -49,9 +49,9 @@ def _config(cwd: str) -> dict[str, Any]:
     }
 
 
-class Package43AgentLoopSafetyTests(AgentCoreTestCase):
+class Package43AgentLoopSafetyTests(TessCoreTestCase):
     def test_retry_after_prior_completed_tool_does_not_reexecute_tool_iteration(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="agent-core-p43-tool-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p43-tool-") as cwd:
             session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",

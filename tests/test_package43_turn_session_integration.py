@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from agent_core.providers.openai_turn_session import OpenAiProviderTurnSession
-from tests.support.agent_core_case import AgentCoreTestCase, run
+from tess_core.providers.openai_turn_session import OpenAiProviderTurnSession
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
-class Package43TurnSessionIntegrationTests(AgentCoreTestCase):
+class Package43TurnSessionIntegrationTests(TessCoreTestCase):
     def test_failed_generation_forces_stable_full_replay(self) -> None:
         async def exercise() -> tuple[dict, dict]:
             class Client:

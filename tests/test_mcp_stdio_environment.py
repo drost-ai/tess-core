@@ -5,15 +5,15 @@ import os
 import unittest
 from unittest import mock
 
-from agent_core.authority.executable_config import parse_mcp_server_config
-from agent_core.mcp.stdio_transport import StdioMcpClient
+from tess_core.authority.executable_config import parse_mcp_server_config
+from tess_core.mcp.stdio_transport import StdioMcpClient
 
 
 class McpStdioEnvironmentTests(unittest.TestCase):
     def _spawn_options(self, **fields):
         config = parse_mcp_server_config({"name": "isolated", "transport": "stdio", "commandOrUrl": "/fake/python", **fields})
         client = StdioMcpClient(config, "/fake/workspace")
-        with mock.patch("agent_core.mcp.stdio_transport.subprocess.Popen", side_effect=OSError("synthetic spawn prevented")) as popen:
+        with mock.patch("tess_core.mcp.stdio_transport.subprocess.Popen", side_effect=OSError("synthetic spawn prevented")) as popen:
             with self.assertRaises(Exception):
                 client._start_process()
         return popen.call_args.kwargs

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class TranscriptShellCompactionTests(AgentCoreTestCase):
+class TranscriptShellCompactionTests(TessCoreTestCase):
     def test_transcript_snapshot_matches_reference_shape(self):
         read_payload_a = {
             "type": "text",

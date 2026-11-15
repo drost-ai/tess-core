@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import AgentCoreTestCase
+from tests.support.tess_core_case import TessCoreTestCase
 
-from agent_core.agent.turn_session import (
+from tess_core.agent.turn_session import (
     resolve_effective_provider_turn_binding,
 )
-from agent_core.providers.turn_session import create_provider_turn_session
-from agent_core.providers.openai_turn_session import OpenAiProviderTurnSession
+from tess_core.providers.turn_session import create_provider_turn_session
+from tess_core.providers.openai_turn_session import OpenAiProviderTurnSession
 
 
-class Package36ProviderBindingTests(AgentCoreTestCase):
+class Package36ProviderBindingTests(TessCoreTestCase):
     def test_model_selected_provider_is_bound_before_turn_session_creation(self):
         session = {
             "id": "session-provider-selection",

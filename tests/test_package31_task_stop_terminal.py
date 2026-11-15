@@ -7,27 +7,27 @@ import threading
 from pathlib import Path
 from unittest import mock
 
-import agent_core.tasks.supervisor as supervisor_module
-import agent_core.process._termination as process_termination_module
-import agent_core.tasks.supervisor_parts.stop as supervisor_stop_module
-import agent_core.tasks.runners.background as background_runner_module
-from agent_core.tasks.task_stop_coordination import (
+import tess_core.tasks.supervisor as supervisor_module
+import tess_core.process._termination as process_termination_module
+import tess_core.tasks.supervisor_parts.stop as supervisor_stop_module
+import tess_core.tasks.runners.background as background_runner_module
+from tess_core.tasks.task_stop_coordination import (
     TaskStopCoordinator,
     set_task_stop_coordination_test_hook_for_tests,
 )
-from agent_core.tasks.terminal_store import (
+from tess_core.tasks.terminal_store import (
     commit_prepared_task_stop,
     commit_task_process_completion,
     prepare_task_stop,
 )
-from agent_core.tasks.terminal_transitions import (
+from tess_core.tasks.terminal_transitions import (
     apply_deliberate_task_stop,
     apply_task_process_completion,
 )
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from tests.support.tess_core_case import TessCoreTestCase, core, run
 
 
-class Package31TaskStopTerminalTests(AgentCoreTestCase):
+class Package31TaskStopTerminalTests(TessCoreTestCase):
     def _session(self, home: Path, workspace: Path):
         config = run(
             core.resolve_config(
@@ -466,10 +466,10 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                 "cwd": str(workspace),
             }
             with mock.patch(
-                "agent_core.tools.tasks._ensure_tool_permission",
+                "tess_core.tools.tasks._ensure_tool_permission",
                 new=mock.AsyncMock(),
             ) as permission, mock.patch(
-                "agent_core.tools.tasks.signal_owned_process",
+                "tess_core.tools.tasks.signal_owned_process",
                 new=mock.AsyncMock(),
             ) as signal_process:
                 payload = json.loads(run(tool.handler({"task_id": task_id}, context))["content"])

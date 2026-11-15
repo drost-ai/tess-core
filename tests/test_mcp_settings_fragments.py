@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 def _server(name: str, **overrides) -> dict:
@@ -13,7 +13,7 @@ def _server(name: str, **overrides) -> dict:
     }
 
 
-class McpSettingsFragmentTests(AgentCoreTestCase):
+class McpSettingsFragmentTests(TessCoreTestCase):
     def test_user_scope_reads_fragment_directory(self):
         root, home, workspace, previous = self.temp_context()
         try:

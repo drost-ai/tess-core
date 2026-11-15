@@ -3,7 +3,7 @@
     "driver": "ensure_daemon",
     "state": {
       "remote": true,
-      "socketPath": "<tmp>/agent-core-<socket-scope>.sock"
+      "socketPath": "<tmp>/tess-core-<socket-scope>.sock"
     },
     "status": "passed"
   },
@@ -84,7 +84,7 @@
     "driver": "ensure_daemon",
     "state": {
       "remote": true,
-      "socketPath": "<tmp>/agent-core-<socket-scope>.sock"
+      "socketPath": "<tmp>/tess-core-<socket-scope>.sock"
     },
     "status": "passed"
   },

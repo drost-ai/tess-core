@@ -9,30 +9,30 @@ import threading
 import time
 from unittest import mock
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.agent.cancellation import (
+from tess_core.agent.cancellation import (
     _capture_session_rollback,
     _restore_session_state,
 )
-from agent_core.storage.io_executor import (
+from tess_core.storage.io_executor import (
     STORAGE_IO_MAX_WORKERS,
     reset_storage_executor_peak_for_testing,
     run_storage_io,
     storage_executor_snapshot,
 )
-from agent_core.payloads.attachments import strip_in_memory_image_data
-from agent_core_harness.performance import (
+from tess_core.payloads.attachments import strip_in_memory_image_data
+from tess_core_harness.performance import (
     REPORT_SCHEMA,
     ROLLBACK_SNAPSHOT_BENCHMARK,
     runRollbackSnapshotBenchmark,
 )
 
 
-class Package46OffLoopStorageTests(AgentCoreTestCase):
+class Package46OffLoopStorageTests(TessCoreTestCase):
     def test_generic_jsonl_appends_are_transactional_and_byte_valid(self):
         async def exercise(path: Path) -> None:
-            from agent_core.storage.json_io import append_json_line, read_json_lines
+            from tess_core.storage.json_io import append_json_line, read_json_lines
 
             await asyncio.gather(
                 *(
@@ -64,8 +64,8 @@ class Package46OffLoopStorageTests(AgentCoreTestCase):
         child = """
 import asyncio
 import sys
-import agent_core._facade as core
-from agent_core.storage.json_io import append_json_line
+import tess_core._facade as core
+from tess_core.storage.json_io import append_json_line
 home, path, prefix = sys.argv[1:]
 core.configure_runtime_home(home)
 async def main():
@@ -101,7 +101,7 @@ asyncio.run(main())
 
     def test_write_burst_keeps_event_loop_responsive(self):
         async def exercise(root: Path) -> tuple[int, float, float]:
-            import agent_core.storage.json_io as json_io
+            import tess_core.storage.json_io as json_io
 
             await asyncio.gather(
                 *(run_storage_io(lambda: None) for _ in range(STORAGE_IO_MAX_WORKERS))
@@ -169,7 +169,7 @@ asyncio.run(main())
 
     def test_cancelled_atomic_write_settles_worker_before_cancellation(self):
         async def exercise(path: Path) -> None:
-            import agent_core.storage.json_io as json_io
+            import tess_core.storage.json_io as json_io
 
             original = json_io._write_json_file_sync
             started = threading.Event()
@@ -196,7 +196,7 @@ asyncio.run(main())
 
     def test_cancelled_lock_open_closes_handle_and_releases_process_lock(self):
         async def exercise(path: Path) -> None:
-            import agent_core.storage.json_io as json_io
+            import tess_core.storage.json_io as json_io
 
             original = json_io._open_lock_handle
             started = threading.Event()
@@ -354,7 +354,7 @@ asyncio.run(main())
             self.restore_home(root, previous)
 
 
-class Package46RollbackRecordTests(AgentCoreTestCase):
+class Package46RollbackRecordTests(TessCoreTestCase):
     def _session(self, message_count: int = 8) -> dict[str, Any]:
         session = core.create_empty_session(
             cwd="/tmp/package46",

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core_harness.executor import run_scenario
-from agent_core_harness.model import Scenario, ScenarioStep
+from tess_core_harness.executor import run_scenario
+from tess_core_harness.model import Scenario, ScenarioStep
 
 
-class HarnessTaskDriverTests(AgentCoreTestCase):
+class HarnessTaskDriverTests(TessCoreTestCase):
     def test_daemon_task_pack_runs_and_captures_evidence(self):
         with tempfile.TemporaryDirectory() as runs:
             result = run_scenario("tasks.daemon-task-pack", runs_dir=runs)

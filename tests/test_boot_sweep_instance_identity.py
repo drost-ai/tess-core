@@ -7,12 +7,12 @@ import time
 import unittest
 from pathlib import Path
 
-import agent_core._facade as core
-from agent_core.storage.daemon import save_daemon_state
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tess_core.storage.daemon import save_daemon_state
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
-class BootSweepInstanceIdentityTests(AgentCoreTestCase):
+class BootSweepInstanceIdentityTests(TessCoreTestCase):
     def test_boot_sweep_owns_only_its_epoch(self):
         """Bug regression: an instance booting on a shared runtime home must
         not classify another LIVE instance's healthy worker as an orphan and

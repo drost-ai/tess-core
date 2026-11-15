@@ -6,11 +6,11 @@ import os
 import tempfile
 import unittest
 
-from tests.support.agent_core_case import bind_test_runtime, run
+from tests.support.tess_core_case import bind_test_runtime, run
 
-import agent_core._facade as core
-from agent_core import testing
-from agent_core.payloads.image_budget import ImageBudgetError
+import tess_core._facade as core
+from tess_core import testing
+from tess_core.payloads.image_budget import ImageBudgetError
 
 
 def _block(data: bytes) -> dict:
@@ -97,7 +97,7 @@ class Package31MultimodalWireTests(unittest.TestCase):
         self.assertEqual(anthropic["messages"][0]["content"][1], block)
 
     def test_token_preflight_and_serialization_use_the_same_four_image_set(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p31-wire-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p31-wire-") as cwd:
             config = _config(cwd)
             session = _session(config)
             blocks = [_block(bytes([value]) * (value * 7)) for value in range(1, 5)]
@@ -136,7 +136,7 @@ class Package31MultimodalWireTests(unittest.TestCase):
             self.assertNotIn(blocks[0]["source"]["data"], json.dumps(session))
 
     def test_context_capacity_rejects_images_before_provider_dispatch(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p31-context-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p31-context-") as cwd:
             config = _config(cwd)
             config["providerProfile"]["maxContextLength"] = 5_000
             config["providerProfile"]["maxOutputTokens"] = 16_384
@@ -170,7 +170,7 @@ class Package31MultimodalWireTests(unittest.TestCase):
             self.assertGreaterEqual(rejection["images"][0]["estimatedInputTokens"], 765)
 
     def test_parallel_read_reservation_rejects_overflow_before_second_file_acquisition(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p31-order-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p31-order-") as cwd:
             config = _config(cwd)
             config["tools"] = config["allowedTools"] = ["Read"]
             config["providerCapabilities"] = {**config["providerCapabilities"], "maxImageCount": 1}

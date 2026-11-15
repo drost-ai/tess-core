@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_core.config._yaml import YamlSubsetError, parse_yaml_subset
+from tess_core.config._yaml import YamlSubsetError, parse_yaml_subset
 
 
 class YamlSubsetAcceptTests(unittest.TestCase):

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class AgentLoopCancellationTests(AgentCoreTestCase):
+class AgentLoopCancellationTests(TessCoreTestCase):
     def test_first_turn_cancellation_clears_the_already_persisted_prompt(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -131,7 +131,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_run_agent_prompt_cancels_turn_and_restores_session(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-cancel-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-cancel-") as cwd:
             config = {
                 "cwd": cwd,
                 "runtimeHome": cwd,

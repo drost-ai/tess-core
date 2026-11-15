@@ -3,8 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from tests.support.agent_core_case import (
-    AgentCoreTestCase,
+from tests.support.tess_core_case import (
+    TessCoreTestCase,
     AsyncChunks,
     core,
     openai_module,
@@ -40,7 +40,7 @@ def _request() -> dict[str, Any]:
     }
 
 
-class OpenAiRetryPolicyTests(AgentCoreTestCase):
+class OpenAiRetryPolicyTests(TessCoreTestCase):
     def test_openai_backoff_ladder_caps_at_thirty_seconds_with_bounded_jitter(self) -> None:
         ladder = [1_000, 3_000, 5_000, 10_000, 30_000, 30_000, 30_000]
         for attempt, base in enumerate(ladder, start=1):

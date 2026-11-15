@@ -5,8 +5,8 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from agent_core.scheduler import jobs, rules
-from agent_core.scheduler.rules import RuleError
+from tess_core.scheduler import jobs, rules
+from tess_core.scheduler.rules import RuleError
 
 LA = "America/Los_Angeles"
 UTC = timezone.utc

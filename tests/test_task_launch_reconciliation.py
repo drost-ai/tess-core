@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class TaskLaunchReconciliationTests(AgentCoreTestCase):
+class TaskLaunchReconciliationTests(TessCoreTestCase):
     def test_interrupted_starting_reservation_fails_once_and_repairs_session_reference(self):
         root, home, workspace, previous = self.temp_context()
         supervisor = None

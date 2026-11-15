@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import copy
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers.anthropic_cache import count_anthropic_cache_controls
-from agent_core.providers.anthropic.payloads import (
+from tess_core.providers.anthropic_cache import count_anthropic_cache_controls
+from tess_core.providers.anthropic.payloads import (
     build_anthropic_beta_header,
     build_anthropic_count_tokens_payload,
     build_anthropic_headers,
@@ -13,9 +13,9 @@ from agent_core.providers.anthropic.payloads import (
     build_anthropic_messages_payload,
     plan_anthropic_cache_breakpoints,
 )
-from agent_core.providers.anthropic.transport import applyAnthropicUsageSnapshot
-from agent_core.providers.usage_costs import estimate_usage_cost, resolve_model_pricing
-from agent_core.providers.prompt_cache_diagnostics import normalize_prompt_cache_provider_reason
+from tess_core.providers.anthropic.transport import applyAnthropicUsageSnapshot
+from tess_core.providers.usage_costs import estimate_usage_cost, resolve_model_pricing
+from tess_core.providers.prompt_cache_diagnostics import normalize_prompt_cache_provider_reason
 
 
 def _policy(**overrides):
@@ -68,7 +68,7 @@ def _request(*, messages=None, tools=None, prompt_cache=None):
     }
 
 
-class AnthropicCachePlanTests(AgentCoreTestCase):
+class AnthropicCachePlanTests(TessCoreTestCase):
     def test_exhaustive_allocator_matrix_matches_wire_and_priority(self):
         for mode in ("off", "explicit", "auto"):
             for has_system in (False, True):

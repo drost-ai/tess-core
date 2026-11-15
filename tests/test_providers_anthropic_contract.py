@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers.anthropic.payloads import (
+from tess_core.providers.anthropic.payloads import (
     _normalize_anthropic_tool_definition,
     normalize_anthropic_content_blocks,
 )
-from agent_core.providers.anthropic.sse import normalize_anthropic_sse_response
-from agent_core.providers.turn_session import create_provider_turn_session
-from agent_core_harness.fake_providers.server import FakeProviderHttpServer
+from tess_core.providers.anthropic.sse import normalize_anthropic_sse_response
+from tess_core.providers.turn_session import create_provider_turn_session
+from tess_core_harness.fake_providers.server import FakeProviderHttpServer
 
 
 def _server(script=None):

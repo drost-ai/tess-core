@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-import agent_core.remote.bridge_runtime as bridge_runtime_module
+import tess_core.remote.bridge_runtime as bridge_runtime_module
 
 
-class RuntimeBootstrapPluginTests(AgentCoreTestCase):
+class RuntimeBootstrapPluginTests(TessCoreTestCase):
     def test_bootstrap_runtime_exposes_typed_event_and_turn_lifecycle_surface(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -102,7 +102,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             (plugin_dir / "plugin_entry.py").write_text(
                 textwrap.dedent(
                     """
-                    from agent_core.tools import ToolDefinition
+                    from tess_core.tools import ToolDefinition
 
 
                     async def echo_handler(input, context):
@@ -290,7 +290,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             (plugin_dir / "plugin_entry.py").write_text(
                 textwrap.dedent(
                     """
-                    from agent_core.tools import ToolDefinition
+                    from tess_core.tools import ToolDefinition
 
 
                     async def handler(input, context):

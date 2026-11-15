@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers.errors import (
+from tess_core.providers.errors import (
     ProviderWireError,
     normalize_unknown_provider_failure,
 )

@@ -8,16 +8,16 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.support.session_monitors import (
     CLEANUP, DEADLINE, IDLE, LEASE, MARKER, MONITOR_ENV, POLL, Listener, ScriptedProvider, SilentListener,
     complete, eventually, make_available, registered_runtime, settled, tool_reply,
 )
 
-from agent_core import MonitorDeliveryController, SessionOptions, Unavailable, start_runtime
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.storage import list_monitors, load_monitor
+from tess_core import MonitorDeliveryController, SessionOptions, Unavailable, start_runtime
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.storage import list_monitors, load_monitor
 
 
 def _register(mode="notification", *more):
@@ -28,7 +28,7 @@ def _register(mode="notification", *more):
     return ScriptedProvider(tool_reply("TaskMonitorStart", fields), "Registered.", *more)
 
 
-class SessionMonitorTests(AgentCoreTestCase):
+class SessionMonitorTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
         os.environ[LEASE] = "120000"
@@ -226,7 +226,7 @@ class SessionMonitorTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             async def scenario():
-                import agent_core.tasks.monitor_transactions as transactions
+                import tess_core.tasks.monitor_transactions as transactions
 
                 provider = _register()
                 listener = Listener()

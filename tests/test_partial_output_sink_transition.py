@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent_core.providers.partial_output import PartialOutputDelivery
-from tests.support.agent_core_case import (
-    AgentCoreTestCase,
+from tess_core.providers.partial_output import PartialOutputDelivery
+from tests.support.tess_core_case import (
+    TessCoreTestCase,
     bind_test_runtime,
     core,
     run,
@@ -38,7 +38,7 @@ def _published_state() -> dict[str, Any]:
     }
 
 
-class PartialOutputSinkTransitionTests(AgentCoreTestCase):
+class PartialOutputSinkTransitionTests(TessCoreTestCase):
     def test_published_preview_remains_fail_closed_without_explicit_policy(self) -> None:
         store = _RecordingStore(_published_state())
 

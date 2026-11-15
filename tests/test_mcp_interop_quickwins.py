@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 import socket
 
-from agent_core.mcp.http_transport import HttpMcpClient
-from agent_core.mcp.protocol import McpProtocolError, _unwrap_json_rpc_response
-from agent_core.mcp.state import (
+from tess_core.mcp.http_transport import HttpMcpClient
+from tess_core.mcp.protocol import McpProtocolError, _unwrap_json_rpc_response
+from tess_core.mcp.state import (
     _connect_state,
     _create_state,
     _refresh_resources,
@@ -14,7 +14,7 @@ from agent_core.mcp.state import (
     _request_with_state_tracking,
     _safe_request,
 )
-from agent_core.mcp.transport_policy import McpTransportError
+from tess_core.mcp.transport_policy import McpTransportError
 
 
 def _noop_event(*_args, **_kwargs) -> None:
@@ -104,7 +104,7 @@ def _http_config(origin: str, path: str = "/mcp", **overrides) -> dict:
     }
 
 
-class McpSseStreamedPostTests(AgentCoreTestCase):
+class McpSseStreamedPostTests(TessCoreTestCase):
     def test_sse_post_response_returns_before_server_closes_stream(self):
         def handler(conn: socket.socket, request: dict) -> bool:
             message = json.loads(request["body"])
@@ -140,7 +140,7 @@ class McpSseStreamedPostTests(AgentCoreTestCase):
             self_server.close()
 
 
-class McpRedirectTests(AgentCoreTestCase):
+class McpRedirectTests(TessCoreTestCase):
     def test_post_follows_same_origin_307_redirect(self):
         def handler(conn: socket.socket, request: dict) -> bool:
             if request["path"] == "/mcp":
@@ -281,7 +281,7 @@ def _stdio_error_config(server: Path, **overrides) -> dict:
     }
 
 
-class McpProtocolErrorSplitTests(AgentCoreTestCase):
+class McpProtocolErrorSplitTests(TessCoreTestCase):
     def test_unwrap_raises_typed_protocol_error(self):
         with self.assertRaises(McpProtocolError) as raised:
             _unwrap_json_rpc_response(
@@ -420,7 +420,7 @@ def _paged_state(client) -> dict:
     }
 
 
-class McpListPaginationTests(AgentCoreTestCase):
+class McpListPaginationTests(TessCoreTestCase):
     def test_tools_list_aggregates_every_page(self):
         client = _PagedClient(
             [

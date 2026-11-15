@@ -5,10 +5,10 @@ import time
 import tracemalloc
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from tests.support.tess_core_case import TessCoreTestCase, core, run
 
 
-class Package29StoreScaleTests(AgentCoreTestCase):
+class Package29StoreScaleTests(TessCoreTestCase):
     def test_two_thousand_session_store_cache_and_hygiene_ceilings(self):
         root, home, workspace, previous = self.temp_context()
         try:

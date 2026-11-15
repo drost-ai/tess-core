@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 from tests.test_providers_anthropic_contract import _config, _request, _server
 
 
 class EffortModelSupportTests(unittest.TestCase):
     def test_five_family_models_keep_their_effort(self):
-        from agent_core.config.providers import normalize_effort_for_model
+        from tess_core.config.providers import normalize_effort_for_model
 
         for model in ("claude-fable-5", "claude-mythos-5", "claude-opus-5", "claude-sonnet-5"):
             self.assertEqual(normalize_effort_for_model("anthropic", model, "xhigh"), "xhigh", model)
@@ -15,7 +15,7 @@ class EffortModelSupportTests(unittest.TestCase):
             self.assertEqual(normalize_effort_for_model("anthropic", model, "high"), "high", model)
 
     def test_pre_xhigh_models_downgrade_xhigh_only(self):
-        from agent_core.config.providers import normalize_effort_for_model
+        from tess_core.config.providers import normalize_effort_for_model
 
         self.assertEqual(normalize_effort_for_model("anthropic", "claude-sonnet-4-6", "xhigh"), "high")
         self.assertEqual(normalize_effort_for_model("anthropic", "claude-sonnet-4-6", "max"), "max")
@@ -69,7 +69,7 @@ if __name__ == "__main__":
 
 class ReasoningEffortFallbackTests(unittest.TestCase):
     def test_reasoning_effort_feeds_profile_effort_level(self):
-        from agent_core.config.providers import resolve_provider_profile
+        from tess_core.config.providers import resolve_provider_profile
 
         profile = resolve_provider_profile(
             "p", {"kind": "anthropic", "reasoningEffort": "xhigh"}
@@ -77,7 +77,7 @@ class ReasoningEffortFallbackTests(unittest.TestCase):
         self.assertEqual(profile["effortLevel"], "xhigh")
 
     def test_explicit_effort_level_wins_over_reasoning_effort(self):
-        from agent_core.config.providers import resolve_provider_profile
+        from tess_core.config.providers import resolve_provider_profile
 
         profile = resolve_provider_profile(
             "p",
@@ -86,7 +86,7 @@ class ReasoningEffortFallbackTests(unittest.TestCase):
         self.assertEqual(profile["effortLevel"], "medium")
 
     def test_openai_xhigh_covers_gpt_5_4_and_later_minors(self):
-        from agent_core.config.providers import normalize_effort_for_model
+        from tess_core.config.providers import normalize_effort_for_model
 
         self.assertEqual(normalize_effort_for_model("openai", "gpt-5.6-sol", "xhigh"), "xhigh")
         self.assertEqual(normalize_effort_for_model("openai", "gpt-5.4", "xhigh"), "xhigh")

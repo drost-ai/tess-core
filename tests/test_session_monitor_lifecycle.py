@@ -8,15 +8,15 @@ from __future__ import annotations
 from contextlib import ExitStack
 from unittest.mock import patch
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 from tests.support.session_monitors import (
     CLEANUP, DEADLINE, LEASE, MONITOR_ENV, Listener, ScriptedProvider, complete, eventually, registered_runtime, settled, tool_reply,
 )
 
-from agent_core import MonitorDeliveryController
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.storage import list_monitors, load_monitor
+from tess_core import MonitorDeliveryController
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.storage import list_monitors, load_monitor
 
 
 def _register(mode, *more):
@@ -26,7 +26,7 @@ def _register(mode, *more):
     return ScriptedProvider(tool_reply("TaskMonitorStart", fields), "Registered.", *more)
 
 
-class SessionMonitorLifecycleTests(AgentCoreTestCase):
+class SessionMonitorLifecycleTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
         os.environ[LEASE] = "120000"
@@ -147,7 +147,7 @@ class SessionMonitorLifecycleTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             async def scenario():
-                import agent_core.runtime.session_turns as turns_module
+                import tess_core.runtime.session_turns as turns_module
 
                 release = asyncio.Event()
                 original = turns_module.run_agent_prompt

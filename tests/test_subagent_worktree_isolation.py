@@ -5,8 +5,8 @@ import os
 import subprocess
 import unittest
 
-import agent_core._facade as core
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 
 def _init_repo(workspace: str) -> None:
@@ -14,7 +14,7 @@ def _init_repo(workspace: str) -> None:
     subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init"], cwd=workspace, check=True)
 
 
-class SubagentWorktreeIsolationTests(AgentCoreTestCase):
+class SubagentWorktreeIsolationTests(TessCoreTestCase):
     def test_worktree_child_passes_startup_authority_enforcement(self):
         """Bug regression: the isolation worktree is created as a SIBLING of
         the repo, outside every parent authority root, and the child's derived

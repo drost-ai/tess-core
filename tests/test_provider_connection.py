@@ -5,9 +5,9 @@ import uuid
 
 import pytest
 
-from agent_core.config import ProviderRegistry
-from agent_core.providers.connection import check_provider_connection
-from agent_core.runtime.credentials import CredentialStore
+from tess_core.config import ProviderRegistry
+from tess_core.providers.connection import check_provider_connection
+from tess_core.runtime.credentials import CredentialStore
 
 
 class Backend:

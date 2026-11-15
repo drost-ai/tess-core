@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core_harness.fake_providers.server import openaiChatSseBody
+from tess_core_harness.fake_providers.server import openaiChatSseBody
 from tests.test_providers_openai_wire import _args, _server
 
 

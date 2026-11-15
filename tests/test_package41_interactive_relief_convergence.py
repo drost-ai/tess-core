@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-import agent_core._facade as core
-from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
+import tess_core._facade as core
+from tests.support.tess_core_case import TessCoreTestCase, bind_test_runtime, run
 from tests.test_package38_interactive_context_relief import _codex_config
 
 
@@ -39,7 +39,7 @@ def _working_context(session: dict[str, Any]) -> dict[str, Any]:
                         "facts": {
                             "primaryLanguage": "Python",
                             "languages": ["Python"],
-                            "ecosystem": "agent-core",
+                            "ecosystem": "tess-core",
                             "packageManager": "uv",
                             "evidence": ["Package 150 qualification"],
                         },
@@ -202,7 +202,7 @@ def _assert_tool_protocol(messages: list[dict[str, Any]]) -> None:
     assert not expected
 
 
-class Package41InteractiveReliefConvergenceTests(AgentCoreTestCase):
+class Package41InteractiveReliefConvergenceTests(TessCoreTestCase):
     def test_large_checkpoint_remains_authoritative_without_projection(
         self,
     ) -> None:

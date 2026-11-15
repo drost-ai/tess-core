@@ -5,14 +5,14 @@ import json
 import time
 from unittest import mock
 
-import agent_core._facade as core
-import agent_core.agent.context as context_module
-from agent_core.context.request_preflight import (
+import tess_core._facade as core
+import tess_core.agent.context as context_module
+from tess_core.context.request_preflight import (
     RECEIPT_MAX_BYTES,
     build_request_preflight,
     preflight_event_payload,
 )
-from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
+from tests.support.tess_core_case import TessCoreTestCase, bind_test_runtime, run
 
 
 def _receipt_fixture(
@@ -241,7 +241,7 @@ def _production_sized_preflight_fixture() -> dict:
     }
 
 
-class Package37RequestPreflightTests(AgentCoreTestCase):
+class Package37RequestPreflightTests(TessCoreTestCase):
     def test_receipt_is_bounded_content_free_and_exhaustively_accounted(self):
         receipt = _receipt_fixture()
         serialized = json.dumps(receipt, ensure_ascii=False)

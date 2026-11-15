@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core import start_runtime, SessionOptions
-from agent_core.runtime.shared_mcp import prepare_host_shared_mcp, _unconditionally_granted_tools
-from agent_core.authority.agent import assert_valid_agent_authority
-from agent_core.authority.executable_config import parse_mcp_server_config
-from agent_core.mcp.shared_broker_http import _control_request
-from agent_core.runtime.secrets import resolve_mcp_server_config_secrets
-from agent_core.subagents import prepare_subagent
-from agent_core.tasks.runners.subagent import _prepare_worker
+from tess_core import start_runtime, SessionOptions
+from tess_core.runtime.shared_mcp import prepare_host_shared_mcp, _unconditionally_granted_tools
+from tess_core.authority.agent import assert_valid_agent_authority
+from tess_core.authority.executable_config import parse_mcp_server_config
+from tess_core.mcp.shared_broker_http import _control_request
+from tess_core.runtime.secrets import resolve_mcp_server_config_secrets
+from tess_core.subagents import prepare_subagent
+from tess_core.tasks.runners.subagent import _prepare_worker
 
 
-class HostSharedMcpTests(AgentCoreTestCase):
+class HostSharedMcpTests(TessCoreTestCase):
     def test_parser_and_permission_constraints_fail_closed(self):
         descriptor = {"name": "coding", "transport": "http", "commandOrUrl": "http://127.0.0.1:1234/mcp", "sharedBroker": {"version": 1}}
         self.assertEqual(parse_mcp_server_config(descriptor)["sharedBroker"], {"version": 1})
@@ -82,7 +82,7 @@ class HostSharedMcpTests(AgentCoreTestCase):
                         await _control_request(resolved_child, "tools/list", {})
                     resolved_parent = await resolve_mcp_server_config_secrets(parent_descriptor)
                     self.assertEqual(len((await _control_request(resolved_parent, "tools/list", {}))["tools"]), 2)
-                    from agent_core.subagents.lifecycle import start_background_subagent
+                    from tess_core.subagents.lifecycle import start_background_subagent
                     leases = len(runtime._shared_mcp_broker._leases)
                     failed_context = {**context, "daemon": {"startSubagentTask": mock.AsyncMock(side_effect=RuntimeError("launch failed"))}}
                     with self.assertRaisesRegex(RuntimeError, "launch failed"):
@@ -107,7 +107,7 @@ class HostSharedMcpTests(AgentCoreTestCase):
                         self.assertIn("tools", await _control_request(resolved_crashed, "tools/list", {}))
                     await core.save_child_agent({**crashed["childRecord"], "taskId": "crashed-task"})
                     await core.write_task_meta("crashed-task", crash_meta)
-                    from agent_core.tasks.supervisor_parts.finalize_child import finalize_lost_worker
+                    from tess_core.tasks.supervisor_parts.finalize_child import finalize_lost_worker
                     await finalize_lost_worker(taskId="crashed-task", cause="worker_lost", source="test",
                         emit=lambda event, data, session_id: runtime.sessions.route_daemon_event({"event": event, "data": data, "sessionId": session_id}))
                     await asyncio.gather(*list(runtime._shared_mcp_cleanup_tasks.values()))

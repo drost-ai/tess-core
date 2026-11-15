@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-class ToolAgentTests(AgentCoreTestCase):
+class ToolAgentTests(TessCoreTestCase):
     def test_agent_tool_prepares_child_session_and_record(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            from agent_core.subagents import prepare_subagent
+            from tess_core.subagents import prepare_subagent
 
             config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "acceptEdits"}, str(workspace)))
             config["systemPrompt"] = "Config level prompt."
@@ -361,7 +361,7 @@ class ToolAgentTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class NonBlockingSpawnTests(AgentCoreTestCase):
+class NonBlockingSpawnTests(TessCoreTestCase):
     def test_default_spawn_returns_immediately_without_waiting(self):
         root, home, workspace, previous = self.temp_context()
         try:

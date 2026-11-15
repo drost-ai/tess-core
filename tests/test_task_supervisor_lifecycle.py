@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import signal
 
-from tests.support.agent_core_case import *
-from agent_core.daemon.security import DaemonSecurityError
+from tests.support.tess_core_case import *
+from tess_core.daemon.security import DaemonSecurityError
 
 
 def _pid_alive(pid: int) -> bool:
@@ -16,7 +16,7 @@ def _pid_alive(pid: int) -> bool:
         return True
 
 
-class TaskSupervisorLifecycleTests(AgentCoreTestCase):
+class TaskSupervisorLifecycleTests(TessCoreTestCase):
     def test_background_runner_accepts_reference_positional_contract(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -31,7 +31,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 [
                     sys.executable,
                     "-m",
-                    "agent_core.tasks.runners.background",
+                    "tess_core.tasks.runners.background",
                     task_id,
                     str(meta_path),
                     str(output_path),
@@ -302,7 +302,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_termination_ladder_escalates_to_kill_for_term_immune_children(self):
-        from agent_core.process._termination import terminate_popen_group
+        from tess_core.process._termination import terminate_popen_group
 
         polite = subprocess.Popen(
             [sys.executable, "-c", "import time; time.sleep(30)"],
@@ -347,11 +347,11 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 time.sleep(0.05)
             proc = supervisor["registries"].processes.get(task_id)
             self.assertIsNotNone(proc)
-            os.environ["AGENT_CORE_PROCESS_TERM_GRACE_MS"] = "400"
+            os.environ["TESS_CORE_PROCESS_TERM_GRACE_MS"] = "400"
             try:
                 run(supervisor["close"]())
             finally:
-                del os.environ["AGENT_CORE_PROCESS_TERM_GRACE_MS"]
+                del os.environ["TESS_CORE_PROCESS_TERM_GRACE_MS"]
             self.assertIsNotNone(proc.poll())
             stopping = [event for event in events if event.get("event") == "supervisor.stopping_workers"]
             self.assertEqual(len(stopping), 1)
@@ -392,7 +392,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(session))
             owner = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
-            os.environ["AGENT_CORE_DAEMON_OWNER_POLL_MS"] = "200"
+            os.environ["TESS_CORE_DAEMON_OWNER_POLL_MS"] = "200"
             client = run(core.ensure_task_supervisor_daemon({"instanceId": "owner-watch-instance", "cwd": str(workspace), "ownerPid": owner.pid}))
             daemon_pid = run(core.load_daemon_state("owner-watch-instance"))["pid"]
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(120)')}"
@@ -410,7 +410,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
 
             owner.kill()
             owner.wait(timeout=5)
-            from agent_core.daemon.lifecycle import _DAEMON_PROCESSES
+            from tess_core.daemon.lifecycle import _DAEMON_PROCESSES
 
             spawned = _DAEMON_PROCESSES.get("owner-watch-instance")
             deadline = time.monotonic() + 20
@@ -425,14 +425,14 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             self.assertTrue(any(event.get("event") == "daemon.owner_lost" for event in events))
             self.assertIsNone(run(core.load_daemon_state("owner-watch-instance")))
         finally:
-            os.environ.pop("AGENT_CORE_DAEMON_OWNER_POLL_MS", None)
+            os.environ.pop("TESS_CORE_DAEMON_OWNER_POLL_MS", None)
             if owner and owner.poll() is None:
                 owner.kill()
             run(core.stop_task_supervisor_daemon({"instanceId": "owner-watch-instance"}))
             self.restore_home(root, previous)
 
     def test_runtime_watchdog_replaces_killed_daemon_with_one_fresh_instance(self):
-        from agent_core.runtime._daemon_watch import check_daemon_once
+        from tess_core.runtime._daemon_watch import check_daemon_once
 
         root, home, workspace, previous = self.temp_context()
         try:
@@ -451,7 +451,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             self.assertEqual(emitted, [])
 
             os.kill(old_state["pid"], signal.SIGKILL)
-            from agent_core.daemon.lifecycle import _DAEMON_PROCESSES
+            from tess_core.daemon.lifecycle import _DAEMON_PROCESSES
 
             spawned = _DAEMON_PROCESSES.get("watchdog-instance")
             deadline = time.monotonic() + 5

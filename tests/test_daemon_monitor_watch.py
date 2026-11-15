@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-import agent_core._facade as core
-from agent_core.tasks.supervisor_parts.monitor_watch import tick_daemon_monitors
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tess_core.tasks.supervisor_parts.monitor_watch import tick_daemon_monitors
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 SESSION_ID = "70000000-0000-4000-8000-000000000001"
 
@@ -31,7 +31,7 @@ def _completed_task_with_monitor(task_id: str) -> dict:
     return monitor
 
 
-class DaemonMonitorWatchTests(AgentCoreTestCase):
+class DaemonMonitorWatchTests(TessCoreTestCase):
     def test_tick_commits_terminal_transition_with_transition_id_and_event(self):
         """Bug regression: the monitor engine only ran with the daemon OFF
         (default-on), so no tick ever fired in production, while a weaker

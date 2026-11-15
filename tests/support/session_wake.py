@@ -3,18 +3,18 @@ scripted provider, a recording listener, seeded tasks and the knobs the
 tests shorten. Used by test_session_wake.py and its reconciliation tests."""
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core import start_runtime
-from agent_core.storage.records import save_task_record
-from agent_core.tasks.communication import create_task_question, send_task_message
+from tess_core import start_runtime
+from tess_core.storage.records import save_task_record
+from tess_core.tasks.communication import create_task_question, send_task_message
 
-IDLE = "AGENT_CORE_SESSIONS_IDLE_CLOSE_MS"
-WATCH = "AGENT_CORE_DAEMON_MAILBOX_WATCH_MS"
-RETRY = "AGENT_CORE_SESSIONS_PENDING_RETRY_MS"
-FAIR = "AGENT_CORE_SESSIONS_BACKGROUND_MAX_WAIT_MS"
-REPLY = "AGENT_CORE_COMMS_REPLY_TIMEOUT_MS"
-_ENV = (IDLE, WATCH, RETRY, FAIR, REPLY, "AGENT_CORE_TEST_MISSING_WAKE_KEY")
+IDLE = "TESS_CORE_SESSIONS_IDLE_CLOSE_MS"
+WATCH = "TESS_CORE_DAEMON_MAILBOX_WATCH_MS"
+RETRY = "TESS_CORE_SESSIONS_PENDING_RETRY_MS"
+FAIR = "TESS_CORE_SESSIONS_BACKGROUND_MAX_WAIT_MS"
+REPLY = "TESS_CORE_COMMS_REPLY_TIMEOUT_MS"
+_ENV = (IDLE, WATCH, RETRY, FAIR, REPLY, "TESS_CORE_TEST_MISSING_WAKE_KEY")
 
 
 class Listener:

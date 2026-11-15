@@ -6,20 +6,20 @@ import sys
 import textwrap
 import unittest
 
-import agent_core._facade as core
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 from tests.test_storage_concurrency import REPO_ROOT
 
 
-class TaskLifecycleLockDomainTests(AgentCoreTestCase):
+class TaskLifecycleLockDomainTests(TessCoreTestCase):
     def test_lifecycle_transaction_excludes_bare_task_meta_writer(self):
         """One lock domain per task: a bare task-meta write must wait for a
         held task-lifecycle transaction instead of landing inside its
         read-modify-write window and being clobbered by the stale commit."""
         root, home, workspace, previous = self.temp_context()
         try:
-            from agent_core.storage import with_record_transaction
+            from tess_core.storage import with_record_transaction
 
             base = {
                 "type": "background_command",
@@ -73,8 +73,8 @@ class TaskLifecycleLockDomainTests(AgentCoreTestCase):
                 """
                 import asyncio, sys
                 sys.path.insert(0, sys.argv[2])
-                import agent_core._facade as core
-                from agent_core.storage import with_record_transaction
+                import tess_core._facade as core
+                from tess_core.storage import with_record_transaction
 
                 async def main():
                     core.configure_runtime_home(sys.argv[1])

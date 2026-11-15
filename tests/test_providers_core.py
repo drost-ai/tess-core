@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.providers import _core
-from agent_core.providers._core import (
+from tess_core.providers import _core
+from tess_core.providers._core import (
     create_provider_cancelled_error,
     create_provider_timeout_error,
     provider_retry_delay_ms,
     race_provider_activity,
     signal_aborted,
 )
-from agent_core.providers.errors import (
+from tess_core.providers.errors import (
     ProviderRequestError,
     create_provider_failure_record,
     create_provider_request_error,
     fallback_eligible_provider_failure,
     anthropic_retry_delay_ms,
 )
-from agent_core.providers.watchdog import AbortSignal
+from tess_core.providers.watchdog import AbortSignal
 
 
 def _race(awaitable, **overrides):

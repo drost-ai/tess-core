@@ -3,7 +3,7 @@
     "command": [
       "python3",
       "-m",
-      "agent_core",
+      "tess_core",
       "run",
       "-p",
       "Say hello from the headless stream.",

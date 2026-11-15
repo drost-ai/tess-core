@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.storage.json_io import StorageTransactionError, with_record_transaction
-from agent_core.tools.shell import _normalize_bash_timeout
+from tess_core.storage.json_io import StorageTransactionError, with_record_transaction
+from tess_core.tools.shell import _normalize_bash_timeout
 
 
-class K6PeripheryResidueTests(AgentCoreTestCase):
+class K6PeripheryResidueTests(TessCoreTestCase):
     def test_torn_daemon_events_tail_keeps_the_replay_stream(self):
         root, home, _workspace, previous = self.temp_context()
         try:

@@ -5,10 +5,10 @@ import subprocess
 import sys
 import unittest
 
-import agent_core._facade as core
-from agent_core.tasks.supervisor_parts.finalize_child import finalize_lost_worker
-from agent_core.tasks.supervisor_parts.live_work import _reconcile_dead_task_meta
-from tests.support.agent_core_case import AgentCoreTestCase, run
+import tess_core._facade as core
+from tess_core.tasks.supervisor_parts.finalize_child import finalize_lost_worker
+from tess_core.tasks.supervisor_parts.live_work import _reconcile_dead_task_meta
+from tests.support.tess_core_case import TessCoreTestCase, run
 
 PARENT_ID = "60000000-0000-4000-8000-000000000001"
 CHILD_SESSION_ID = "60000000-0000-4000-8000-000000000002"
@@ -84,7 +84,7 @@ def _dead_worker_fixture(workspace: str, task_id: str, agent_id: str) -> dict:
     return meta
 
 
-class LostWorkerFinalizerTests(AgentCoreTestCase):
+class LostWorkerFinalizerTests(TessCoreTestCase):
     def test_live_work_apply_finalizes_record_child_and_parent_ledger(self):
         """Bug regressions: live-work wrote meta but never the task record (a
         dead subagent held a capacity slot until reboot) and no lost path

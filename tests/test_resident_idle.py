@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.tasks.communication import (
+from tess_core.tasks.communication import (
     create_task_question,
     read_task_events,
     read_task_mailbox_messages,
     send_task_message,
     task_mailbox_path,
 )
-from agent_core.tasks.mailbox_closure import (
+from tess_core.tasks.mailbox_closure import (
     TaskMailboxClosedError,
     close_mailbox_if_idle,
     read_mailbox_closure,
 )
-from agent_core.tasks.runners.resident_idle import ResidentIdleClock, expire_if_idle
+from tess_core.tasks.runners.resident_idle import ResidentIdleClock, expire_if_idle
 from tests import test_resident_subagent as resident_support  # module import: its test classes must not be collected twice
 
 
@@ -39,7 +39,7 @@ async def _seed_task(workspace, task_id="idle-task", *, status="awaiting_input")
     })
 
 
-class MailboxClosureTests(AgentCoreTestCase):
+class MailboxClosureTests(TessCoreTestCase):
     def test_empty_mailbox_closes_and_a_later_message_fails_clearly(self):
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -102,7 +102,7 @@ class MailboxClosureTests(AgentCoreTestCase):
                                 await core.mark_task_message_delivered("idle-task", message["messageId"])
 
                 await asyncio.gather(close_when_possible(), *(send(index) for index in range(24)))
-                from agent_core.storage.json_io import read_json_lines
+                from tess_core.storage.json_io import read_json_lines
 
                 records = await read_json_lines(path)
                 closed_at = next(i for i, record in enumerate(records) if record.get("kind") == "mailbox_closed")
@@ -120,7 +120,7 @@ class MailboxClosureTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class ResidentIdleDecisionTests(AgentCoreTestCase):
+class ResidentIdleDecisionTests(TessCoreTestCase):
     def test_clock_counts_idle_time_only(self):
         clock = ResidentIdleClock(50)
         self.assertFalse(clock.due())
@@ -227,9 +227,9 @@ class ResidentIdleDecisionTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class SendMessageToFinishedChildTests(AgentCoreTestCase):
+class SendMessageToFinishedChildTests(TessCoreTestCase):
     def test_parent_is_told_clearly_and_nothing_is_queued(self):
-        from agent_core.tools.messaging import _send_message_tool
+        from tess_core.tools.messaging import _send_message_tool
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -249,7 +249,7 @@ class SendMessageToFinishedChildTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class ResidentIdleProcessTests(AgentCoreTestCase):
+class ResidentIdleProcessTests(TessCoreTestCase):
     """Real worker processes: process exit is the claim being tested."""
 
     def _start(self, home, workspace, events):
@@ -274,8 +274,8 @@ class ResidentIdleProcessTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "100"
-            os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_IDLE_TTL_MS"] = "1200"
+            os.environ["TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "100"
+            os.environ["TESS_CORE_SUBAGENTS_RESIDENT_IDLE_TTL_MS"] = "1200"
             events = []
             seeder, supervisor, parent, child, task_id = self._start(home, workspace, events)
             idle_meta = seeder._wait_for(
@@ -304,8 +304,8 @@ class ResidentIdleProcessTests(AgentCoreTestCase):
             with self.assertRaises(TaskMailboxClosedError):
                 run(send_task_message(task_id, {"direction": "to_child", "content": "too late"}))
         finally:
-            os.environ.pop("AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS", None)
-            os.environ.pop("AGENT_CORE_SUBAGENTS_RESIDENT_IDLE_TTL_MS", None)
+            os.environ.pop("TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS", None)
+            os.environ.pop("TESS_CORE_SUBAGENTS_RESIDENT_IDLE_TTL_MS", None)
             if supervisor:
                 run(supervisor["close"]())
             self.restore_home(root, previous)
@@ -314,8 +314,8 @@ class ResidentIdleProcessTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "100"
-            os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_IDLE_TTL_MS"] = "2500"
+            os.environ["TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "100"
+            os.environ["TESS_CORE_SUBAGENTS_RESIDENT_IDLE_TTL_MS"] = "2500"
             events = []
             seeder, supervisor, parent, child, task_id = self._start(home, workspace, events)
             seeder._wait_for(
@@ -336,8 +336,8 @@ class ResidentIdleProcessTests(AgentCoreTestCase):
             # The clock restarted with the second result: it did not stop straight away.
             self.assertGreater(time.monotonic() - answered_at, 1.5)
         finally:
-            os.environ.pop("AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS", None)
-            os.environ.pop("AGENT_CORE_SUBAGENTS_RESIDENT_IDLE_TTL_MS", None)
+            os.environ.pop("TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS", None)
+            os.environ.pop("TESS_CORE_SUBAGENTS_RESIDENT_IDLE_TTL_MS", None)
             if supervisor:
                 run(supervisor["close"]())
             self.restore_home(root, previous)

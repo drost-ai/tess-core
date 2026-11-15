@@ -9,13 +9,13 @@ import uuid
 
 import pytest
 
-from agent_core.providers import chatgpt_account
-from agent_core.providers.chatgpt_account import OPENAI, ChatGPTAccountError, Grant, current_access_token, revoke, store_grant
-from agent_core.runtime import encrypted_credentials as encrypted
-from agent_core.runtime.credentials import CredentialStore, CredentialStoreError
-from agent_core.runtime.encrypted_credentials import UnlockSecret
-from agent_core.runtime.secrets import resolve_runtime_secret
-from agent_core.storage.paths import scoped_runtime_home
+from tess_core.providers import chatgpt_account
+from tess_core.providers.chatgpt_account import OPENAI, ChatGPTAccountError, Grant, current_access_token, revoke, store_grant
+from tess_core.runtime import encrypted_credentials as encrypted
+from tess_core.runtime.credentials import CredentialStore, CredentialStoreError
+from tess_core.runtime.encrypted_credentials import UnlockSecret
+from tess_core.runtime.secrets import resolve_runtime_secret
+from tess_core.storage.paths import scoped_runtime_home
 
 NOW = 1_800_000_000.0
 

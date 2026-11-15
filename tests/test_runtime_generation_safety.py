@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class RuntimeGenerationSafetyTests(AgentCoreTestCase):
+class RuntimeGenerationSafetyTests(TessCoreTestCase):
     def test_delayed_generation_a_work_cannot_commit_after_b_to_c_switch(self):
         root, home, workspace, previous = self.temp_context()
 

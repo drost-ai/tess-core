@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class AnthropicProviderTransportTests(AgentCoreTestCase):
+class AnthropicProviderTransportTests(TessCoreTestCase):
     def test_anthropic_blocking_http_transport_abort_returns_before_socket_finishes(self):
         signal = SimpleNamespace(aborted=False)
         request_started = threading.Event()

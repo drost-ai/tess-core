@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import copy
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class ContextCompactionIsolationTests(AgentCoreTestCase):
+class ContextCompactionIsolationTests(TessCoreTestCase):
     def test_prompt_context_accepts_only_session_owned_working_context(self):
         root, home, workspace, previous = self.temp_context()
         try:

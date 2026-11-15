@@ -3,9 +3,9 @@ from __future__ import annotations
 import socket
 import importlib
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.daemon.protocol import (
+from tess_core.daemon.protocol import (
     DAEMON_MAX_PENDING_GLOBAL,
     DAEMON_MAX_PENDING_PER_CLIENT,
     DAEMON_MAX_REQUEST_FRAME_BYTES,
@@ -15,13 +15,13 @@ from agent_core.daemon.protocol import (
     DaemonProtocolError,
     encode_daemon_frame,
 )
-from agent_core.daemon.transport import (
+from tess_core.daemon.transport import (
     DaemonServerPeer,
     create_authenticated_daemon_server,
     read_one_daemon_frame,
 )
 
-daemon_client_module = importlib.import_module("agent_core.daemon.client")
+daemon_client_module = importlib.import_module("tess_core.daemon.client")
 
 
 _TOKEN = "a" * 43
@@ -75,7 +75,7 @@ async def _close_fixture(owner, peer_task, writer):
     await asyncio.gather(peer_task, return_exceptions=True)
 
 
-class Package31DaemonTransportTests(AgentCoreTestCase):
+class Package31DaemonTransportTests(TessCoreTestCase):
     def test_foreign_legacy_and_wrong_token_peers_dispatch_nothing(self):
         async def scenario():
             dispatches = 0

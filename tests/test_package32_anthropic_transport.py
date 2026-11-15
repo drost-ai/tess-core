@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-import agent_core.providers.anthropic.request as anthropic_request_module
-from agent_core.providers.anthropic_cache import count_anthropic_cache_controls
-from agent_core.providers.anthropic.sse import normalize_anthropic_sse_response
-from agent_core.runtime.paths import resolve_runtime_paths
-from agent_core.providers.usage_costs import estimate_usage_cost
+import tess_core.providers.anthropic.request as anthropic_request_module
+from tess_core.providers.anthropic_cache import count_anthropic_cache_controls
+from tess_core.providers.anthropic.sse import normalize_anthropic_sse_response
+from tess_core.runtime.paths import resolve_runtime_paths
+from tess_core.providers.usage_costs import estimate_usage_cost
 
 
-class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
+class AnthropicPromptCacheTransportTests(TessCoreTestCase):
     def setUp(self):
         self.root, self.home, self.workspace, self.previous = self.temp_context()
 

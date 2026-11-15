@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-import agent_core.agent.context as agent_context_module
-import agent_core.agent.checkpoints as agent_checkpoints_module
+from tests.support.tess_core_case import *
+import tess_core.agent.context as agent_context_module
+import tess_core.agent.checkpoints as agent_checkpoints_module
 
 
-class ContextCompactionTests(AgentCoreTestCase):
+class ContextCompactionTests(TessCoreTestCase):
     def test_codex_spark_compaction_uses_codex_transport(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -57,7 +57,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_compaction_model_client_timeout_uses_provider_failure(self):
-        import agent_core.context.compaction_transport as compaction_transport
+        import tess_core.context.compaction_transport as compaction_transport
 
         async def slow_request():
             await asyncio.sleep(0.05)
@@ -91,9 +91,9 @@ class ContextCompactionTests(AgentCoreTestCase):
             def working_context(self, goal, next_step):
                 return {
                     "project": {
-                        "description": "Python port of agent-core",
-                        "facts": {"primaryLanguage": "Python", "languages": ["Python"], "ecosystem": "unittest", "packageManager": None, "evidence": ["tests/test_agent_core.py"]},
-                        "keyFiles": [{"path": "agent_core/compaction.py", "role": "modified", "note": "checkpoint-v2 pipeline"}],
+                        "description": "Python port of tess-core",
+                        "facts": {"primaryLanguage": "Python", "languages": ["Python"], "ecosystem": "unittest", "packageManager": None, "evidence": ["tests/test_tess_core.py"]},
+                        "keyFiles": [{"path": "tess_core/compaction.py", "role": "modified", "note": "checkpoint-v2 pipeline"}],
                     },
                     "goals": {"active": [goal], "recentRequests": ["Slice 4 compaction"], "constraints": ["Perform exactly like TypeScript"], "preferences": ["Detailed commits"]},
                     "currentState": {"completed": ["Committed and pushed previous slice"], "inProgress": ["Implementing checkpoint-v2 compaction"], "blocked": []},
@@ -297,7 +297,7 @@ class ContextCompactionTests(AgentCoreTestCase):
         self.assertEqual(context_limit.calls, 2)
 
     def test_agent_prompt_auto_compacts_and_rebuilds_request_before_provider_send(self):
-        import agent_core.agent as agent_module
+        import tess_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
         original_measure = agent_context_module.measure_request_input_tokens
@@ -370,7 +370,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_raw_session_checkpoint_runs_before_request_relief(self):
-        import agent_core.agent as agent_module
+        import tess_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
         original_run_compaction = agent_checkpoints_module.run_compaction
@@ -425,12 +425,12 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
-class TokenEstimatorUnificationTests(AgentCoreTestCase):
+class TokenEstimatorUnificationTests(TessCoreTestCase):
     def test_every_estimator_shares_one_message_serialization(self):
-        from agent_core.context.token_accounting import _estimate_request_tokens
-        from agent_core.context.continuation.tokens import estimate_messages_tokens
-        from agent_core.context.compaction.utils import estimate_message_tokens as compaction_estimate
-        from agent_core.payloads.token_estimation import (
+        from tess_core.context.token_accounting import _estimate_request_tokens
+        from tess_core.context.continuation.tokens import estimate_messages_tokens
+        from tess_core.context.compaction.utils import estimate_message_tokens as compaction_estimate
+        from tess_core.payloads.token_estimation import (
             estimate_message_tokens,
             estimate_text_tokens,
             stringify_value_for_token_estimate,

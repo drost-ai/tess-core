@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core_harness.executor import run_scenario
-from agent_core_harness.loader import load_scenario
+from tess_core_harness.executor import run_scenario
+from tess_core_harness.loader import load_scenario
 
 
-class HarnessFakeProviderTests(AgentCoreTestCase):
+class HarnessFakeProviderTests(TessCoreTestCase):
     def test_provider_pack_runs_and_captures_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = run_scenario("providers.fake-provider-pack", runs_dir=tmp)

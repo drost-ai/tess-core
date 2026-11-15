@@ -7,9 +7,9 @@ import threading
 import unittest
 from pathlib import Path
 
-import agent_core._facade as core
-from agent_core.authority.mcp_origin_policy import fetch_mcp_resource_with_bound_credentials
-from agent_core.runtime.secrets import authorize_runtime_secret_write, store_runtime_secret
+import tess_core._facade as core
+from tess_core.authority.mcp_origin_policy import fetch_mcp_resource_with_bound_credentials
+from tess_core.runtime.secrets import authorize_runtime_secret_write, store_runtime_secret
 
 
 class _Server:
@@ -40,16 +40,16 @@ class McpHeaderOriginTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(prefix="mcp-origin-")
         self.home = Path(self.temp.name) / "home"
-        self.previous_home = os.environ.get("AGENT_CORE_HOME")
-        os.environ["AGENT_CORE_HOME"] = str(self.home)
+        self.previous_home = os.environ.get("TESS_CORE_HOME")
+        os.environ["TESS_CORE_HOME"] = str(self.home)
         core.configure_runtime_home(str(self.home))
 
     async def asyncTearDown(self) -> None:
         core.reset_configured_runtime_home()
         if self.previous_home is None:
-            os.environ.pop("AGENT_CORE_HOME", None)
+            os.environ.pop("TESS_CORE_HOME", None)
         else:
-            os.environ["AGENT_CORE_HOME"] = self.previous_home
+            os.environ["TESS_CORE_HOME"] = self.previous_home
         self.temp.cleanup()
 
     async def secret_header(self, value: str) -> dict:

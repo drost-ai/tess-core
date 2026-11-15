@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
-from agent_core._utils import now_iso
+from tests.support.tess_core_case import *
+from tess_core._utils import now_iso
 
-from agent_core.tasks import health_check_executor as executor
-from agent_core.tasks.health_check_policy import (
+from tess_core.tasks import health_check_executor as executor
+from tess_core.tasks.health_check_policy import (
     authorize_health_check_spec,
     health_check_spec_digest,
     normalize_health_check_spec,
 )
-from agent_core.tasks.health_check_record import (
+from tess_core.tasks.health_check_record import (
     build_authorized_health_check_record,
     persist_health_check_record,
 )
-from agent_core.tasks.health_check_runtime import _commit_attempt
-from agent_core.tasks.terminal_store import prepare_task_stop
+from tess_core.tasks.health_check_runtime import _commit_attempt
+from tess_core.tasks.terminal_store import prepare_task_stop
 
 
-class Package31HealthCheckSafetyTests(AgentCoreTestCase):
+class Package31HealthCheckSafetyTests(TessCoreTestCase):
     def _session(self, home: Path, workspace: Path, mode: str = "bypassPermissions"):
         config = run(
             core.resolve_config(

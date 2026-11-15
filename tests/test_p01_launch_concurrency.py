@@ -3,14 +3,14 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from tests.support.tess_core_case import TessCoreTestCase, core, run
 from tests.test_p01_spawn_before_persist_probe import (
     _starting_record,
     _wait_pid_dead,
 )
 
 
-class P01LaunchConcurrencyTests(AgentCoreTestCase):
+class P01LaunchConcurrencyTests(TessCoreTestCase):
     def test_reservation_spawn_and_session_failure_boundaries_do_not_orphan(self):
         trace: list[str] = []
         reservation = core.create_task_launch_reservation(

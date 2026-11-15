@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 import gzip
 import socket
 
-import agent_core.tools.web as web_module
-from agent_core.payloads.bounded_io import AcquisitionLimitError, read_response_text_bounded_sync
-from agent_core.acquisition.bounded_web_fetch import WebFetchPolicyError, bounded_web_fetch
+import tess_core.tools.web as web_module
+from tess_core.payloads.bounded_io import AcquisitionLimitError, read_response_text_bounded_sync
+from tess_core.acquisition.bounded_web_fetch import WebFetchPolicyError, bounded_web_fetch
 
 
 @contextlib.contextmanager
@@ -34,12 +34,12 @@ def _serve(callback):
         thread.join(timeout=2)
 
 
-class Package31WebAcquisitionTests(AgentCoreTestCase):
+class Package31WebAcquisitionTests(TessCoreTestCase):
     def setUp(self):
         super().setUp()
         # These fixtures serve from loopback; admitting that requires the
         # explicit private-host opt-in knob.
-        env = mock.patch.dict(os.environ, {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "127.0.0.1,localhost"})
+        env = mock.patch.dict(os.environ, {"TESS_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "127.0.0.1,localhost"})
         env.start()
         self.addCleanup(env.stop)
 
@@ -51,7 +51,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             raise socket.timeout("controlled connect deadline")
 
         with mock.patch(
-            "agent_core.acquisition.bounded_web_fetch._connect_policy_checked",
+            "tess_core.acquisition.bounded_web_fetch._connect_policy_checked",
             side_effect=timed_out_dial,
         ):
             result = run(
@@ -71,7 +71,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
 
     def test_private_and_metadata_addresses_are_refused_by_default(self):
         with mock.patch.dict(os.environ):
-            os.environ.pop("AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST", None)
+            os.environ.pop("TESS_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST", None)
             for url, reason in (
                 ("http://169.254.169.254/latest/meta-data/", "metadata_address"),
                 ("http://metadata.google.internal/computeMetadata/", "metadata_address"),
@@ -102,7 +102,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
 
         with mock.patch.dict(
             os.environ,
-            {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "169.254.169.254,169.254.0.0/16,metadata.google.internal"},
+            {"TESS_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "169.254.169.254,169.254.0.0/16,metadata.google.internal"},
         ):
             metadata = run(bounded_web_fetch(url="http://169.254.169.254/"))
             self.assertEqual(metadata["outcome"], "refused")
@@ -142,18 +142,18 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
                 return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", requested_port))]
 
             with mock.patch(
-                "agent_core.acquisition.bounded_web_fetch.socket.getaddrinfo",
+                "tess_core.acquisition.bounded_web_fetch.socket.getaddrinfo",
                 side_effect=fake_getaddrinfo,
             ):
                 with mock.patch.dict(os.environ):
-                    os.environ.pop("AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST", None)
+                    os.environ.pop("TESS_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST", None)
                     hidden = run(bounded_web_fetch(url=f"http://rebind.test:{port}/"))
                 self.assertEqual(hidden["outcome"], "refused")
                 self.assertEqual(hidden["reason"], "private_address")
 
                 with mock.patch.dict(
                     os.environ,
-                    {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "rebind.test"},
+                    {"TESS_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "rebind.test"},
                 ):
                     resolutions.clear()
                     admitted = run(bounded_web_fetch(url=f"http://rebind.test:{port}/"))

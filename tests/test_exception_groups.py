@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_core.runtime.exception_groups import RuntimeExceptionGroup, aggregate_runtime_failures
+from tess_core.runtime.exception_groups import RuntimeExceptionGroup, aggregate_runtime_failures
 
 
 def test_runtime_exception_group_preserves_all_failures() -> None:

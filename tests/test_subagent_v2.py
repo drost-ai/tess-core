@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
-class SubagentV2Tests(AgentCoreTestCase):
+class SubagentV2Tests(TessCoreTestCase):
     def test_agent_runtime_contract_persists_and_validates_structured_foreground_result(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -25,7 +25,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                 }
             }
             parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
-            from agent_core.subagents import prepare_subagent
+            from tess_core.subagents import prepare_subagent
 
             context = {
                 "session": parent,
@@ -188,7 +188,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             )
             self.assertEqual(calls["tool"], 1)
             # The limit ends the turn at the next loop top instead of buying
-            # further provider calls (TS agent-core parity).
+            # further provider calls (TS tess-core parity).
             self.assertEqual(calls["provider"], 1)
             self.assertEqual(result["stopReason"], "max_tool_calls")
             tool_results = session["messages"][2]["content"]

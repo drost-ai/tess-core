@@ -6,13 +6,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-import agent_core._facade as core
-from agent_core.payloads.tools import _persist_artifact
-from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
+import tess_core._facade as core
+from tess_core.payloads.tools import _persist_artifact
+from tests.support.tess_core_case import TessCoreTestCase, bind_test_runtime, run
 from tests.test_package38_interactive_context_relief import _codex_config
 
 
-class Package44ArtifactReachabilityTests(AgentCoreTestCase):
+class Package44ArtifactReachabilityTests(TessCoreTestCase):
     def _session(self, workspace: Path) -> dict[str, Any]:
         return core.create_empty_session(
             cwd=str(workspace),

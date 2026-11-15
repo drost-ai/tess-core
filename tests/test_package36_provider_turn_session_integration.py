@@ -6,8 +6,8 @@ import tempfile
 from types import SimpleNamespace
 
 from tests import test_package36_provider_turn_session as p36
-from tests.support.agent_core_case import (
-    AgentCoreTestCase,
+from tests.support.tess_core_case import (
+    TessCoreTestCase,
     AsyncChunks,
     bind_test_runtime,
     core,
@@ -15,12 +15,12 @@ from tests.support.agent_core_case import (
     testing,
 )
 
-from agent_core.providers.openai_turn_session import OpenAiProviderTurnSession
+from tess_core.providers.openai_turn_session import OpenAiProviderTurnSession
 
 
-class Package36ProviderTurnSessionIntegrationTests(AgentCoreTestCase):
+class Package36ProviderTurnSessionIntegrationTests(TessCoreTestCase):
     def test_three_round_turn_reuses_one_client_and_sends_strict_deltas(self):
-        with tempfile.TemporaryDirectory(prefix="agent-core-p36-") as cwd:
+        with tempfile.TemporaryDirectory(prefix="tess-core-p36-") as cwd:
             config = p36._config(cwd)
             # This test isolates provider-session transport reuse. Its deliberately
             # large prompt remains below the explicit proactive-compaction target

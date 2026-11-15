@@ -7,9 +7,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import agent_core._facade as core
-from agent_core.runtime.secret_provider import resolve_provider_config_secrets
-from agent_core.runtime.secrets import (
+import tess_core._facade as core
+from tess_core.runtime.secret_provider import resolve_provider_config_secrets
+from tess_core.runtime.secrets import (
     RuntimeSecretError,
     authorize_runtime_secret_write,
     is_runtime_secret_ref,
@@ -26,8 +26,8 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         self.home = self.root / "home"
         self.project = self.root / "project"
         self.project.mkdir()
-        self.previous_home = os.environ.get("AGENT_CORE_HOME")
-        os.environ["AGENT_CORE_HOME"] = str(self.home)
+        self.previous_home = os.environ.get("TESS_CORE_HOME")
+        os.environ["TESS_CORE_HOME"] = str(self.home)
         self.provider_env_keys = (
             "ANTHROPIC_API_KEY",
             "ANTHROPIC_AUTH_TOKEN",
@@ -45,9 +45,9 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         core.reset_configured_runtime_home()
         if self.previous_home is None:
-            os.environ.pop("AGENT_CORE_HOME", None)
+            os.environ.pop("TESS_CORE_HOME", None)
         else:
-            os.environ["AGENT_CORE_HOME"] = self.previous_home
+            os.environ["TESS_CORE_HOME"] = self.previous_home
         for key, value in self.previous_provider_env.items():
             if value is None:
                 os.environ.pop(key, None)

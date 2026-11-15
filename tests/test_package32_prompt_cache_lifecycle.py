@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-import agent_core.agent.context as context_module
-from agent_core.providers.prompt_cache_state import prompt_cache_state_path, read_prompt_cache_state
-from agent_core.providers.anthropic.payloads import build_anthropic_messages_envelope
-from agent_core.providers.anthropic.sse import normalize_anthropic_sse_response
-from agent_core.providers.prompt_cache_orchestration import (
+import tess_core.agent.context as context_module
+from tess_core.providers.prompt_cache_state import prompt_cache_state_path, read_prompt_cache_state
+from tess_core.providers.anthropic.payloads import build_anthropic_messages_envelope
+from tess_core.providers.anthropic.sse import normalize_anthropic_sse_response
+from tess_core.providers.prompt_cache_orchestration import (
     is_prompt_cache_eviction_terminal_success,
     record_prompt_cache_eviction_intent_at_finalization,
 )
-from agent_core.runtime.paths import resolve_runtime_paths
+from tess_core.runtime.paths import resolve_runtime_paths
 
 
-class PromptCacheLifecycleTests(AgentCoreTestCase):
+class PromptCacheLifecycleTests(TessCoreTestCase):
     def setUp(self):
         self.root, self.home, self.workspace, self.previous = self.temp_context()
 

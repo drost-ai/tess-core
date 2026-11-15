@@ -10,14 +10,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from tests.support.tess_core_case import TessCoreTestCase, core, run
 
-from agent_core.daemon.security import (
+from tess_core.daemon.security import (
     daemon_token_id,
     read_daemon_auth_material,
     verify_owned_daemon_socket,
 )
-from agent_core.daemon.security_tree import verify_private_daemon_runtime
+from tess_core.daemon.security_tree import verify_private_daemon_runtime
 
 
 P02_INSTANCE = "p02-test-instance"
@@ -58,11 +58,11 @@ def _ensure_daemon_worker(
     fault_stage: str | None = None,
     fault_marker: str | None = None,
 ) -> None:
-    os.environ["AGENT_CORE_HOME"] = runtime_home
-    os.environ["AGENT_CORE_DAEMON_INSTANCE_LOCK_TIMEOUT_MS"] = "15000"
+    os.environ["TESS_CORE_HOME"] = runtime_home
+    os.environ["TESS_CORE_DAEMON_INSTANCE_LOCK_TIMEOUT_MS"] = "15000"
     if fault_stage:
-        os.environ["AGENT_CORE_TEST_FAULTS"] = "daemon-boot"
-        os.environ["AGENT_CORE_TEST_DAEMON_BOOT_FAULT_STAGE"] = fault_stage
+        os.environ["TESS_CORE_TEST_FAULTS"] = "daemon-boot"
+        os.environ["TESS_CORE_TEST_DAEMON_BOOT_FAULT_STAGE"] = fault_stage
     if fault_marker:
         os.environ["P02_FAULT_MARKER"] = fault_marker
     core.configure_runtime_home(runtime_home)
@@ -102,8 +102,8 @@ def _reattach_daemon_worker(
     recovery_barrier: Any,
     results: Any,
 ) -> None:
-    os.environ["AGENT_CORE_HOME"] = runtime_home
-    os.environ["AGENT_CORE_DAEMON_INSTANCE_LOCK_TIMEOUT_MS"] = "15000"
+    os.environ["TESS_CORE_HOME"] = runtime_home
+    os.environ["TESS_CORE_DAEMON_INSTANCE_LOCK_TIMEOUT_MS"] = "15000"
     core.configure_runtime_home(runtime_home)
     failure_phase = "attached"
 
@@ -209,7 +209,7 @@ def _is_alive(pid: int) -> bool:
         return False
 
 
-class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
+class P02ConcurrentDaemonBootstrapTests(TessCoreTestCase):
     def test_two_clients_converge_after_each_bootstrap_crash_boundary(self):
         context = multiprocessing.get_context("spawn")
         for fault_stage, expected_boundary in _FAULT_STAGES.items():

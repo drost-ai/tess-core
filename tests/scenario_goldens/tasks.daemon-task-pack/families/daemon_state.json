@@ -10,7 +10,7 @@
   "phase": "running",
   "pid": "<pid:1>",
   "protocolVersion": 2,
-  "socketPath": "<tmp>/agent-core-<socket-scope>.sock",
+  "socketPath": "<tmp>/tess-core-<socket-scope>.sock",
   "startedAt": "<timestamp>",
   "status": "running",
   "supervisor": {

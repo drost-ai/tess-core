@@ -5,14 +5,14 @@ import math
 import pytest
 import yaml
 
-from agent_core.config import YamlSubsetError, dump_yaml_subset, parse_yaml_subset
+from tess_core.config import YamlSubsetError, dump_yaml_subset, parse_yaml_subset
 
 SETTINGS = {
     "schema_version": 1,
     "roles": {"conversation": {"profile": "codex-sol"}, "compaction": "codex-sol"},
     "gateway": {"add_dirs": ["~"], "personal_research_times": ["00:00", "06:00", "12:00"], "timezone": "America/Los_Angeles",
                 "empty_list": [], "empty_map": {}, "port": 8420, "ratio": 0.25, "enabled": False, "nothing": None},
-    "memory": {"data_stores": [{"name": "tess-agent", "type": "agent-core", "path": "/runtime/sessions",
+    "memory": {"data_stores": [{"name": "tess-agent", "type": "tess-core", "path": "/runtime/sessions",
                                 "skip_copies_of": ["/a", "/b"]}, {"name": "second"}],
                "nested": [[1, 2], ["a"]], "personal": {"context_subjects": ["owner"], "ai_name": ""}},
     "awkward strings": ["- dash", "a: b", "x #y", "true", "yes", "Off", "0755", "12", "1.5e3", "", " pad", "line\nbreak",

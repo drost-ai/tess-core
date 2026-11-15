@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.tools.messaging import _send_message_tool
+from tess_core.tools.messaging import _send_message_tool
 
 
 def _context(session, workspace, daemon=None):
@@ -15,7 +15,7 @@ def _context(session, workspace, daemon=None):
     }
 
 
-class SendMessageToolTests(AgentCoreTestCase):
+class SendMessageToolTests(TessCoreTestCase):
     def _sessions(self, workspace):
         parent = core.create_empty_session(
             cwd=str(workspace), provider="openai", model="gpt-5.4",
@@ -98,7 +98,7 @@ class SendMessageToolTests(AgentCoreTestCase):
             parent, child = self._sessions(workspace)
             self._seed_task(workspace, parent, child)
             tool = _send_message_tool()
-            os.environ["AGENT_CORE_COMMS_REPLY_POLL_MS"] = "50"
+            os.environ["TESS_CORE_COMMS_REPLY_POLL_MS"] = "50"
             try:
                 async def round_trip():
                     async def reply_soon():
@@ -129,7 +129,7 @@ class SendMessageToolTests(AgentCoreTestCase):
                 queued = [m for m in run(core.readTaskMailboxMessages("sm-task")) if m.get("direction") == "to_child"]
                 self.assertEqual(queued[0]["status"], "queued")
             finally:
-                os.environ.pop("AGENT_CORE_COMMS_REPLY_POLL_MS", None)
+                os.environ.pop("TESS_CORE_COMMS_REPLY_POLL_MS", None)
         finally:
             self.restore_home(root, previous)
 
@@ -138,9 +138,9 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class CommsInlineBudgetTests(AgentCoreTestCase):
+class CommsInlineBudgetTests(TessCoreTestCase):
     def test_large_sendmessage_result_returns_inline_not_artifact(self):
-        from agent_core.payloads.agent_results import finalize_tool_dispatch_result
+        from tess_core.payloads.agent_results import finalize_tool_dispatch_result
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -177,10 +177,10 @@ class CommsInlineBudgetTests(AgentCoreTestCase):
     def test_drain_injection_clamps_oversized_message_with_readable_artifact(self):
         import re
 
-        from agent_core.tasks.communication import _render_injected_message
+        from tess_core.tasks.communication import _render_injected_message
 
         root, _home, workspace, previous = self.temp_context()
-        os.environ["AGENT_CORE_COMMS_INLINE_RESULT_BYTES"] = "4096"
+        os.environ["TESS_CORE_COMMS_INLINE_RESULT_BYTES"] = "4096"
         try:
             session = {"id": "clamp-session"}
             envelope = run(_render_injected_message({
@@ -203,11 +203,11 @@ class CommsInlineBudgetTests(AgentCoreTestCase):
             self.assertIn("short and sweet", small)
             self.assertNotIn("truncated", small)
         finally:
-            os.environ.pop("AGENT_CORE_COMMS_INLINE_RESULT_BYTES", None)
+            os.environ.pop("TESS_CORE_COMMS_INLINE_RESULT_BYTES", None)
             self.restore_home(root, previous)
 
     def test_comms_results_skip_the_structured_summarizer(self):
-        from agent_core.payloads.agent_results import finalize_tool_dispatch_result
+        from tess_core.payloads.agent_results import finalize_tool_dispatch_result
 
         root, _home, workspace, previous = self.temp_context()
         try:

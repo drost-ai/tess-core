@@ -1,11 +1,11 @@
 """Spawn-to-pinned-permission regressions using disposable session state."""
-from tests.support.agent_core_case import *
-from agent_core.subagents import prepare_subagent
-from agent_core.tools.permissions import _ensure_tool_permission
-from agent_core.authority.agent import is_no_more_permissive
+from tests.support.tess_core_case import *
+from tess_core.subagents import prepare_subagent
+from tess_core.tools.permissions import _ensure_tool_permission
+from tess_core.authority.agent import is_no_more_permissive
 
 
-class SubagentPermissionInheritanceTests(AgentCoreTestCase):
+class SubagentPermissionInheritanceTests(TessCoreTestCase):
     def exercise(self, parent_mode, requested, expected):
         root, home, workspace, previous = self.temp_context()
         try:

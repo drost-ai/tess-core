@@ -5,17 +5,17 @@ claim. Every test is one coroutine.
 """
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core import SessionEnded, SessionOptions, start_runtime
-from agent_core._utils import is_process_alive
-from agent_core.config._knobs import reset_configured_knobs
-from agent_core.runtime import host as host_module
-from agent_core.storage import load_daemon_state, load_monitor, save_monitor
-from agent_core.storage.records import save_task_record
-from agent_core.tasks.communication import create_task_question, read_task_mailbox_messages, read_task_questions, send_task_message
+from tess_core import SessionEnded, SessionOptions, start_runtime
+from tess_core._utils import is_process_alive
+from tess_core.config._knobs import reset_configured_knobs
+from tess_core.runtime import host as host_module
+from tess_core.storage import load_daemon_state, load_monitor, save_monitor
+from tess_core.storage.records import save_task_record
+from tess_core.tasks.communication import create_task_question, read_task_mailbox_messages, read_task_questions, send_task_message
 
-_ENV = ("AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS", "AGENT_CORE_TEST_MISSING_END_KEY", "AGENT_CORE_SESSIONS_IDLE_CLOSE_MS")
+_ENV = ("TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS", "TESS_CORE_TEST_MISSING_END_KEY", "TESS_CORE_SESSIONS_IDLE_CLOSE_MS")
 _LIVE = {"starting", "queued", "running", "backgrounded", "awaiting_input"}
 
 
@@ -70,7 +70,7 @@ def _settings(home):
     path = home / "settings.json"
     path.write_text(json.dumps({
         "provider": "end-openai",
-        "providerProfiles": {"end-openai": {"kind": "openai", "defaultModel": "end-model", "auth": {"kind": "openai_api_key", "envVar": "AGENT_CORE_TEST_MISSING_END_KEY"}}},
+        "providerProfiles": {"end-openai": {"kind": "openai", "defaultModel": "end-model", "auth": {"kind": "openai_api_key", "envVar": "TESS_CORE_TEST_MISSING_END_KEY"}}},
     }), encoding="utf-8")
     return path
 
@@ -100,10 +100,10 @@ async def _child_pid(agent_id):
     return pid if isinstance(pid, int) and record.get("status") in _LIVE else None
 
 
-class SessionEndTests(AgentCoreTestCase):
+class SessionEndTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
-        os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "100"
+        os.environ["TESS_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "100"
 
     def tearDown(self):
         for name in _ENV:
@@ -196,7 +196,7 @@ class SessionEndTests(AgentCoreTestCase):
                     await core.persist_session(live.record, live.config)
                     monitor = core.create_monitor_record({"sessionId": handle.id, "taskId": task_id, "goal": "watch"})
                     await save_monitor(monitor)
-                    from agent_core.subagents.reconciliation import list_unconsumed_subagent_reconciliations, read_subagent_reconciliations, upsert_subagent_reconciliation
+                    from tess_core.subagents.reconciliation import list_unconsumed_subagent_reconciliations, read_subagent_reconciliations, upsert_subagent_reconciliation
                     await upsert_subagent_reconciliation({
                         "parentSessionId": handle.id, "taskId": "task-finished-earlier", "childAgentId": "child-y", "label": "child-y",
                         "terminalStatus": "failed", "terminalReason": "worker_failed", "summary": "a result the parent never took",
@@ -232,7 +232,7 @@ class SessionEndTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             async def scenario():
-                from agent_core.subagents.reconciliation import (
+                from tess_core.subagents.reconciliation import (
                     create_subagent_reconciliation_for_terminal_child, list_unconsumed_subagent_reconciliations, read_subagent_reconciliations,
                 )
 

@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from agent_core.runtime import encrypted_credentials as encrypted
-from agent_core.runtime.credentials import CredentialStore, CredentialStoreError
-from agent_core.runtime.encrypted_credentials import EncryptedFileBackend, UnlockSecret
-from agent_core.runtime.secrets import resolve_runtime_secret
+from tess_core.runtime import encrypted_credentials as encrypted
+from tess_core.runtime.credentials import CredentialStore, CredentialStoreError
+from tess_core.runtime.encrypted_credentials import EncryptedFileBackend, UnlockSecret
+from tess_core.runtime.secrets import resolve_runtime_secret
 
 PASSPHRASE = "correct horse battery staple"
 

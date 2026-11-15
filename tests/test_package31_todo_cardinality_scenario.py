@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import copy
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core.shell_surface.status import build_todos_report
-from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serialized_content_bytes
+from tess_core.shell_surface.status import build_todos_report
+from tess_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serialized_content_bytes
 
 
-class Package31TodoCardinalityScenarioTests(AgentCoreTestCase):
+class Package31TodoCardinalityScenarioTests(TessCoreTestCase):
     def test_todo_cardinality_and_small_terminal_view_are_bounded(self):
         async def scenario():
             with tempfile.TemporaryDirectory() as tmp:

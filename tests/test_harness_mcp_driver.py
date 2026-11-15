@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core_harness.executor import run_scenario
-from agent_core_harness.model import Scenario, ScenarioStep
+from tess_core_harness.executor import run_scenario
+from tess_core_harness.model import Scenario, ScenarioStep
 
 
-class HarnessMcpDriverTests(AgentCoreTestCase):
+class HarnessMcpDriverTests(TessCoreTestCase):
     def test_package28_hardening_pack_runs_and_matches_golden(self):
         with tempfile.TemporaryDirectory() as runs:
             result = run_scenario(

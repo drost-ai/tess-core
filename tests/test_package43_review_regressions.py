@@ -5,12 +5,12 @@ import json
 from types import SimpleNamespace
 from typing import Any
 
-from agent_core.providers.partial_output import PartialOutputDelivery
-from agent_core.providers.partial_output_state import (
+from tess_core.providers.partial_output import PartialOutputDelivery
+from tess_core.providers.partial_output_state import (
     create_partial_output_state_store,
     finalize_partial_output_state,
 )
-from tests.support.agent_core_case import AgentCoreTestCase, AsyncChunks, core, run, testing
+from tests.support.tess_core_case import TessCoreTestCase, AsyncChunks, core, run, testing
 
 
 class _OpenAiConnectionError(Exception):
@@ -107,7 +107,7 @@ def _completed(text: str) -> AsyncChunks:
     )
 
 
-class Package43ReviewRegressionTests(AgentCoreTestCase):
+class Package43ReviewRegressionTests(TessCoreTestCase):
     def test_official_api_connection_error_is_retryable_transport(self) -> None:
         failure = core.normalize_unknown_provider_failure(
             error=_OpenAiConnectionError("Connection error."),

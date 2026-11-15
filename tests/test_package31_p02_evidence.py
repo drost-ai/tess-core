@@ -4,16 +4,16 @@ import hashlib
 import tempfile
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase
+from tests.support.tess_core_case import TessCoreTestCase
 
-from agent_core_harness.package31_p02_evidence import (
+from tess_core_harness.package31_p02_evidence import (
     P02EvidenceError,
     buildP02Evidence,
     writeP02Evidence,
 )
 
 
-class Package31P02EvidenceTests(AgentCoreTestCase):
+class Package31P02EvidenceTests(TessCoreTestCase):
     def test_passing_exact_junit_builds_bounded_hashed_evidence(self):
         with tempfile.TemporaryDirectory() as root:
             junit = Path(root, "p02.xml")

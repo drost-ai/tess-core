@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
-from agent_core_harness.loader import load_scenario, load_scenarios
-from agent_core_harness.model import ScenarioValidationError
+from tess_core_harness.loader import load_scenario, load_scenarios
+from tess_core_harness.model import ScenarioValidationError
 
 
-class HarnessLoaderTests(AgentCoreTestCase):
+class HarnessLoaderTests(TessCoreTestCase):
     def _write(self, directory: Path, name: str, data: dict):
         path = directory / name
         path.parent.mkdir(parents=True, exist_ok=True)

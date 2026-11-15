@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import uuid
 
-import agent_core.subagents.groups as groups_module
-from tests.support.agent_core_case import *
+import tess_core.subagents.groups as groups_module
+from tests.support.tess_core_case import *
 
 
-class SubagentParentReconciliationTests(AgentCoreTestCase):
+class SubagentParentReconciliationTests(TessCoreTestCase):
     def test_background_finalizer_reconciles_once_and_parent_next_turn_consumes(self):
         root, home, workspace, previous = self.temp_context()
         previous_env = {name: os.environ.get(name) for name in ("TESS_CHILD_AGENT_ID", "TESS_CHILD_TASK_ID", "TESS_CHILD_SESSION_ID")}

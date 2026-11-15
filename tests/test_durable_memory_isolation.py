@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 
-from tests.support.agent_core_case import *
+from tests.support.tess_core_case import *
 
 
 _AUTOMATIC_SENTINELS = (
@@ -103,7 +103,7 @@ def _compaction_state(working_context_path: Path, summary_path: Path):
     }
 
 
-class DurableMemoryIsolationTests(AgentCoreTestCase):
+class DurableMemoryIsolationTests(TessCoreTestCase):
     def restore_home(self, root, previous):
         # Use absolute paths for this fixture's disposable tree. The guarded
         # runner cannot resolve shutil's relative open(..., dir_fd=...) reads.
@@ -340,7 +340,7 @@ class DurableMemoryIsolationTests(AgentCoreTestCase):
         try:
             if stale_runtime_home:
                 # Reproduce a preceding config consumer leaving a configured
-                # home which takes precedence over AGENT_CORE_HOME.
+                # home which takes precedence over TESS_CORE_HOME.
                 core.configure_runtime_home(str(Path(root.name) / "stale-home"))
             # Bind the fixture home before deriving security-sensitive paths.
             config = run(

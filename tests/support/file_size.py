@@ -21,7 +21,7 @@ SKIPPED_DIR_NAMES = {
     ".venv",
     ".scenario-runs",
     "__pycache__",
-    "agent_core_python.egg-info",
+    "tess_core_python.egg-info",
     "build",
     "dist",
 }
