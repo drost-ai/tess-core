@@ -9,7 +9,7 @@ from typing import Any
 
 from .turn_session import ProviderTurnSession, _close_resource
 
-_INTERNAL_ITEM_KEYS = {"_agent_core", "provider_metadata"}
+_INTERNAL_ITEM_KEYS = {"_tess_core", "provider_metadata"}
 _TURN_STATE_HEADER = "x-codex-turn-state"
 
 

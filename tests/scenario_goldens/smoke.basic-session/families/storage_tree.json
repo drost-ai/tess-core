@@ -55,7 +55,7 @@
     "json": {
       "bodyRef": {
         "commitId": "<uuid:2>",
-        "format": "agent-core.session-messages.jsonl.v1",
+        "format": "tess-core.session-messages.jsonl.v1",
         "messageKeyIndex": 11,
         "path": "<uuid:1>.messages.jsonl"
       },

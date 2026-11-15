@@ -7,7 +7,7 @@
     {
       "content": "Read README.md and summarize it.",
       "metadata": {
-        "agentCoreOrigin": {
+        "tessCoreOrigin": {
           "actor": "user",
           "intentAuthority": "request",
           "kind": "user_request",
@@ -43,7 +43,7 @@
         }
       ],
       "metadata": {
-        "agentCoreOrigin": {
+        "tessCoreOrigin": {
           "actor": "tool",
           "intentAuthority": "none",
           "kind": "tool_result_batch",

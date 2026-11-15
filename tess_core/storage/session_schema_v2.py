@@ -27,7 +27,7 @@ from .json_io import read_json_file_tolerant, with_record_transaction, write_jso
 from .paths import get_state_root, session_path
 
 SESSION_SCHEMA_V2 = 2
-SESSION_BODY_FORMAT = "agent-core.session-messages.jsonl.v1"
+SESSION_BODY_FORMAT = "tess-core.session-messages.jsonl.v1"
 _HEAD_FIELDS = {
     "schemaVersion", "messageCount", "bodyRef", "hasPersistableContent", "firstUserText"
 }

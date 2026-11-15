@@ -109,7 +109,7 @@ class ResidentSubagentTests(TessCoreTestCase):
         child["messages"].append({"role": "user", "content": "report in"})
         child["metadata"]["parentSessionId"] = parent["id"]
         child["metadata"]["agentId"] = "resident-agent"
-        child["metadata"]["agentCoreSettingsPath"] = str(settings_path)
+        child["metadata"]["tessCoreSettingsPath"] = str(settings_path)
         child_authority = run(core.capture_agent_authority(config=config, session=child, tools=core.create_builtin_tools()))
         child["metadata"]["effectiveAgentAuthority"] = child_authority
         run(core.save_session(parent))

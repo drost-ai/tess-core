@@ -446,8 +446,8 @@ class AgentLoopTests(TessCoreTestCase):
                                 "id": "bad_edit",
                                 "name": "Edit",
                                 "input": {},
-                                "_agent_core_invalid_tool_input": True,
-                                "_agent_core_invalid_tool_input_error": "The provider streamed incomplete or invalid JSON for this tool call.",
+                                "_tess_core_invalid_tool_input": True,
+                                "_tess_core_invalid_tool_input_error": "The provider streamed incomplete or invalid JSON for this tool call.",
                             }
                         ],
                     }

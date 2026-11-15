@@ -153,7 +153,7 @@ def _read_tool_artifact() -> ToolDefinition:
         return {
             "content": serialized,
             "meta": {
-                "agentCoreArtifactPage": True,
+                "tessCoreArtifactPage": True,
                 "artifactId": artifact_id,
                 "offsetBytes": offset,
                 "nextOffsetBytes": page["nextOffsetBytes"],
@@ -278,7 +278,7 @@ def _error_result(
         ),
         "isError": True,
         "meta": {
-            "agentCoreArtifactPage": True,
+            "tessCoreArtifactPage": True,
             **({"artifactId": artifact_id} if artifact_id else {}),
             **({"offsetBytes": offset} if offset is not None else {}),
         },

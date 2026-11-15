@@ -82,7 +82,7 @@ async def _spawn_child(runtime, parent_session_id, agent_id, settings_path, work
         effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions",
     )
     child["messages"].append({"role": "user", "content": "report in"})
-    child["metadata"].update({"parentSessionId": parent_session_id, "agentId": agent_id, "agentCoreSettingsPath": str(settings_path)})
+    child["metadata"].update({"parentSessionId": parent_session_id, "agentId": agent_id, "tessCoreSettingsPath": str(settings_path)})
     child["metadata"]["effectiveAgentAuthority"] = await core.capture_agent_authority(config=config, session=child, tools=core.create_builtin_tools())
     await core.save_session(child)
     await core.save_child_agent({

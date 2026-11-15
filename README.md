@@ -6,7 +6,7 @@ tasks and scheduling. Tess-Agent is built on it.
 
 The Python package is `tess_core`. It began as a port of a TypeScript
 runtime; a few on-disk and wire identifiers still carry the earlier
-`agent-core` name so existing sessions stay readable.
+`tess-core` name so existing sessions stay readable.
 
 ## Licensing
 

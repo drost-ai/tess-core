@@ -58,7 +58,7 @@ class SessionWakeTests(TessCoreTestCase):
                         effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions",
                     )
                     child["messages"].append({"role": "user", "content": "report in"})
-                    child["metadata"].update({"parentSessionId": parent.id, "agentId": "wake-agent", "agentCoreSettingsPath": str(settings_path)})
+                    child["metadata"].update({"parentSessionId": parent.id, "agentId": "wake-agent", "tessCoreSettingsPath": str(settings_path)})
                     child["metadata"]["effectiveAgentAuthority"] = await core.capture_agent_authority(config=config, session=child, tools=core.create_builtin_tools())
                     await core.save_session(child)
                     await core.save_child_agent({

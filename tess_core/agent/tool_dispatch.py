@@ -13,13 +13,13 @@ ToolDispatchOutcome = dict[str, Any]
 def invalid_tool_input_message(tool_use: Any) -> str | None:
     if not isinstance(tool_use, dict):
         return None
-    if tool_use.get("_agent_core_invalid_tool_input") is True:
-        message = tool_use.get("_agent_core_invalid_tool_input_error")
+    if tool_use.get("_tess_core_invalid_tool_input") is True:
+        message = tool_use.get("_tess_core_invalid_tool_input_error")
         if isinstance(message, str) and message.strip():
             return message.strip()
         return "The provider streamed incomplete or invalid JSON for this tool call. Retry the tool call with complete valid JSON arguments."
     input_value = tool_use.get("input")
-    if not isinstance(input_value, dict) or input_value.get("__agent_core_invalid_tool_input") is not True:
+    if not isinstance(input_value, dict) or input_value.get("__tess_core_invalid_tool_input") is not True:
         return None
     message = input_value.get("error")
     if isinstance(message, str) and message.strip():

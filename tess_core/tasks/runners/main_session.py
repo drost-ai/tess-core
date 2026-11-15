@@ -76,17 +76,17 @@ def _apply_session_overrides(config: dict[str, Any], session: dict[str, Any]) ->
 
 def _session_config_options(session: dict[str, Any], runtime_home: str | None) -> dict[str, Any]:
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
-    settings = (metadata.get("agentCoreSettingsPath") or metadata.get("settingsPath")) if isinstance(metadata, dict) else None
+    settings = (metadata.get("tessCoreSettingsPath") or metadata.get("settingsPath")) if isinstance(metadata, dict) else None
     options = {
         "runtimeHome": runtime_home,
         "provider": session.get("providerProfileName") or session.get("provider"),
         "model": session.get("model"),
     }
-    if metadata.get("agentCoreProviderRegistryPath") is not None:
-        options["providerRegistry"] = metadata["agentCoreProviderRegistryPath"]
-        options["settingSources"] = metadata.get("agentCoreSettingsSources", [])
-        if metadata.get("agentCoreProviderAuthPath") is not None:
-            options["providerAuthPath"] = metadata["agentCoreProviderAuthPath"]
+    if metadata.get("tessCoreProviderRegistryPath") is not None:
+        options["providerRegistry"] = metadata["tessCoreProviderRegistryPath"]
+        options["settingSources"] = metadata.get("tessCoreSettingsSources", [])
+        if metadata.get("tessCoreProviderAuthPath") is not None:
+            options["providerAuthPath"] = metadata["tessCoreProviderAuthPath"]
     if settings:
         options["settings"] = settings
     return options

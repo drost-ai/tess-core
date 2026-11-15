@@ -62,7 +62,7 @@ class TaskSupervisorRuntimeHomeTests(TessCoreTestCase):
             child["metadata"]["parentSessionId"] = parent["id"]
             child["metadata"]["subagentRuntimeContract"] = {"resident": False}
             child["metadata"]["agentId"] = "agent-runtime-home"
-            child["metadata"]["agentCoreSettingsPath"] = str(settings_path)
+            child["metadata"]["tessCoreSettingsPath"] = str(settings_path)
             child_authority = run(
                 core.capture_agent_authority(
                     config=config,

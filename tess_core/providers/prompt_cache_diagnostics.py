@@ -198,7 +198,7 @@ def canonical_prompt_cache_json(value: Any) -> str:
 
 
 def hash_prompt_cache_value(domain: str, value: Any) -> str:
-    payload = f"agent-core:prompt-cache:{domain}:v1\0{canonical_prompt_cache_json(value)}"
+    payload = f"tess-core:prompt-cache:{domain}:v1\0{canonical_prompt_cache_json(value)}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

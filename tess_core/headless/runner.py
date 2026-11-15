@@ -154,7 +154,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="Run one non-interactive agent turn.")
     run.add_argument("-p", "--prompt", help="Prompt text, or '-' to read stdin.")
     run.add_argument("--cwd", help="Workspace directory.")
-    run.add_argument("--runtime-home", dest="runtime_home", help="Agent-core runtime home.")
+    run.add_argument("--runtime-home", dest="runtime_home", help="Tess-core runtime home.")
     run.add_argument("--session", help="Resume a saved session by id or search query.")
     run.add_argument("--provider", help="Provider or provider profile name.")
     run.add_argument("--model", help="Model name.")

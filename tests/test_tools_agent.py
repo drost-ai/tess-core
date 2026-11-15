@@ -38,7 +38,7 @@ class ToolAgentTests(TessCoreTestCase):
             }))
             child_session = prepared["childSession"]
             self.assertEqual(
-                (child_session["messages"][0]["content"], child_session["messages"][0]["metadata"]["agentCoreOrigin"]["kind"]),
+                (child_session["messages"][0]["content"], child_session["messages"][0]["metadata"]["tessCoreOrigin"]["kind"]),
                 ("Find the issue", "subagent_task_prompt"),
             )
             self.assertEqual(child_session["permissionMode"], "acceptEdits")

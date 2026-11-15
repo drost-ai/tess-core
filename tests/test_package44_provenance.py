@@ -119,7 +119,7 @@ class Package44ProvenanceTests(TessCoreTestCase):
             }
         )
         self.assertEqual(
-            bridged[0]["metadata"]["agentCoreOrigin"]["kind"],
+            bridged[0]["metadata"]["tessCoreOrigin"]["kind"],
             "continuation_bridge",
         )
         messages: list[dict[str, Any]] = [
@@ -132,7 +132,7 @@ class Package44ProvenanceTests(TessCoreTestCase):
         ]
         summary = core.apply_partial_compaction(messages)["messages"][0]
         self.assertEqual(
-            summary["metadata"]["agentCoreOrigin"]["kind"],
+            summary["metadata"]["tessCoreOrigin"]["kind"],
             "partial_compaction_summary",
         )
         self.assertFalse(is_genuine_user_request(summary))
@@ -201,5 +201,5 @@ class Package44ProvenanceTests(TessCoreTestCase):
             ],
         }
         self.assertEqual(_request_fingerprint(first), _request_fingerprint(second))
-        second["messages"][0]["metadata"]["agentCoreOrigin"]["kind"] = "other"
+        second["messages"][0]["metadata"]["tessCoreOrigin"]["kind"] = "other"
         self.assertNotEqual(_request_fingerprint(first), _request_fingerprint(second))

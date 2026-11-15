@@ -59,7 +59,7 @@ class ToolControlFlowTests(TessCoreTestCase):
 
             for tool_name, payload in (
                 ("WebFetch", {"url": "https://example.test", "prompt": "summarize"}),
-                ("WebSearch", {"query": "agent core"}),
+                ("WebSearch", {"query": "tess-core"}),
                 ("AskUserQuestion", {"questions": [{"question": "Pick?", "options": [{"label": "Blue"}]}]}),
                 ("ReadMcpResource", {"server": "edge", "uri": "https://mcp.example.test/resource"}),
             ):

@@ -199,7 +199,7 @@ class ProviderRegistryTests(TessCoreTestCase):
             try:
                 session = await runtime.sessions.open()
                 record = await load_session(session.id)
-                self.assertEqual(record["metadata"]["agentCoreProviderRegistryPath"], str(self.path))
+                self.assertEqual(record["metadata"]["tessCoreProviderRegistryPath"], str(self.path))
                 for options in (main_options(record, str(self.home)), child_options(record, str(self.home))):
                     self.assertEqual(options["providerRegistry"], str(self.path))
                     self.assertEqual(options["settingSources"], [])

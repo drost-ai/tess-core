@@ -179,7 +179,7 @@ def _session_task_message_ids(session: Mapping[str, Any]) -> set[str]:
         if not isinstance(message, Mapping):
             continue
         metadata = message.get("metadata")
-        origin = metadata.get("agentCoreOrigin") if isinstance(metadata, Mapping) else None
+        origin = metadata.get("tessCoreOrigin") if isinstance(metadata, Mapping) else None
         lineage = origin.get("lineage") if isinstance(origin, Mapping) else None
         message_id = lineage.get("messageId") if isinstance(lineage, Mapping) else None
         if isinstance(message_id, str) and message_id:

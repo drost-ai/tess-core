@@ -80,13 +80,13 @@ async def persist_session(
         registry = config.get("providerRegistry")
         if registry is not None:
             metadata = snapshot.setdefault("metadata", {})
-            metadata["agentCoreProviderRegistryPath"] = str(registry.path)
+            metadata["tessCoreProviderRegistryPath"] = str(registry.path)
             if config.get("providerAuthPath") is not None:
-                metadata["agentCoreProviderAuthPath"] = str(config["providerAuthPath"])
-            metadata["agentCoreSettingsSources"] = list(config.get("settingsSources") or [])
+                metadata["tessCoreProviderAuthPath"] = str(config["providerAuthPath"])
+            metadata["tessCoreSettingsSources"] = list(config.get("settingsSources") or [])
             explicit = config.get("inlineSettings")
             if isinstance(explicit, str) and not explicit.lstrip().startswith(("{", "[")):
-                metadata["agentCoreSettingsPath"] = explicit
+                metadata["tessCoreSettingsPath"] = explicit
         repair = repair_session_transcript(snapshot)
         await hydrate_session_workspace_metadata(snapshot, {"includePullRequest": False})
         if persist_options.get("touch", True):

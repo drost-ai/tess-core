@@ -4,7 +4,7 @@ import copy
 from typing import Any
 
 
-ORIGIN_METADATA_KEY = "agentCoreOrigin"
+ORIGIN_METADATA_KEY = "tessCoreOrigin"
 ORIGIN_SCHEMA_VERSION = 1
 
 _VALID_ACTORS = {
