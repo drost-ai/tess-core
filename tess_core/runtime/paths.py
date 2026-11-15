@@ -48,7 +48,8 @@ _active_runtime_paths: contextvars.ContextVar[_runtime_path_scope | None] = cont
 _configured_runtime_paths: RuntimePaths | None = None
 
 
-def expand_runtime_home(rawPath: str) -> str:
+def expand_runtime_home(rawPath: str | os.PathLike[str]) -> str:
+    rawPath = os.fspath(rawPath)
     if rawPath == "~":
         return str(Path.home())
     if rawPath.startswith("~/"):

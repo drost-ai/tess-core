@@ -129,6 +129,41 @@ class HeadlessCliTests(TessCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_missing_credential_is_a_failed_run(self):
+        root, home, workspace, previous = self._context()
+        try:
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("ANTHROPIC_", "OPENAI_", "TESS_CORE_HEADLESS_"))}
+            env["TESS_CORE_HOME"] = str(home)
+            env["PYTHONPATH"] = str(Path.cwd())
+            proc = subprocess.run(
+                [sys.executable, "-m", "tess_core", "run", "-p", "hi", "--output-format", "json", "--runtime-home", str(home), "--cwd", str(workspace), "--provider", "anthropic"],
+                cwd=str(workspace), env=env, text=True, capture_output=True, timeout=20,
+            )
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+            final = json.loads(proc.stdout.splitlines()[-1])
+            self.assertFalse(final["success"])
+            self.assertEqual(final["stopReason"], "error")
+            self.assertIn("No credential is configured", final["error"])
+            self.assertNotIn("tess auth", final["error"])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_tool_flags_reject_permission_rules(self):
+        root, home, workspace, previous = self._context()
+        try:
+            proc = self._run_cli(
+                ["-p", "x", "--runtime-home", str(home), "--cwd", str(workspace), "--allowed-tools", "Bash(touch x)"],
+                home=home,
+                workspace=workspace,
+                responses=[{"model": "gpt-5.4", "stopReason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1}, "content": [{"type": "text", "text": "ok"}]}],
+            )
+            self.assertEqual(proc.returncode, 2)
+            self.assertEqual(proc.stdout, "")
+            self.assertIn("--allowed-tools takes tool names", proc.stderr)
+            self.assertIn("permissions.allow", proc.stderr)
+        finally:
+            self.restore_home(root, previous)
+
     def test_default_permission_mode_denies_gated_tool_without_hanging(self):
         root, home, workspace, previous = self._context()
         try:

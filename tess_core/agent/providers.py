@@ -189,13 +189,18 @@ async def _heal_partial_output_commit(
             metadata.get("partialOutputCommit"),
         )
 
+# The answer a turn gets when its profile has no credential. Hosts that must
+# fail instead of answering (the headless runner) recognise it by this prefix.
+MISSING_CREDENTIAL_PREFIX = "No credential is configured for provider profile"
+
+
 def _missing_openai_credential_response(config: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
     env_var = (((config.get("providerProfile") or {}).get("auth") or {}).get("envVar")) or "the required bearer token env var"
     return {
         "content": [
             {
                 "type": "text",
-                "text": f"No credential is configured for provider profile '{config.get('providerProfileName')}'. Set {env_var}, provide a Codex auth file, or run `tess auth login --openai` for official OpenAI access.",
+                "text": f"{MISSING_CREDENTIAL_PREFIX} '{config.get('providerProfileName')}'. Set {env_var} or provide a Codex auth file.",
             }
         ],
         "usage": {"input_tokens": 0, "output_tokens": 0},
@@ -209,7 +214,7 @@ def _missing_anthropic_credential_response(config: dict[str, Any], request: dict
         "content": [
             {
                 "type": "text",
-                "text": f"No credential is configured for provider profile '{config.get('providerProfileName')}'. Set {env_var} or run `tess auth login` to enable model-backed responses.",
+                "text": f"{MISSING_CREDENTIAL_PREFIX} '{config.get('providerProfileName')}'. Set {env_var} to enable model-backed responses.",
             }
         ],
         "usage": {"input_tokens": 0, "output_tokens": 0},

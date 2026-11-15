@@ -195,7 +195,7 @@ class ProviderErrorTests(TessCoreTestCase):
         openai_response = agent_provider_turn_module._create_provider(openai_config, {})["send"](request)
         self.assertEqual(
             openai_response["content"][0]["text"],
-            "No credential is configured for provider profile 'codex'. Set OPENAI_API_KEY, provide a Codex auth file, or run `tess auth login --openai` for official OpenAI access.",
+            "No credential is configured for provider profile 'codex'. Set OPENAI_API_KEY or provide a Codex auth file.",
         )
         self.assertEqual(openai_response["usage"], {"input_tokens": 0, "output_tokens": 0})
         self.assertEqual(openai_response["stopReason"], "end_turn")
@@ -210,7 +210,7 @@ class ProviderErrorTests(TessCoreTestCase):
         anthropic_response = agent_provider_turn_module._create_provider(anthropic_config, {})["send"]({**request, "model": "claude-sonnet-4-6"})
         self.assertEqual(
             anthropic_response["content"][0]["text"],
-            "No credential is configured for provider profile 'anthropic-claude-code'. Set ANTHROPIC_AUTH_TOKEN or run `tess auth login` to enable model-backed responses.",
+            "No credential is configured for provider profile 'anthropic-claude-code'. Set ANTHROPIC_AUTH_TOKEN to enable model-backed responses.",
         )
         self.assertEqual(anthropic_response["usage"], {"input_tokens": 0, "output_tokens": 0})
         self.assertEqual(anthropic_response["stopReason"], "end_turn")

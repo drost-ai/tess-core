@@ -68,6 +68,18 @@ class RuntimeHostTests(TessCoreTestCase):
     def setUp(self):
         host_module._ACTIVE = None
 
+    def test_start_accepts_path_objects(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            runtime = run(start_runtime(Path(home), cwd=Path(workspace), daemon_enabled=False))
+            try:
+                self.assertEqual(os.path.realpath(runtime.home), os.path.realpath(str(home)))
+                self.assertEqual(os.path.realpath(runtime.cwd), os.path.realpath(str(workspace)))
+            finally:
+                run(runtime.stop())
+        finally:
+            self.restore_home(root, previous)
+
     def test_start_owns_one_daemon_and_stop_ends_it(self):
         root, home, workspace, previous = self.temp_context()
         try:

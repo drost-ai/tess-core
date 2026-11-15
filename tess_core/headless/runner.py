@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Sequence, TextIO
 
 from ..agent import run_agent_prompt
+from ..agent.providers import MISSING_CREDENTIAL_PREFIX
 from ..runtime.agent_bindings import create_agent_runtime_bindings, is_task_supervisor_gateway
 from ..config import resolve_config
 from ..runtime.bootstrap import bootstrap_runtime
@@ -84,7 +85,11 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
                 **({"providerOverride": provider_override} if provider_override else {}),
             }
         )
-        if sink.permission_denied:
+        if not provider_override and str(result.get("text") or "").startswith(MISSING_CREDENTIAL_PREFIX):
+            # No model was called: a missing credential is a failed run, not an answer.
+            result = {**result, "stopReason": "error", "error": str(result.get("text"))}
+            exit_code = 1
+        elif sink.permission_denied:
             result = {**result, "stopReason": "permission_denied", "error": "Permission denied in non-interactive mode."}
             exit_code = 2
         elif _is_error_stop_reason(result.get("stopReason")):
@@ -123,6 +128,13 @@ def headless_main(argv: Sequence[str] | None = None) -> int:
     if args.command != "run":
         parser.print_help()
         return 2
+    for flag, value in (("--tools", args.tools), ("--allowed-tools", args.allowed_tools), ("--disallowed-tools", args.disallowed_tools)):
+        if value and ("(" in value or ")" in value):
+            sys.stderr.write(
+                f"tess_core run: {flag} takes tool names (for example Read,Bash), not permission rules. "
+                "Put rules such as Bash(git diff:*) under permissions.allow in <runtime-home>/settings/config.yaml.\n"
+            )
+            return 2
     prompt = _read_prompt_arg(args.prompt, args.input_format)
     options = HeadlessOptions(
         prompt=prompt,

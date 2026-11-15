@@ -374,9 +374,9 @@ class Runtime:
 
 
 async def start_runtime(
-    runtime_home: str | None = None,
+    runtime_home: str | os.PathLike[str] | None = None,
     *,
-    cwd: str | None = None,
+    cwd: str | os.PathLike[str] | None = None,
     daemon_enabled: bool = True,
     session_options: Any = None,
     listener: Any = None,
@@ -401,7 +401,7 @@ async def start_runtime(
     if runtime_home:
         configure_runtime_home(runtime_home)
     home = get_state_root()
-    workspace = os.path.abspath(cwd) if cwd else os.getcwd()
+    workspace = os.path.abspath(os.fspath(cwd)) if cwd else os.getcwd()
     runtime = Runtime(
         home=home,
         cwd=workspace,
