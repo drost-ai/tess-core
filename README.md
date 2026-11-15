@@ -1,13 +1,18 @@
 <div align="center">
 
-# Tess Core
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/tess-core-dark.svg">
+    <img src="docs/assets/tess-core-light.svg" alt="Tess Core" height="64">
+  </picture>
+</h1>
 
 **The agent runtime for Python. Zero dependencies. Any model.**
 
 A complete operating system for AI agents (sessions, tools, permissions, sub-agents,
 MCP, scheduling and durable state) in one pure-Python package you can read, audit and embed.
 
-[Quickstart](#quickstart) · [Why Tess Core](#why-tess-core) · [What's inside](#whats-inside) · [Built for production](#built-for-production) · [Documentation](docs/README.md)
+[Quickstart](#quickstart) · [Why Tess Core](#why-tess-core) · [What's inside](#whats-inside) · [Built for production](#built-for-production) · [Documentation](https://continuityresearch.ai/tess-core/docs)
 
 No transitive dependencies · Python 3.12+ · Apache-2.0
 
@@ -188,6 +193,9 @@ framework's worldview or a second language's toolchain, this is what Tess Core i
 Read [the architecture guide](docs/architecture.md) for how the pieces fit.
 
 ## Documentation
+
+The full documentation, with search, is at **[continuityresearch.ai/tess-core/docs](https://continuityresearch.ai/tess-core/docs)**.
+The same pages live in this repository:
 
 - [Getting started](docs/getting-started.md): install, first agent, streaming, resuming
 - [Concepts](docs/concepts.md): runtimes, sessions, turns, tools, authority
