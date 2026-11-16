@@ -26,7 +26,6 @@ from .file_change_payloads import (
 )
 from .paths import _authorize_path, _display_path
 from .permissions import _ensure_tool_permission
-from ..authority.secret_files import looks_like_secret_file
 from .schemas import builtin_tool
 from .validation import _require_string
 
@@ -34,8 +33,6 @@ from .validation import _require_string
 def _read_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         file_path = await _authorize_path(_require_string(input.get("file_path"), "file_path"), context, "Read")
-        if looks_like_secret_file(file_path):
-            await _ensure_tool_permission(context, "Read", "secret", f"Read {_display_path(context, file_path)} (a credentials file)", path=file_path)
         ext = Path(file_path).suffix.lower()
         stat = _inspect_regular_file(file_path)
         if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):

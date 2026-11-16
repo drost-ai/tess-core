@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any
 
 from ..._utils import now_iso
-from ...tools.shell_env import shell_environment
 from ...storage import configure_runtime_home, read_task_meta, write_task_meta
 from ..terminal_transitions import (
     apply_task_process_completion,
@@ -48,7 +47,6 @@ async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
             process = subprocess.Popen(
                 [shell, "-lc", command],
                 cwd=cwd,
-                env=shell_environment(),
                 stdin=subprocess.DEVNULL,
                 stdout=output,
                 stderr=subprocess.STDOUT,

@@ -3,8 +3,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .secret_files import names_a_secret_file
-
 
 SHELL_COMMAND_CLASSIFIER_REVISION = 1
 
@@ -245,8 +243,6 @@ def classify_read_only_shell_command(command: Any) -> dict[str, Any]:
         safe = _classify_simple(args, _SIMPLE_OPTION_POLICIES[name])
     if not safe:
         return _unsafe(argv, "argv_policy_rejected" if name else "unknown_command")
-    if names_a_secret_file(args):
-        return _unsafe(argv, "credentials_file")
     return {
         "safe": True,
         "argv": argv,

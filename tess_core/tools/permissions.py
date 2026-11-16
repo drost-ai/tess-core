@@ -226,10 +226,6 @@ async def _resolve_tool_permission(
         if mode in ("acceptEdits", "auto", "dontAsk"):
             return {"decision": "allow", "source": "mode"}
         return {"decision": "ask", "source": "mode", "switchMode": "acceptEdits", "reason": "This tool changes files on disk."}
-    if category == "secret":
-        if mode in ("auto", "dontAsk"):
-            return {"decision": "deny", "source": "mode", "reason": "Reading a credentials file needs an explicit allow permission rule in non-interactive permission modes."}
-        return {"decision": "ask", "source": "mode", "reason": "This file holds credentials by convention."}
     if category == "worktree":
         if mode in ("auto", "dontAsk"):
             return {"decision": "deny", "source": "mode", "reason": "Worktree creation is blocked in non-interactive permission modes."}

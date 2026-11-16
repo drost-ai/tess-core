@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from .shell_env import shell_environment
 from ..contracts.context import ToolContext
 from ..contracts.records import launch_output_file, launch_task_id
 from ..contracts.tools import ToolResult
@@ -282,7 +281,7 @@ def _bash_tool() -> ToolDefinition:
             command=command,
             argv=argv,
             cwd=context["session"]["cwd"],
-            env=shell_environment(context.get("config")),
+            env=os.environ.copy(),
             timeoutMs=timeout,
             abortSignal=context.get("abortSignal"),
             sessionId=context["session"]["id"],

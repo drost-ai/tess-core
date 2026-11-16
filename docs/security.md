@@ -131,24 +131,6 @@ Treat this as defence in depth. It narrows what a mistaken command can do; it is
 boundary designed to hold hostile code. For untrusted workloads, run the whole runtime in a
 container or virtual machine.
 
-## Credentials the agent cannot reach
-
-Two protections apply without configuration:
-
-- **Provider keys are removed from the shell.** A command the agent runs does not see
-  `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or any variable a provider profile names in
-  `auth.envVar`, so `env` or `echo $OPENAI_API_KEY` reveals nothing. This holds in every
-  mode, including `bypassPermissions`, and for background commands.
-- **Credentials files need approval.** `.env` and `.env.*` files (templates such as
-  `.env.example` excepted), private keys, `.netrc`, and anything under `~/.ssh`, `~/.aws`
-  or `~/.codex` are not ordinary reads. `Read` and `Grep` ask before opening one, a shell
-  command that names one is not treated as read-only, and in `auto` and `dontAsk` they are
-  refused unless an allow rule names the file.
-
-`bypassPermissions` turns the second protection off, as it does every prompt: in that mode
-the agent can read any file your user account can. Keep secrets out of the working
-directory of a session that runs in it.
-
 ## Credentials
 
 - **Provider credentials** are never stored in configuration. A profile names an
