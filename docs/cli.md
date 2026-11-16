@@ -34,6 +34,10 @@ The command knows two built-in providers, `anthropic` and `openai`, which read
 `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`. Profiles you define in
 `<runtime-home>/settings/providers.yaml` are available by name.
 
+A Codex sign-in is used only when you name its file, for example
+`TESS_OPENAI_CODEX_AUTH_PATH=~/.codex/auth.json`. The command never looks for one, so
+being signed in to another tool does not change which provider or credential a run uses.
+
 ### Output
 
 `text` prints the final answer.

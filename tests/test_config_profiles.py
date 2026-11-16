@@ -372,3 +372,23 @@ class ConfigProfileTests(TessCoreTestCase):
             else:
                 os.environ["OPENAI_API_KEY"] = prev_openai
             self.restore_home(root, previous)
+
+    def test_resolve_config_discovers_no_codex_auth_file(self):
+        from unittest import mock
+
+        root, home, workspace, previous = self.temp_context()
+        try:
+            user_home, codex_home = home / "user", home / "codex-home"
+            for folder in (user_home / ".codex", codex_home):
+                folder.mkdir(parents=True)
+                (folder / "auth.json").write_text(json.dumps({"tokens": {"access_token": "ambient-codex-token"}}))
+            environment = {"HOME": str(user_home), "CODEX_HOME": str(codex_home)}
+            with mock.patch.dict(os.environ, environment):
+                for name in ("OPENAI_API_KEY", "TESS_OPENAI_CODEX_AUTH_PATH"):
+                    os.environ.pop(name, None)
+                config = run(core.resolve_config({}, str(workspace)))
+            self.assertEqual(config["providerProfileName"], "openai")
+            self.assertIsNone(config["openaiToken"])
+            self.assertIsNone(config["openaiCodexAuthPath"])
+        finally:
+            self.restore_home(root, previous)

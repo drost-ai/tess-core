@@ -64,7 +64,6 @@ from .shared import (
     DEFAULT_ASSISTANT_DESCRIPTION,
     DEFAULT_ASSISTANT_NAME,
     DEFAULT_OPENAI_API_MODE,
-    DEFAULT_OPENAI_CODEX_AUTH_PATH,
     DEFAULT_PROVIDER_PROFILE_NAME,
     DEFAULT_TUI_SCREEN_MODE,
 )
@@ -229,17 +228,17 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
     stored_anthropic_api_key = _get_stored_anthropic_api_key(auth)
     explicit_api_key = os.environ.get("ANTHROPIC_API_KEY") or settings_env.get("ANTHROPIC_API_KEY") or helper_auth_value
     explicit_auth_token = os.environ.get("ANTHROPIC_AUTH_TOKEN") or settings_env.get("ANTHROPIC_AUTH_TOKEN")
-    openai_codex_auth_path = resolve_maybe_relative(
-        cwd,
+    # A Codex auth file is read only when one is named; none is discovered.
+    named_codex_auth_path = (
         os.environ.get("TESS_OPENAI_CODEX_AUTH_PATH")
         or settings_env.get("TESS_OPENAI_CODEX_AUTH_PATH")
         or merged_settings.get("openaiCodexAuthPath")
         or (auth or {}).get("openaiCodexAuthPath")
-        or DEFAULT_OPENAI_CODEX_AUTH_PATH,
     )
+    openai_codex_auth_path = resolve_maybe_relative(cwd, named_codex_auth_path) if named_codex_auth_path else None
     openai_env_token = os.environ.get("OPENAI_API_KEY") or settings_env.get("OPENAI_API_KEY")
     openai_stored_token = (auth or {}).get("openaiToken")
-    openai_codex_token = None if registry else await load_codex_auth_token(openai_codex_auth_path)
+    openai_codex_token = None if registry or not openai_codex_auth_path else await load_codex_auth_token(openai_codex_auth_path)
     openai_base_url = os.environ.get("OPENAI_BASE_URL") or settings_env.get("OPENAI_BASE_URL") or merged_settings.get("openaiBaseUrl")
     requested_openai_api_mode = normalize_openai_api_mode_setting(
         options.get("openaiApiMode")

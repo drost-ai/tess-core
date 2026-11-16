@@ -205,7 +205,7 @@ class ResolvedConfig(_resolved_config_required, total=False):
     openaiToken: RuntimeSecretValue | None
     openaiApiMode: OpenAiApiMode
     openaiBaseUrl: str | None
-    openaiCodexAuthPath: str
+    openaiCodexAuthPath: str | None
     effort: str
     assistantName: str
     assistantDescription: str

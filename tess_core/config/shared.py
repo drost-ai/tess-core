@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from ..contracts.config import AgentDefinition, ProviderProfile
 
 
@@ -11,7 +9,6 @@ DEFAULT_PROVIDER = "openai"
 DEFAULT_MODEL = "gpt-5.4"
 DEFAULT_EFFORT = "xhigh"
 DEFAULT_OPENAI_API_MODE = "responses"
-DEFAULT_OPENAI_CODEX_AUTH_PATH = os.path.join(os.environ.get("CODEX_HOME", "~/.codex"), "auth.json")
 DEFAULT_PROVIDER_PROFILE_NAME = "openai"
 DEFAULT_TUI_SCREEN_MODE = "auto"
 
