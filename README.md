@@ -68,23 +68,34 @@ Tess Core is the runtime, in Python:
 
 ## Quickstart
 
-**1. Install**
+**1. Create an environment and install.** With [uv](https://docs.astral.sh/uv/):
 
 ```sh
-pip install "tess-core @ git+https://github.com/drost-ai/tess-core.git"
+mkdir my-agent && cd my-agent
+uv venv --python 3.12
+uv pip install "tess-core @ git+https://github.com/drost-ai/tess-core.git"
 ```
 
-**2. Declare your models** in `providers.yaml`. Credentials are named, never written down:
+**2. Put your credential in `.env`.** Your Codex sign-in file, or an API key for the
+provider you use. You only need the one your profile names:
+
+```sh
+OPENAI_API_KEY=...
+CODEX_AUTH_PATH=~/.codex/auth.json
+```
+
+**3. Declare your models in `providers.yaml`.** Credentials are named here, never written
+down. Declare as many profiles as you like; only the one a session uses needs its key:
 
 ```yaml
 schema_version: 1
 providerProfiles:
-  claude:
-    kind: anthropic
-    defaultModel: claude-sonnet-5-5
+  codex:
+    kind: openai
+    apiMode: codex
+    defaultModel: gpt-6.1-sol
     auth:
-      kind: anthropic_api_key
-      envVar: ANTHROPIC_API_KEY
+      kind: openai_api_key_or_codex
 
   gpt:
     kind: openai
@@ -93,6 +104,13 @@ providerProfiles:
     auth:
       kind: openai_api_key
       envVar: OPENAI_API_KEY
+
+  claude:
+    kind: anthropic
+    defaultModel: claude-sonnet-5-5
+    auth:
+      kind: anthropic_api_key
+      envVar: ANTHROPIC_API_KEY
 
   local:                                   # llama.cpp, vLLM, Ollama: anything OpenAI-compatible
     kind: openai
@@ -103,12 +121,54 @@ providerProfiles:
       kind: none
 ```
 
-**3. Run the example above**, or skip the code and use the command line:
+**4. Write `main.py`:**
+
+```python
+import asyncio
+import os
+
+from tess_core import SessionOptions, start_runtime
+
+
+async def main():
+    runtime = await start_runtime(
+        "agent-home",                        # durable state lives here, as plain files
+        provider_registry="providers.yaml",  # your models, declared once
+        session_options=lambda session_id, reason: SessionOptions(
+            provider="codex",
+            provider_auth_path=os.environ["CODEX_AUTH_PATH"],
+        ),
+    )
+    session = await runtime.sessions.open()
+    result = await session.run_turn("Read the codebase here and orient yourself. What are we building here?")
+    print(result["text"])
+    await runtime.stop()
+
+
+asyncio.run(main())
+```
+
+**5. Run it:**
 
 ```sh
-export ANTHROPIC_API_KEY=...
-python -m tess_core run -p "Summarise what changed in the last five commits" \
-    --provider-registry providers.yaml --provider claude --output-format stream-json
+uv run --env-file .env main.py
+```
+
+### Using an API key instead?
+
+Choose a profile that names a key, and drop the sign-in file:
+
+```python
+        session_options=lambda session_id, reason: SessionOptions(provider="gpt"),
+```
+
+### Or skip the code
+
+```sh
+uv run --env-file .env python -m tess_core run \
+    -p "Summarise what changed in the last five commits" \
+    --provider-registry providers.yaml --provider codex \
+    --provider-auth-path ~/.codex/auth.json --output-format stream-json
 ```
 
 The [getting started guide](docs/getting-started.md) takes it from here: streaming events,
