@@ -63,6 +63,8 @@ SessionOptions(provider="gpt", model="another-model", effort="low")
 | `baseUrl` | The endpoint, for anything other than the provider's own. |
 | `auth` | Where the credential comes from. Required. |
 | `reasoningEffort` | Default reasoning effort for models that support it. |
+| `openAiChatReasoningSummary` | For `openai`: ask for reasoning summaries (`auto`, `concise` or `detailed`). |
+| `anthropicThinkingDisplay` | For `anthropic`: how thinking is returned (`auto`, `summarized` or `hidden`). |
 | `maxContextLength`, `maxOutputTokens` | Limits used for token accounting and compaction. |
 | `headers` | Extra non-secret request headers. |
 | `capabilities` | What the model accepts, such as image input. |
@@ -91,6 +93,118 @@ credential are redacted.
 For hosts that manage credentials for their users, `auth` may instead hold a
 `credentialRef`: an opaque reference to a secret in the operating system keychain or an
 encrypted file. See [Permissions and security](security.md#managed-credentials).
+
+## Provider samples
+
+Three profiles that cover the shapes you will meet. Each is a complete `providers.yaml`
+that has been run as written; change the model to one your account serves.
+
+### A Codex sign-in
+
+A ChatGPT account signed in through the Codex CLI. The profile declares no key; the
+session names the sign-in file.
+
+```yaml
+schema_version: 1
+providerProfiles:
+  codex:
+    kind: openai
+    apiMode: codex
+    defaultModel: gpt-6.1-sol
+    reasoningEffort: xhigh
+    openAiChatReasoningSummary: auto
+    auth:
+      kind: openai_api_key_or_codex
+```
+
+```sh
+# .env
+CODEX_AUTH_PATH=~/.codex/auth.json
+```
+
+```python
+SessionOptions(provider="codex", provider_auth_path=os.environ["CODEX_AUTH_PATH"])
+```
+
+The file is read as it is and is not refreshed. If a request is refused as
+unauthenticated, run the Codex CLI once to renew it.
+
+### An Anthropic-compatible service
+
+Services that speak the Anthropic Messages protocol use `kind: anthropic` and their own
+`baseUrl`. This one is Kimi K3 on a coding plan:
+
+```yaml
+schema_version: 1
+providerProfiles:
+  kimi:
+    kind: anthropic
+    baseUrl: https://api.kimi.com/coding/v1
+    defaultModel: k3
+    reasoningEffort: max
+    anthropicThinkingDisplay: summarized
+    maxContextLength: 1000000
+    maxOutputTokens: 256000
+    requestStartTimeoutMs: 300000
+    streamIdleTimeoutMs: 300000
+    auth:
+      kind: anthropic_api_key
+      envVar: KIMI_API_KEY
+```
+
+```sh
+# .env
+KIMI_API_KEY=...
+```
+
+```python
+SessionOptions(provider="kimi")
+```
+
+### An OpenAI-compatible service
+
+Services that speak Chat Completions use `kind: openai`, `apiMode: chat_completions` and
+a bearer key. This one is Z.ai's GLM on a coding plan:
+
+```yaml
+schema_version: 1
+providerProfiles:
+  zai:
+    kind: openai
+    apiMode: chat_completions
+    baseUrl: https://api.z.ai/api/coding/paas/v4
+    defaultModel: GLM-5.3
+    reasoningEffort: max
+    openAiChatReasoningSummary: auto
+    maxContextLength: 1000000
+    maxOutputTokens: 128000
+    requestStartTimeoutMs: 300000
+    streamIdleTimeoutMs: 300000
+    capabilities:
+      imageInput: false
+    auth:
+      kind: custom_bearer
+      envVar: ZAI_API_KEY
+```
+
+```sh
+# .env
+ZAI_API_KEY=...
+```
+
+```python
+SessionOptions(provider="zai")
+```
+
+A model on your own machine is the same shape with a local `baseUrl` and
+`auth.kind: none`; see [Models on your own hardware](#models-on-your-own-hardware).
+
+### Seeing the model's reasoning
+
+Reasoning arrives as `message.assistant.thinking.partial` [events](events.md) when the
+profile asks for it: `openAiChatReasoningSummary: auto` on an `openai` profile,
+`anthropicThinkingDisplay: summarized` on an `anthropic` one. Raise the two timeouts, as
+above, for models that think for a long time before their first byte.
 
 ## What a registry guarantees
 

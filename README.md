@@ -122,6 +122,9 @@ providerProfiles:
       kind: none
 ```
 
+Working profiles for a Codex sign-in, Kimi and Z.ai are in the
+[provider samples](docs/providers.md#provider-samples).
+
 **4. Write `main.py`:**
 
 ```python
