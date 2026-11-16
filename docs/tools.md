@@ -19,6 +19,9 @@ Tools are how an agent acts. Tess Core ships 27, and every one passes through th
 File tools are confined to the session's workspace and any directories you added. See
 [path confinement](security.md#path-confinement).
 
+`Glob` and `Grep` run [ripgrep](https://github.com/BurntSushi/ripgrep). If `rg` is not on the
+`PATH`, they return an error saying so and the other tools keep working.
+
 ### Shell
 
 | Tool | Does |

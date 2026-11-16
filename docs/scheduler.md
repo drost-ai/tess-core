@@ -29,7 +29,8 @@ job = await runtime.scheduler.add(
 ```
 
 When it fires, the session is reopened if it was closed, and the turn runs with the origin
-`scheduled`, so the agent knows this was a timer and not a person.
+`scheduled`, so the agent knows this was a timer and not a person. The agent's reply arrives
+in your listener's `on_event`, like the events of any other turn.
 
 **Host jobs** call your code:
 

@@ -140,16 +140,19 @@ class Host:
         return options[0]
 
     async def publish(self, session_id, delivery):
-        """Something the runtime produced without a caller waiting for it:
-        the reply to a scheduled turn, a sub-agent's result. Store it, show
-        it, and return a receipt."""
+        """A background monitor's notification: something a watched task did
+        that nobody was waiting on. Store it, show it, and return a receipt."""
 ```
 
 Without `ask_question`, sessions are non-interactive: anything that would need an answer
 is refused, and the model is told why.
 
-Without `publish`, the runtime does not fire scheduled jobs, because it would have nowhere
-to deliver their output.
+Without `publish`, the runtime does not fire scheduled jobs or deliver monitor
+notifications, because it would have nowhere to put output nobody is waiting for.
+
+The reply to a scheduled turn and the result of a sub-agent do not come through `publish`.
+They arrive as ordinary session events in `on_event`: a `turn.started` whose `origin` is
+`scheduled` or `child_message`, then `message.assistant` and `turn.completed`.
 
 ## Your own tools
 

@@ -43,6 +43,8 @@ A response must include `model`.
 
 ## A test
 
+The example uses `pytest` with the `pytest-asyncio` plugin (`uv pip install pytest pytest-asyncio`).
+
 ```python
 import pytest
 from tess_core import SessionOptions, start_runtime

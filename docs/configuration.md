@@ -115,7 +115,12 @@ permissions:
     - Bash(git push:*)
   deny:
     - Read(**/.env)
+    - Grep(**/.env)
 ```
+
+A deny rule covers the tool it names. `Read(**/.env)` alone leaves `Grep` able to print the
+file, and a shell command such as `cat .env` is a `Bash` call. If a secrets file must stay
+out of an agent's reach, keep it outside the session's working directory.
 
 See [Security](security.md) for what each rule means and the order they apply in.
 

@@ -76,6 +76,9 @@ uv venv --python 3.12
 uv pip install "tess-core @ git+https://github.com/drost-ai/tess-core.git"
 ```
 
+The file search tools (`Glob`, `Grep`) use [ripgrep](https://github.com/BurntSushi/ripgrep);
+install it if `rg` is not already on your `PATH`.
+
 **2. Put your credential in `.env`.** Your Codex sign-in file, or an API key for the
 provider you use. You only need the one your profile names:
 
@@ -174,9 +177,10 @@ Choose a profile that names a key, and drop the sign-in file:
 
 ```sh
 uv run --env-file .env python -m tess_core run \
-    -p "Summarise what changed in the last five commits" \
+    -p "Read the codebase here and orient yourself. What are we building here?" \
     --provider-registry providers.yaml --provider codex \
-    --provider-auth-path ~/.codex/auth.json --output-format stream-json
+    --provider-auth-path ~/.codex/auth.json \
+    --permission-mode bypassPermissions --output-format stream-json
 ```
 
 The [getting started guide](docs/getting-started.md) takes it from here: streaming events,

@@ -8,6 +8,10 @@ It is meant for scripts, CI jobs and quick checks. For an application, use the
 uv run python -m tess_core run -p "Summarise the changes in this repository" --provider anthropic
 ```
 
+In the default permission mode a shell command that is not clearly read-only is refused, and
+a run in which anything was refused exits with 2 even when it produced an answer. See
+[Permissions without a person](#permissions-without-a-person).
+
 ## `run`
 
 | Option | Meaning |
@@ -113,9 +117,16 @@ permissions:
 ```
 
 ```bash
-uv run python -m tess_core run -p "Fix the failing test" --provider anthropic \
-    --runtime-home ./ci-agent --permission-mode acceptEdits
+uv run python -m tess_core run -p "Fix the failing test. Run the tests with: pytest -q" \
+    --provider anthropic --runtime-home ./ci-agent --permission-mode acceptEdits
 ```
+
+The model is not shown your rules, and an allow rule matches one spelling of a command:
+`Bash(pytest:*)` allows `pytest -q` but not `python -m pytest` or `uv run pytest`. Say in
+the prompt which commands to use, or add a rule for each spelling you accept. A command
+joined to another with a pipe or `&&` is never covered by an allow rule. Models often try
+such a form first, are refused, and then use the allowed one: the work is done, and the
+exit code is still 2 because a call was refused.
 
 **The mode.** `--permission-mode` sets how everything not covered by a rule is treated.
 See [Security](security.md) for the modes and the rule syntax.
@@ -147,5 +158,7 @@ directory except `settings/`:
 
 ## What the command does not do
 
-It runs one conversation and exits. Sub-agents, background tasks, the scheduler and
-monitors need a running runtime; use [`start_runtime`](embedding.md) for those.
+It runs one conversation and exits. A sub-agent or background task the model starts runs
+only while the command does, and is stopped when it exits. Work that must outlive a turn,
+the scheduler and monitors need a running runtime; use [`start_runtime`](embedding.md) for
+those.
