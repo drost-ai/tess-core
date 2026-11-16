@@ -12,7 +12,7 @@
 A complete operating system for AI agents (sessions, tools, permissions, sub-agents,
 MCP, scheduling and durable state) in one pure-Python package you can read, audit and embed.
 
-[Quickstart](#quickstart) · [Why Tess Core](#why-tess-core) · [What's inside](#whats-inside) · [Built for production](#built-for-production) · [Documentation](https://continuityresearch.ai/tess-core/docs)
+[Quickstart](#quickstart) · [Why Tess Core](#why-tess-core) · [What's inside](#whats-inside) · [Built for production](#built-for-production) · [Documentation](https://continuityresearch.ai/tess-core/docs) · [Samples](https://github.com/drost-ai/tess-core-samples)
 
 No transitive dependencies · Python 3.12+ · Apache-2.0
 
@@ -182,6 +182,10 @@ uv run --env-file .env python -m tess_core run \
 
 The [getting started guide](docs/getting-started.md) takes it from here: streaming events,
 permissions, your own tools, and resuming a session.
+
+Want something bigger than a script?
+[coding-agent-minimal](https://github.com/drost-ai/tess-core-samples/tree/main/coding-agent-minimal)
+is a terminal coding agent in one file.
 
 ## What's inside
 
