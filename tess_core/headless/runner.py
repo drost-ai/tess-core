@@ -109,7 +109,7 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
         result = _error_result(exc, session)
         exit_code = 1
     finally:
-        final = _final_result(result, session, exit_code)
+        final = {**_final_result(result, session, exit_code), "deniedCalls": sink.denied_calls}
         runtime["emitEvent"]("result", final)
         if options.output_format == "json":
             stdout.write(json.dumps(final, ensure_ascii=False, separators=(",", ":")) + "\n")

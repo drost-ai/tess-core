@@ -229,6 +229,27 @@ class HeadlessCliTests(TessCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_a_refusal_the_run_gets_past_is_reported_but_does_not_fail_it(self):
+        root, home, workspace, previous = self._context()
+        try:
+            def bash(call_id, command):
+                return {"model": "gpt-5.4", "stopReason": "tool_use", "usage": {}, "content": [{"type": "tool_use", "id": call_id, "name": "Bash", "input": {"command": command}}]}
+
+            done = {"model": "gpt-5.4", "stopReason": "end_turn", "usage": {}, "content": [{"type": "text", "text": "listed"}]}
+            args = ["-p", "List the files.", "--output-format", "json", "--runtime-home", str(home), "--cwd", str(workspace), "--provider", "openai", "--model", "gpt-5.4"]
+
+            # Refused with a pipe, then the plain command runs: the work was done.
+            proc = self._run_cli(args, home=home, workspace=workspace, responses=[bash("b1", "ls | head -5"), bash("b2", "ls"), done])
+            final = json.loads(proc.stdout.splitlines()[-1])
+            self.assertEqual((proc.returncode, final["success"], final["stopReason"], final["deniedCalls"]), (0, True, "end_turn", 1), proc.stdout + proc.stderr)
+
+            # Refused and never run: the run was stopped by its permissions.
+            proc = self._run_cli(args, home=home, workspace=workspace, responses=[bash("b1", "ls | head -5"), done])
+            final = json.loads(proc.stdout.splitlines()[-1])
+            self.assertEqual((proc.returncode, final["success"], final["stopReason"], final["deniedCalls"]), (2, False, "permission_denied", 1), proc.stdout + proc.stderr)
+        finally:
+            self.restore_home(root, previous)
+
     def test_tool_flags_reject_permission_rules(self):
         root, home, workspace, previous = self._context()
         try:

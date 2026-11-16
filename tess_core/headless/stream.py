@@ -11,7 +11,8 @@ class JsonStreamSink:
     def __init__(self, stream: TextIO | None = None, *, max_string_chars: int = 12000) -> None:
         self.stream = stream
         self.max_string_chars = max_string_chars
-        self.permission_denied = False
+        self.denied_calls = 0
+        self._blocked_tools: set[str] = set()
         self.event_count = 0
 
     def handle_runtime_envelope(self, envelope: dict[str, Any]) -> None:
@@ -34,14 +35,25 @@ class JsonStreamSink:
         self.stream.write(json.dumps(safe, ensure_ascii=False, separators=(",", ":")) + "\n")
         self.stream.flush()
 
+    @property
+    def permission_denied(self) -> bool:
+        """A refusal the run never got past: a tool that was refused and did
+        not then run successfully. A model that is refused one spelling of a
+        command and succeeds with another has not been stopped."""
+        return bool(self._blocked_tools)
+
     def _observe(self, envelope: dict[str, Any]) -> None:
-        if envelope.get("event") != "permission.decided":
+        event = envelope.get("event")
+        if event not in ("permission.decided", "tool.completed"):
             return
         data = envelope.get("data") if isinstance(envelope.get("data"), dict) else {}
         payload = envelope.get("payload") if isinstance(envelope.get("payload"), dict) else {}
-        decision = data.get("decision") or payload.get("decision")
-        if decision == "deny":
-            self.permission_denied = True
+        if event == "permission.decided":
+            if (data.get("decision") or payload.get("decision")) == "deny":
+                self.denied_calls += 1
+                self._blocked_tools.add(str(data.get("tool") or payload.get("tool") or ""))
+        elif not (data.get("error") or payload.get("error")):
+            self._blocked_tools.discard(str(data.get("name") or payload.get("name") or ""))
 
     def _redact(self, value: Any, *, parent_key: str = "", image_context: bool = False) -> Any:
         if isinstance(value, list):

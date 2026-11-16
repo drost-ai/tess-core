@@ -8,8 +8,8 @@ It is meant for scripts, CI jobs and quick checks. For an application, use the
 uv run python -m tess_core run -p "Summarise the changes in this repository" --provider anthropic
 ```
 
-In the default permission mode a shell command that is not clearly read-only is refused, and
-a run in which anything was refused exits with 2 even when it produced an answer. See
+In the default permission mode a shell command that is not clearly read-only is refused. If
+the agent never gets past the refusal, the command exits with 2. See
 [Permissions without a person](#permissions-without-a-person).
 
 ## `run`
@@ -71,7 +71,8 @@ account takes its auth file from `--provider-auth-path`.
   "stopReason": "end_turn",
   "usage": {"input_tokens": 1820, "output_tokens": 214},
   "toolCount": 3,
-  "estimatedCostUsd": 0.0087
+  "estimatedCostUsd": 0.0087,
+  "deniedCalls": 0
 }
 ```
 
@@ -90,12 +91,15 @@ uv run python -m tess_core run -p "Run the tests and report" --provider anthropi
 |---|---|
 | 0 | The turn completed |
 | 1 | The turn failed or was cancelled, or the provider has no credential |
-| 2 | A tool call needed approval. The command cannot ask, so it was refused. |
+| 2 | A tool call needed approval, was refused because the command cannot ask, and that tool never then ran successfully. |
 
 ### Permissions without a person
 
-Nobody is there to answer a prompt, so a call that would ask is refused and the command
-exits with 2. Decide the authority up front. There are three levers:
+Nobody is there to answer a prompt, so a call that would ask is refused. A model that is
+refused one form of a command often succeeds with another, and that run is not a failure:
+the command exits with 2 only when a refused tool never ran successfully afterwards. The
+`deniedCalls` field of the result counts every refusal either way. Decide the authority up
+front. There are three levers:
 
 **Which tools exist.** The tool options take tool names and decide what the model can
 call at all. They do not take permission rules: `--allowed-tools "Bash(git diff:*)"` is
@@ -125,8 +129,8 @@ The model is not shown your rules, and an allow rule matches one spelling of a c
 `Bash(pytest:*)` allows `pytest -q` but not `python -m pytest` or `uv run pytest`. Say in
 the prompt which commands to use, or add a rule for each spelling you accept. A command
 joined to another with a pipe or `&&` is never covered by an allow rule. Models often try
-such a form first, are refused, and then use the allowed one: the work is done, and the
-exit code is still 2 because a call was refused.
+such a form first, are refused, and then use the allowed one; the run then exits 0 and
+reports the refusal in `deniedCalls`.
 
 **The mode.** `--permission-mode` sets how everything not covered by a rule is treated.
 See [Security](security.md) for the modes and the rule syntax.
