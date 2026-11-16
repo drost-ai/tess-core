@@ -141,6 +141,7 @@ async def main():
         session_options=lambda session_id, reason: SessionOptions(
             provider="codex",
             provider_auth_path=os.environ["CODEX_AUTH_PATH"],
+            permission_mode="bypassPermissions",
         ),
     )
     session = await runtime.sessions.open()
@@ -163,7 +164,10 @@ uv run --env-file .env main.py
 Choose a profile that names a key, and drop the sign-in file:
 
 ```python
-        session_options=lambda session_id, reason: SessionOptions(provider="gpt"),
+        session_options=lambda session_id, reason: SessionOptions(
+            provider="gpt",
+            permission_mode="bypassPermissions",
+        ),
 ```
 
 ### Or skip the code
