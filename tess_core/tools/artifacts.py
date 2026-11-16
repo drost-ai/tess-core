@@ -79,13 +79,9 @@ def _read_tool_artifact() -> ToolDefinition:
                 offset=offset,
             )
 
-        extension = ".json" if metadata.get("contentType") == "json" else ".txt"
-        expected_path = tool_artifact_data_path(session_id, artifact_id, extension)
         recorded_path = metadata.get("filePath")
-        if (
-            not isinstance(recorded_path, str)
-            or os.path.abspath(recorded_path) != os.path.abspath(expected_path)
-        ):
+        expected_path = _registered_data_path(session_id, artifact_id, recorded_path)
+        if expected_path is None:
             return _error_result(
                 "artifact_metadata_invalid",
                 "The tool artifact metadata does not identify its registered data file.",
@@ -162,6 +158,26 @@ def _read_tool_artifact() -> ToolDefinition:
         }
 
     return builtin_tool("ReadToolArtifact", handler)
+
+
+def _registered_data_path(session_id: str, artifact_id: str, recorded_path: Any) -> str | None:
+    """The artifact's data file, or None when the metadata names anything else.
+
+    Artifacts are stored as ``<id>.json``, ``<id>.txt`` or, for streamed command
+    and search output, ``<id>.stdout.txt``. Whatever the suffix, the file must be
+    this session's own file for this artifact id."""
+    if not isinstance(recorded_path, str):
+        return None
+    name = os.path.basename(recorded_path)
+    if not name.startswith(artifact_id):
+        return None
+    try:
+        expected = tool_artifact_data_path(session_id, artifact_id, name[len(artifact_id):])
+    except ValueError:
+        return None
+    if name.endswith(".meta.json") or os.path.abspath(recorded_path) != os.path.abspath(expected):
+        return None
+    return expected
 
 
 def _read_registered_artifact_metadata(file_path: str) -> dict[str, Any]:

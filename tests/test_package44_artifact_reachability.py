@@ -105,6 +105,39 @@ class Package44ArtifactReachabilityTests(TessCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_search_output_artifact_is_readable_by_the_id_the_result_gives(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
+            session = self._session(workspace)
+            config = _codex_config(home, workspace)
+            for index in range(5):
+                (workspace / f"module_{index}.py").write_text("x = 1\n", encoding="utf-8")
+            glob = next(tool for tool in core.create_builtin_tools() if tool.name == "Glob")
+            listing = json.loads(run(glob.handler({"pattern": "*.py"}, self._context(session, config, workspace)))["content"])
+            artifact = listing["artifact"]
+            # Streamed search output is stored as <id>.stdout.txt.
+            self.assertTrue(artifact["filePath"].endswith(".stdout.txt"), artifact["filePath"])
+
+            page = json.loads(
+                run(self._reader().handler({"artifact_id": artifact["artifactId"]}, self._context(session, config, workspace)))["content"]
+            )
+            self.assertEqual(page["type"], "tool_artifact_page", page)
+            self.assertIn("module_4.py", page["content"])
+
+            # Metadata that names any other file is still refused.
+            meta_path = Path(artifact["filePath"]).with_name(f"{artifact['artifactId']}.meta.json")
+            metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+            for wrong in (str(workspace / "module_0.py"), str(meta_path), str(Path(artifact["filePath"]).with_name("other.stdout.txt"))):
+                meta_path.write_text(json.dumps({**metadata, "filePath": wrong}), encoding="utf-8")
+                refused = json.loads(
+                    run(self._reader().handler({"artifact_id": artifact["artifactId"]}, self._context(session, config, workspace)))["content"]
+                )
+                self.assertEqual(refused["code"], "artifact_metadata_invalid", wrong)
+        finally:
+            self.restore_home(root, previous)
+
     def test_transient_worker_can_recover_artifact_without_session_persistence(self):
         from unittest.mock import patch
         original = _codex_config
