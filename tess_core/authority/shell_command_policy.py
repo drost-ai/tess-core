@@ -309,6 +309,7 @@ def _classify_git(args: list[str]) -> bool:
                 "--tags", "--remotes", "--first-parent", "--merges", "--no-merges",
                 "--reverse", "--patch", "-p", "--raw",
             },
+            count_shorthand=True,
         )
     if subcommand == "branch":
         if not rest:
@@ -335,7 +336,7 @@ def _classify_git(args: list[str]) -> bool:
     return False
 
 
-def _classify_git_inspection(args: list[str], exact_options: set[str]) -> bool:
+def _classify_git_inspection(args: list[str], exact_options: set[str], *, count_shorthand: bool = False) -> bool:
     positional = False
     index = 0
     while index < len(args):
@@ -346,6 +347,8 @@ def _classify_git_inspection(args: list[str], exact_options: set[str]) -> bool:
             pass
         elif arg in exact_options or re.match(r"^(?:-U\d+|-n\d+)$", arg):
             pass
+        elif count_shorthand and re.match(r"^-\d+$", arg):
+            pass  # git log -5: the usual spelling of --max-count=5
         elif re.match(
             r"^--(?:unified|max-count|format|pretty|date|since|until|author|grep|diff-filter)=",
             arg,

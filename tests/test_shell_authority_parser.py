@@ -12,6 +12,9 @@ class ShellAuthorityParserTests(unittest.TestCase):
             "git status --short -- 'file with spaces'",
             "git diff --name-only -- src",
             "git log --oneline -n 10",
+            "git log --oneline -15",
+            "git --no-pager log -5 --stat",
+            "git show -1",
             "git show --stat HEAD",
             "git branch --list 'feature/*'",
             "ls -la -- 'literal;name'",
@@ -27,6 +30,8 @@ class ShellAuthorityParserTests(unittest.TestCase):
         )
         unsafe = (
             "git status; touch pwned",
+            "git diff -5",
+            "git log -5x",
             "git status&&touch pwned",
             "git status | tee pwned",
             "git status > pwned",
