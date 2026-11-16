@@ -9,6 +9,7 @@ how to use it and how it works.
 | | |
 |---|---|
 | [Getting started](getting-started.md) | Install, run your first agent, stream events, resume a session |
+| [Samples](samples.md) | Complete programs to run, read and copy, starting with a coding agent |
 | [Concepts](concepts.md) | The vocabulary: runtime, session, turn, tool, authority |
 | [Architecture](architecture.md) | How the subsystems fit together and why |
 
