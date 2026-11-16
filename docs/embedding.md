@@ -97,7 +97,7 @@ result = await session.run_turn(
 | Key | Meaning |
 |---|---|
 | `text` | The assistant's final text |
-| `stopReason` | Why the turn ended, when it was not a normal completion |
+| `stopReason` | Why the turn ended: `end_turn` for a normal completion, `max_tokens`, `refusal`, `cancelled`, or a limit the runtime applied. The same names are used for every provider. |
 | `usage` | Token counts |
 | `model` | The model that answered |
 | `toolCount` | Tool calls made |

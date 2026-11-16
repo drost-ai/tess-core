@@ -7,6 +7,18 @@ from typing import Any
 from ..providers.usage_costs import round_usd as _round_usd
 
 
+# A turn's result names its end the same way whichever provider ran it. The
+# OpenAI protocols say "stop" where Anthropic says "end_turn", and so on;
+# provider responses keep their native value, the turn result does not.
+_PROVIDER_STOP_REASONS = {
+    "stop": "end_turn",
+    "tool_calls": "tool_use",
+    "function_call": "tool_use",
+    "length": "max_tokens",
+    "max_output_tokens": "max_tokens",
+}
+
+
 @dataclass
 class TurnState:
     """Accumulator state for one logical agent turn.
@@ -48,5 +60,5 @@ class TurnState:
             "usage": self.total_usage,
             "model": self.active_model,
             "estimatedCostUsd": _round_usd(self.cost),
-            "stopReason": stop_reason,
+            "stopReason": _PROVIDER_STOP_REASONS.get(stop_reason, stop_reason) if isinstance(stop_reason, str) else stop_reason,
         }
