@@ -68,6 +68,13 @@ async def create_monitor_runtime(args: dict[str, Any] | None = None) -> dict[str
 
     async def close():
         stop_event.set()
+        if loop_task.get_loop() is not asyncio.get_running_loop():
+            # Closed from another event loop than the one that started it (a
+            # host that builds and closes in separate asyncio.run calls). The
+            # task cannot be awaited here; Python 3.14 refuses outright.
+            if not loop_task.get_loop().is_closed():
+                loop_task.get_loop().call_soon_threadsafe(loop_task.cancel)
+            return
         loop_task.cancel()
         await asyncio.gather(loop_task, return_exceptions=True)
 
