@@ -167,10 +167,27 @@ async def _ensure_daemon_under_lock(
             await _cleanup_stale_daemon_artifacts(instance_id)
     # No degraded modes: daemon spawn failure is a loud hard error and the
     # remedy is a daemon restart, never unsupervised in-process execution.
+    log_path = os.path.join(daemon_logs_dir(instance_id), "bootstrap.log")
+    reason = _last_bootstrap_line(log_path)
     raise RuntimeError(
-        f"Unable to start task supervisor daemon: {last_error}; "
-        f"see {os.path.join(daemon_logs_dir(instance_id), 'bootstrap.log')}"
+        f"Unable to start task supervisor daemon: {last_error}"
+        + (f" The daemon reported: {reason}" if reason else "")
+        + f"; see {log_path}"
     )
+
+
+def _last_bootstrap_line(log_path: str, limit: int = 300) -> str | None:
+    """What the daemon said before it died (a bad setting, most often), so the
+    host's error carries the cause instead of only a path to it."""
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as handle:
+            lines = [line.strip() for line in handle.readlines()[-40:] if line.strip()]
+    except OSError:
+        return None
+    if not lines:
+        return None
+    last = lines[-1]
+    return last if len(last) <= limit else last[: limit - 1] + "…"
 
 
 async def stop_task_supervisor_daemon(
