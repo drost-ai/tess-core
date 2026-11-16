@@ -44,10 +44,12 @@ class Session:
         return [getattr(tool, "name", None) or tool.get("name") for tool in self._live_session().bindings["tools"]]
 
     def subscribe(self, listener: Callable[[dict[str, Any]], Any]) -> Callable[[], None]:
-        """Receive this session's event envelopes, in addition to the runtime listener."""
-        live = self._live_session()
-        live.subscribers.append(listener)
-        return lambda: live.subscribers.remove(listener) if listener in live.subscribers else None
+        """Receive this session's event envelopes, in addition to the runtime listener.
+        The subscription lasts until the returned function is called or the session
+        ends; it survives the session being unloaded when idle and reopened."""
+        listeners = self._manager.subscribers_for(self.id)
+        listeners.append(listener)
+        return lambda: listeners.remove(listener) if listener in listeners else None
 
     @property
     def provider_profile(self) -> dict[str, Any]:

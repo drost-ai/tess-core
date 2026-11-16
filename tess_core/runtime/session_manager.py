@@ -68,7 +68,9 @@ class _LiveSession:
             self.id, 1, 1, runtimeInstanceId=runtime.instance_id, pathGraphId=runtime_path_graph_id(runtime.paths)
         )
         self.state_store = create_runtime_state_store(create_initial_runtime_state(record))
-        self.subscribers: list[Callable[[dict[str, Any]], Any]] = []
+        # Kept by the manager, not by this object: a session that is unloaded
+        # when idle and reopened later still reaches whoever subscribed to it.
+        self.subscribers: list[Callable[[dict[str, Any]], Any]] = manager.subscribers_for(self.id)
         self.components: dict[str, Any] | None = None
         self.controller: dict[str, Any] | None = None
         self.bindings: Any = None
@@ -196,6 +198,7 @@ class SessionManager:
         self._handles: dict[str, Session] = {}
         self._opening: dict[str, Any] = {}
         self._ended: set[str] = set()
+        self._subscribers: dict[str, list[Any]] = {}
         self.stopping = False  # runtime.stop() began: no new session or turn
         # What caused the most recent open, close, spawn and stop.
         self.recent: dict[str, dict[str, Any] | None] = {"opened": None, "closed": None, "spawned": None, "stopped": None}
@@ -374,7 +377,12 @@ class SessionManager:
         closes it, blocks every reopen. Idempotent."""
         outcome = await end_session(self, session_id, reason)
         self._ended.add(session_id)
+        self._subscribers.pop(session_id, None)
         return outcome
+
+    def subscribers_for(self, session_id: str) -> list[Any]:
+        """The listeners of one session, shared by every loading of it."""
+        return self._subscribers.setdefault(session_id, [])
 
     def is_ended(self, session_id: str) -> bool:
         """Known ended in this runtime; the durable marker is checked at open."""
