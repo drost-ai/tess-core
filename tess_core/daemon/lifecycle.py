@@ -148,7 +148,7 @@ async def _ensure_daemon_under_lock(
     await _cleanup_stale_daemon_artifacts(instance_id)
     last_error: BaseException | None = None
     for attempt in (1, 2):
-        process = await _spawn_detached_daemon(instance_id, cwd, owner_pid)
+        process = await _spawn_detached_daemon(instance_id, cwd, owner_pid, args.get("credentialEnvNames"))
         deadline = asyncio.get_running_loop().time() + budget
         while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(0.05)
@@ -248,13 +248,17 @@ async def get_task_supervisor_daemon_state(
     return state
 
 
-async def _spawn_detached_daemon(instance_id: str, cwd: str, owner_pid: int) -> subprocess.Popen[Any]:
+async def _spawn_detached_daemon(instance_id: str, cwd: str, owner_pid: int, credential_env_names: Any = None) -> subprocess.Popen[Any]:
     await ensure_base_layout(cwd)
     os.makedirs(daemon_logs_dir(instance_id), mode=0o700, exist_ok=True)
     os.chmod(daemon_logs_dir(instance_id), 0o700)
     log_path = os.path.join(daemon_logs_dir(instance_id), "bootstrap.log")
     env = dict(os.environ)
     env["TESS_CORE_HOME"] = get_state_root()
+    if isinstance(credential_env_names, (list, tuple, set)) and credential_env_names:
+        # Names only: the daemon's workers strip these from commands they run.
+        known = [name for name in (env.get("TESS_CORE_CREDENTIAL_ENV") or "").split(",") if name]
+        env["TESS_CORE_CREDENTIAL_ENV"] = ",".join(sorted({*known, *(str(name) for name in credential_env_names)}))
     repo_root = str(Path(__file__).resolve().parents[2])
     env["PYTHONPATH"] = repo_root if not env.get("PYTHONPATH") else f"{repo_root}{os.pathsep}{env['PYTHONPATH']}"
     fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)

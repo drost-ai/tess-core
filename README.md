@@ -79,11 +79,9 @@ uv pip install "tess-core @ git+https://github.com/drost-ai/tess-core.git"
 The file search tools (`Glob`, `Grep`) use [ripgrep](https://github.com/BurntSushi/ripgrep);
 install it if `rg` is not already on your `PATH`.
 
-**2. Put your credential in `.env`.** Your Codex sign-in file, or an API key for the
-provider you use. You only need the one your profile names:
+**2. Name your Codex sign-in in `.env`.** It is a path, not a secret:
 
 ```sh
-OPENAI_API_KEY=...
 CODEX_AUTH_PATH=~/.codex/auth.json
 ```
 
@@ -164,7 +162,15 @@ uv run --env-file .env main.py
 
 ### Using an API key instead?
 
-Choose a profile that names a key, and drop the sign-in file:
+Keep the key out of the folder the agent works in. Put it in a file elsewhere, for
+example `~/my-agent.env`:
+
+```sh
+OPENAI_API_KEY=...
+```
+
+Run with `uv run --env-file ~/my-agent.env main.py`, choose a profile that names the key,
+and drop the sign-in file:
 
 ```python
         session_options=lambda session_id, reason: SessionOptions(
@@ -172,6 +178,10 @@ Choose a profile that names a key, and drop the sign-in file:
             permission_mode="bypassPermissions",
         ),
 ```
+
+The runtime never shows a provider key to the commands the agent runs. Files are another
+matter: `bypassPermissions` gives the agent your own reach, so it can read any file you can.
+In the other modes, credentials files such as `.env` need your approval.
 
 ### Or skip the code
 

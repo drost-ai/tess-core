@@ -44,6 +44,20 @@ _ACTIVE: Runtime | None = None
 _ACTIVE_LOCK = threading.Lock()
 
 
+def _registry_credential_variables(registry: Any) -> list[str]:
+    """The environment variables a provider registry reads credentials from."""
+    if registry is None:
+        return []
+    from ..config.registry import ProviderRegistry
+    from ..tools.shell_env import profile_credential_variables
+
+    try:
+        loaded = registry if isinstance(registry, ProviderRegistry) else ProviderRegistry(registry)
+    except Exception:
+        return []  # the session that uses the registry reports what is wrong with it
+    return sorted(profile_credential_variables(loaded.profiles))
+
+
 class Runtime:
     """A started runtime. Build it with :func:`start_runtime`."""
 
@@ -107,6 +121,9 @@ class Runtime:
             request: dict[str, Any] = {"instanceId": self.instance_id, "cwd": self.cwd, "ownerPid": self.pid}
             if startup_timeout_seconds is not None:
                 request["startupTimeoutSeconds"] = startup_timeout_seconds
+            credential_names = _registry_credential_variables(self.provider_registry)
+            if credential_names:
+                request["credentialEnvNames"] = credential_names
             self.daemon = await ensure_task_supervisor_daemon(request)
             self._daemon_state = await load_daemon_state(self.instance_id)
             self._subscribe(self.daemon)

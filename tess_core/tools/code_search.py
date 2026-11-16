@@ -25,6 +25,7 @@ from ..payloads.tools import (
 from .cancellation import _create_tool_abort_error
 from .definitions import ToolDefinition
 from .paths import _authorize_path
+from ..authority.secret_files import looks_like_secret_file
 from .schemas import builtin_tool
 from .validation import _require_optional_number, _require_string
 
@@ -96,6 +97,10 @@ def _grep_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
         pattern = _require_string(input.get("pattern"), "pattern")
         cwd = context.get("cwd") or context["session"]["cwd"]
         search_path = await _authorize_path(_require_string(input.get("path"), "path"), context, "Grep") if input.get("path") else cwd
+        if input.get("path") and looks_like_secret_file(search_path):
+            from .permissions import _ensure_tool_permission
+
+            await _ensure_tool_permission(context, "Grep", "secret", f"Search {search_path} (a credentials file)", path=search_path)
         rg_path = await ((search or {}).get("resolveBinary") or _resolve_ripgrep_binary)()
         if not rg_path:
             return {"content": "ripgrep is required for Grep and was not found.", "isError": True}
