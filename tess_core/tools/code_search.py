@@ -69,7 +69,7 @@ def _glob_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
             offset=offset,
             sampleItems=limit,
             sampleBytes=policy["globInlineBytes"],
-            accept=lambda record: bool(filter_default_ignored_glob_matches([record])),
+            accept=lambda record: bool(filter_default_ignored_glob_matches([_below_search_root(record, search_path)])),
             abortSignal=context.get("abortSignal"),
         )
         if acquisition["aborted"]:
@@ -268,6 +268,16 @@ async def _resolve_glob_search(pattern: str, requested_path: Any, context: ToolC
         "pattern": pattern,
         "searchPath": await _authorize_path(_require_string(requested_path, "path"), context, "Glob") if requested_path else (context.get("cwd") or context["session"]["cwd"]),
     }
+
+
+def _below_search_root(record: str, search_path: str) -> str:
+    """The part of a match below the directory searched. Ignored directory names
+    apply inside the search, never to where the workspace itself happens to live."""
+    try:
+        relative = os.path.relpath(record, search_path)
+    except ValueError:
+        return record
+    return record if relative.startswith(os.pardir) else relative
 
 
 def _split_absolute_glob_pattern(pattern: str) -> dict[str, str]:

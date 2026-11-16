@@ -53,6 +53,26 @@ class ToolPayloadSearchTests(TessCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_glob_ignores_directory_names_only_below_the_search_root(self):
+        root, home, base, previous = self.temp_context()
+        try:
+            # A workspace that itself lives under directories named like ignored ones.
+            workspace = base / "tmp" / "build" / "project"
+            (workspace / "src").mkdir(parents=True)
+            (workspace / "tmp").mkdir()
+            (workspace / "agent.py").write_text("x = 1\n", encoding="utf-8")
+            (workspace / "src" / "app.py").write_text("y = 2\n", encoding="utf-8")
+            (workspace / "tmp" / "scratch.py").write_text("z = 3\n", encoding="utf-8")
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=config["permissionMode"])
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}
+            tool = next(tool for tool in core.create_builtin_tools() if tool.name == "Glob")
+
+            payload = json.loads(run(tool.handler({"pattern": "**/*.py"}, context))["content"])
+            self.assertEqual(sorted(payload["matches"]), sorted([str(workspace / "agent.py"), str(workspace / "src" / "app.py")]))
+        finally:
+            self.restore_home(root, previous)
+
     def test_shell_and_task_output_manifests_persist_artifacts_match_reference(self):
         root, home, workspace, previous = self.temp_context()
         try:
