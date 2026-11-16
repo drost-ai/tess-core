@@ -19,8 +19,10 @@ Tools are how an agent acts. Tess Core ships 27, and every one passes through th
 File tools are confined to the session's workspace and any directories you added. See
 [path confinement](security.md#path-confinement).
 
-`Glob` and `Grep` run [ripgrep](https://github.com/BurntSushi/ripgrep). If `rg` is not on the
-`PATH`, they return an error saying so and the other tools keep working.
+`Glob` and `Grep` use [ripgrep](https://github.com/BurntSushi/ripgrep) when `rg` is on the
+`PATH`, because it is fast. Without it they use a search built into Tess Core that takes
+the same arguments and prints the same results. The built-in search is slower on large
+trees, does not read `.gitignore` files, and takes Python regular expressions.
 
 ### Shell
 

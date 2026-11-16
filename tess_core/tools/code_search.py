@@ -36,9 +36,7 @@ def _glob_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
         query = await _resolve_glob_search(_require_string(input.get("pattern"), "pattern"), input.get("path"), context)
         pattern = query["pattern"]
         search_path = query["searchPath"]
-        rg_path = await ((search or {}).get("resolveBinary") or _resolve_ripgrep_binary)()
-        if not rg_path:
-            return {"content": "ripgrep is required for Glob and was not found.", "isError": True}
+        rg_path, fallback = _search_command(await ((search or {}).get("resolveBinary") or _resolve_ripgrep_binary)())
         if _is_filesystem_root(search_path):
             return {"content": "Glob refuses to search the filesystem root. Provide a narrower path or an absolute glob inside the target directory.", "isError": True}
         args = apply_default_glob_excludes(["--files", "--sort", "path", "-g", pattern])
@@ -61,7 +59,7 @@ def _glob_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
         acquisition = await _run_search(
             search,
             binary=rg_path,
-            argv=args,
+            argv=[*fallback, *args],
             cwd=cwd,
             sessionId=context["session"]["id"],
             toolName="Glob",
@@ -101,9 +99,7 @@ def _grep_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
             from .permissions import _ensure_tool_permission
 
             await _ensure_tool_permission(context, "Grep", "secret", f"Search {search_path} (a credentials file)", path=search_path)
-        rg_path = await ((search or {}).get("resolveBinary") or _resolve_ripgrep_binary)()
-        if not rg_path:
-            return {"content": "ripgrep is required for Grep and was not found.", "isError": True}
+        rg_path, fallback = _search_command(await ((search or {}).get("resolveBinary") or _resolve_ripgrep_binary)())
         output_mode = input.get("output_mode") if isinstance(input.get("output_mode"), str) else "files_with_matches"
         args = ["--color", "never", "--sort", "path"]
         if output_mode == "files_with_matches":
@@ -157,7 +153,7 @@ def _grep_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
         acquisition = await _run_search(
             search,
             binary=rg_path,
-            argv=args,
+            argv=[*fallback, *args],
             cwd=cwd,
             sessionId=context["session"]["id"],
             toolName="Grep",
@@ -186,6 +182,14 @@ def _grep_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
         return {"content": pretty_json(payload)}
 
     return builtin_tool("Grep", handler)
+
+
+def _search_command(rg_path: str | None) -> tuple[str, list[str]]:
+    """ripgrep when it is installed; otherwise this package's own search,
+    run as a separate process that takes the same arguments."""
+    if rg_path:
+        return rg_path, []
+    return sys.executable, ["-I", "-B", str(Path(__file__).with_name("search_fallback.py"))]
 
 
 async def _resolve_ripgrep_binary() -> str | None:

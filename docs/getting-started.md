@@ -9,7 +9,6 @@ off. It takes about ten minutes.
 - Python 3.12 or newer
 - An API key for a model provider, or a local OpenAI-compatible server
 - macOS or Linux
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) on your `PATH`, which the `Glob` and `Grep` tools use
 
 ## Install
 

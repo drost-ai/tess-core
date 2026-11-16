@@ -216,8 +216,9 @@ class ToolControlFlowTests(TessCoreTestCase):
                 return None
 
             missing_tools = {tool.name: tool for tool in core.create_builtin_tools({"search": {"resolveBinary": missing_rg}})}
-            self.assertTrue(run(missing_tools["Glob"].handler({"pattern": "*.py"}, context))["isError"])
-            self.assertTrue(run(missing_tools["Grep"].handler({"pattern": "needle"}, context))["isError"])
+            # Without ripgrep the tools run on the built-in search instead of failing.
+            self.assertFalse(run(missing_tools["Glob"].handler({"pattern": "*.py"}, context)).get("isError"))
+            self.assertFalse(run(missing_tools["Grep"].handler({"pattern": "needle"}, context)).get("isError"))
 
             rg_calls = []
 

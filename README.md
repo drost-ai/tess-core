@@ -76,9 +76,6 @@ uv venv --python 3.12
 uv pip install "tess-core @ git+https://github.com/drost-ai/tess-core.git"
 ```
 
-The file search tools (`Glob`, `Grep`) use [ripgrep](https://github.com/BurntSushi/ripgrep);
-install it if `rg` is not already on your `PATH`.
-
 **2. Name your Codex sign-in in `.env`.** It is a path, not a secret:
 
 ```sh
