@@ -108,7 +108,7 @@ providerProfiles:
 ```sh
 export ANTHROPIC_API_KEY=...
 python -m tess_core run -p "Summarise what changed in the last five commits" \
-    --provider anthropic --output-format stream-json
+    --provider-registry providers.yaml --provider claude --output-format stream-json
 ```
 
 The [getting started guide](docs/getting-started.md) takes it from here: streaming events,

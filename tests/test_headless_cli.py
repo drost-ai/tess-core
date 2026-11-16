@@ -148,6 +148,60 @@ class HeadlessCliTests(TessCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def _registry_run(self, registry_text, extra_args, extra_env):
+        root, home, workspace, previous = self._context()
+        try:
+            (workspace / "providers.yaml").write_text(registry_text, encoding="utf-8")
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("ANTHROPIC_", "OPENAI_", "TESS_"))}
+            env.update({"TESS_CORE_HOME": str(home), "PYTHONPATH": str(Path.cwd()), **extra_env})
+            env["TESS_CORE_HEADLESS_PROVIDER_RESPONSES"] = json.dumps(
+                [{"model": "m", "stopReason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1}, "content": [{"type": "text", "text": "ok"}]}]
+            )
+            return subprocess.run(
+                [sys.executable, "-m", "tess_core", "run", "-p", "hi", "--output-format", "json", "--no-session-persistence", *extra_args],
+                cwd=str(workspace), env=env, text=True, capture_output=True, timeout=20,
+            )
+        finally:
+            self.restore_home(root, previous)
+
+    _ONE_PROFILE = "schema_version: 1\nproviderProfiles:\n  mine:\n    kind: openai\n    apiMode: responses\n    defaultModel: m\n    auth:\n      kind: openai_api_key\n      envVar: MY_KEY\n"
+    _SECOND_PROFILE = "  other:\n    kind: anthropic\n    defaultModel: m2\n    auth:\n      kind: anthropic_api_key\n      envVar: OTHER_KEY\n"
+
+    def test_provider_registry_flag_uses_only_the_registry(self):
+        # A relative path, one profile and no --provider: the profile is selected.
+        proc = self._registry_run(self._ONE_PROFILE, ["--provider-registry", "providers.yaml"], {"MY_KEY": "k"})
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout.splitlines()[-1])["text"], "ok")
+        # Its credential is the declared variable and nothing else.
+        proc = self._registry_run(self._ONE_PROFILE, ["--provider-registry", "providers.yaml"], {"OPENAI_API_KEY": "ambient"})
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("Missing credential for profile 'mine'", proc.stderr)
+        # Built-in profiles do not exist beside a registry.
+        proc = self._registry_run(self._ONE_PROFILE, ["--provider-registry", "providers.yaml", "--provider", "openai"], {"MY_KEY": "k"})
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+
+    def test_provider_registry_flag_asks_which_of_several_profiles(self):
+        both = self._ONE_PROFILE + self._SECOND_PROFILE
+        proc = self._registry_run(both, ["--provider-registry", "providers.yaml"], {"MY_KEY": "k"})
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertIn("choose one with --provider: mine, other", proc.stderr)
+        proc = self._registry_run(both, ["--provider-registry", "providers.yaml", "--provider", "mine"], {"MY_KEY": "k"})
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_provider_auth_path_flag_supplies_a_codex_sign_in(self):
+        registry = "schema_version: 1\nproviderProfiles:\n  codex:\n    kind: openai\n    apiMode: codex\n    defaultModel: m\n    auth:\n      kind: openai_api_key_or_codex\n"
+        proc = self._registry_run(registry, ["--provider-registry", "providers.yaml"], {})
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("name a Codex auth file", proc.stderr)
+        with tempfile.TemporaryDirectory() as folder:
+            auth = Path(folder) / "auth.json"
+            auth.write_text(json.dumps({"tokens": {"access_token": "codex-token"}}), encoding="utf-8")
+            proc = self._registry_run(registry, ["--provider-registry", "providers.yaml", "--provider-auth-path", str(auth)], {})
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            proc = self._registry_run(registry, ["--provider-auth-path", str(auth)], {})
+            self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+            self.assertIn("--provider-auth-path needs --provider-registry", proc.stderr)
+
     def test_tool_flags_reject_permission_rules(self):
         root, home, workspace, previous = self._context()
         try:

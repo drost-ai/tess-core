@@ -11,7 +11,7 @@ from typing import Any, Sequence, TextIO
 from ..agent import run_agent_prompt
 from ..agent.providers import MISSING_CREDENTIAL_PREFIX
 from ..runtime.agent_bindings import create_agent_runtime_bindings, is_task_supervisor_gateway
-from ..config import resolve_config
+from ..config import ProviderRegistry, resolve_config
 from ..runtime.bootstrap import bootstrap_runtime
 from ..session.persistence import resolve_session
 from ..session.runtime import active_session_payload
@@ -26,6 +26,8 @@ class HeadlessOptions:
     runtime_home: str | None = None
     session: str | None = None
     provider: str | None = None
+    provider_registry: str | None = None
+    provider_auth_path: str | None = None
     model: str | None = None
     effort: str | None = None
     permission_mode: str | None = None
@@ -135,13 +137,23 @@ def headless_main(argv: Sequence[str] | None = None) -> int:
                 "Put rules such as Bash(git diff:*) under permissions.allow in <runtime-home>/settings/config.yaml.\n"
             )
             return 2
+    if args.provider_auth_path and not args.provider_registry:
+        sys.stderr.write("tess_core run: --provider-auth-path needs --provider-registry.\n")
+        return 2
+    try:
+        provider = _registry_provider(args.provider_registry, args.provider)
+    except ValueError as exc:
+        sys.stderr.write(f"tess_core run: {exc}\n")
+        return 2
     prompt = _read_prompt_arg(args.prompt, args.input_format)
     options = HeadlessOptions(
         prompt=prompt,
         cwd=os.path.abspath(args.cwd or os.getcwd()),
         runtime_home=args.runtime_home,
         session=args.session,
-        provider=args.provider,
+        provider=provider,
+        provider_registry=_user_path(args.provider_registry),
+        provider_auth_path=_user_path(args.provider_auth_path),
         model=args.model,
         effort=args.effort,
         permission_mode=args.permission_mode,
@@ -169,6 +181,8 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--runtime-home", dest="runtime_home", help="Tess-core runtime home.")
     run.add_argument("--session", help="Resume a saved session by id or search query.")
     run.add_argument("--provider", help="Provider or provider profile name.")
+    run.add_argument("--provider-registry", dest="provider_registry", metavar="FILE", help="Provider registry file (providers.yaml). Only its profiles are used.")
+    run.add_argument("--provider-auth-path", dest="provider_auth_path", metavar="FILE", help="Codex auth file for the chosen registry profile.")
     run.add_argument("--model", help="Model name.")
     run.add_argument("--effort", help="Reasoning effort level.")
     run.add_argument("--permission-mode", dest="permission_mode", help="Permission mode.")
@@ -188,11 +202,27 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _user_path(value: str | None) -> str | None:
+    return os.path.abspath(os.path.expanduser(value)) if value else None
+
+
+def _registry_provider(registry_path: str | None, provider: str | None) -> str | None:
+    """With a registry and no --provider, a registry of one profile selects it."""
+    if not registry_path or provider:
+        return provider
+    names = sorted(ProviderRegistry(_user_path(registry_path)).profiles)
+    if len(names) == 1:
+        return names[0]
+    raise ValueError(f"--provider-registry has {len(names)} profiles; choose one with --provider: {', '.join(names)}")
+
+
 def _config_options(options: HeadlessOptions) -> dict[str, Any]:
     out: dict[str, Any] = {"outputFormat": options.output_format, "inputFormat": options.input_format}
     for key, value in {
         "runtimeHome": options.runtime_home,
         "provider": options.provider,
+        "providerRegistry": options.provider_registry,
+        "providerAuthPath": options.provider_auth_path,
         "model": options.model,
         "effort": options.effort,
         "permissionMode": options.permission_mode,

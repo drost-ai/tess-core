@@ -193,6 +193,8 @@ class ProviderRegistry:
             return {'apiKey': copy.deepcopy(auth['credentialRef']), 'customHeaders': headers}
         token = env.get(auth.get("envVar")) if auth.get("envVar") else None
         if not isinstance(token, str) or not token.strip():
+            if auth["kind"] == "openai_api_key_or_codex" and not auth.get("envVar"):
+                raise ProviderRegistryError(f"Missing credential for profile '{name}'; name a Codex auth file for it or declare auth.envVar")
             raise ProviderRegistryError(f"Missing credential for profile '{name}'; set its declared auth.envVar")
         if record["kind"] == "openai":
             return {"openaiToken": token, "customHeaders": headers}

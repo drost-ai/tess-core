@@ -17,6 +17,8 @@ python -m tess_core run -p "Summarise the changes in this repository" --provider
 | `--runtime-home` | Where state is kept. Default: `$TESS_CORE_HOME`, then `~/.tess-core`. |
 | `--session` | Continue a saved session, by id or by a search phrase. |
 | `--provider` | A provider or profile name. |
+| `--provider-registry` | A provider registry file. Only its profiles are used. |
+| `--provider-auth-path` | A Codex auth file for the chosen registry profile. |
 | `--model` | A model name, overriding the profile's default. |
 | `--effort` | Reasoning effort. |
 | `--permission-mode` | `default`, `acceptEdits`, `auto`, `dontAsk` or `bypassPermissions`. |
@@ -37,6 +39,17 @@ The command knows two built-in providers, `anthropic` and `openai`, which read
 A Codex sign-in is used only when you name its file, for example
 `TESS_OPENAI_CODEX_AUTH_PATH=~/.codex/auth.json`. The command never looks for one, so
 being signed in to another tool does not change which provider or credential a run uses.
+
+To use a [provider registry](providers.md) file, pass it:
+
+```sh
+python -m tess_core run -p "..." --provider-registry providers.yaml --provider claude
+```
+
+Resolution is then strict, as it is for `start_runtime`: the built-in profiles, the
+settings folder's profiles and credentials found elsewhere are not used. `--provider` may
+be left out when the registry has one profile. A profile that signs in with a Codex
+account takes its auth file from `--provider-auth-path`.
 
 ### Output
 
