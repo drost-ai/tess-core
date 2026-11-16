@@ -202,6 +202,33 @@ class HeadlessCliTests(TessCoreTestCase):
             self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
             self.assertIn("--provider-auth-path needs --provider-registry", proc.stderr)
 
+    def test_resumed_session_keeps_its_profile_without_repeating_the_flags(self):
+        root, home, workspace, previous = self._context()
+        try:
+            (workspace / "providers.yaml").write_text(self._ONE_PROFILE, encoding="utf-8")
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("ANTHROPIC_", "OPENAI_", "TESS_"))}
+            env.update({"TESS_CORE_HOME": str(home), "PYTHONPATH": str(Path.cwd()), "MY_KEY": "k"})
+            env["TESS_CORE_HEADLESS_PROVIDER_RESPONSES"] = json.dumps(
+                [{"model": "m", "stopReason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1}, "content": [{"type": "text", "text": "ok"}]}]
+            )
+
+            def cli(*args):
+                return subprocess.run(
+                    [sys.executable, "-m", "tess_core", "run", *args], cwd=str(workspace), env=env, text=True, capture_output=True, timeout=20,
+                )
+
+            first = cli("-p", "one", "--provider-registry", "providers.yaml", "--output-format", "json")
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            session_id = json.loads(first.stdout.splitlines()[-1])["sessionId"]
+
+            # Neither --provider nor --provider-registry is repeated.
+            resumed = cli("-p", "two", "--session", session_id, "--output-format", "stream-json")
+            self.assertEqual(resumed.returncode, 0, resumed.stdout + resumed.stderr)
+            init = next(json.loads(line)["data"] for line in resumed.stdout.splitlines() if '"system.init"' in line)
+            self.assertEqual((init["session_id"], init["provider_profile"], init["model"]), (session_id, "mine", "m"))
+        finally:
+            self.restore_home(root, previous)
+
     def test_tool_flags_reject_permission_rules(self):
         root, home, workspace, previous = self._context()
         try:

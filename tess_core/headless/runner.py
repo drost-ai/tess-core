@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import json
 import os
 import sys
@@ -47,6 +48,11 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
     config = await resolve_config(_config_options(options), options.cwd)
     session_options = {"resume": options.session} if options.session else {}
     session = await resolve_session(session_options, config, {"cwd": options.cwd, "originalCwd": options.cwd})
+    rebound = _resumed_session_options(options, session, config)
+    if rebound is not None:
+        # A resumed session keeps the profile and model it was created with;
+        # its credentials are resolved for that profile, not for the default.
+        config = await resolve_config(_config_options(rebound), options.cwd)
     runtime = await bootstrap_runtime({"session": session, "config": config, "cwd": options.cwd})
     stream_enabled = options.output_format == "stream-json"
     sink = JsonStreamSink(stdout if stream_enabled else None)
@@ -200,6 +206,20 @@ def _build_parser() -> argparse.ArgumentParser:
     write_back.add_argument("session_id", help="Session id to write back.")
     write_back.add_argument("--runtime-home", dest="runtime_home", required=True)
     return parser
+
+
+def _resumed_session_options(options: HeadlessOptions, session: dict[str, Any], config: dict[str, Any]) -> HeadlessOptions | None:
+    """The options a resumed session needs when the command line did not repeat them."""
+    profile = session.get("providerProfileName")
+    if not options.session or options.provider or not profile:
+        return None
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    registry = options.provider_registry or metadata.get("tessCoreProviderRegistryPath")
+    auth_path = options.provider_auth_path or (metadata.get("tessCoreProviderAuthPath") if registry else None)
+    model = options.model or session.get("model")
+    if (profile, model, registry) == (config.get("providerProfileName"), config.get("model"), options.provider_registry):
+        return None
+    return dataclasses.replace(options, provider=profile, model=model, provider_registry=registry, provider_auth_path=auth_path)
 
 
 def _user_path(value: str | None) -> str | None:
