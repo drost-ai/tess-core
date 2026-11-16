@@ -94,6 +94,7 @@ providerProfiles:
     kind: openai
     apiMode: codex
     defaultModel: gpt-6.1-sol
+    reasoningEffort: xhigh
     auth:
       kind: openai_api_key_or_codex
 
