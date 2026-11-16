@@ -213,6 +213,40 @@ def _assert_owned(info: os.stat_result, target: str) -> None:
         raise _unsafe("Daemon path has the wrong owner.", target)
 
 
+_PRIVATE_GROUPS: dict[int, bool] = {}
+
+
+def _group_is_private(gid: int) -> bool:
+    """Whether a group has exactly one member: the user this process runs as.
+
+    Many Linux systems give each user a group of their own and a umask of 002,
+    so every directory the user makes is group-writable, by a group nobody
+    else is in. That is not writable by another user. A group anyone else
+    belongs to, as a listed member or as their primary group, is. Anything
+    that cannot be established counts as shared."""
+    if gid in _PRIVATE_GROUPS:
+        return _PRIVATE_GROUPS[gid]
+    private = False
+    try:
+        import grp
+        import pwd
+
+        me = pwd.getpwuid(os.getuid())
+        members = set(grp.getgrgid(gid).gr_mem) - {me.pw_name}
+        private = not members and not any(entry.pw_gid == gid and entry.pw_uid != me.pw_uid for entry in pwd.getpwall())
+    except (ImportError, KeyError, OSError):
+        private = False
+    _PRIVATE_GROUPS[gid] = private
+    return private
+
+
+def _writable_by_others(info: os.stat_result) -> bool:
+    """Whether anyone but the owner can write to a directory: every user can,
+    or the members of a group that is not the owner's alone."""
+    mode = stat.S_IMODE(info.st_mode)
+    return bool(mode & stat.S_IWOTH) or (bool(mode & stat.S_IWGRP) and not _group_is_private(info.st_gid))
+
+
 def _same_identity(left: os.stat_result, right: os.stat_result) -> bool:
     return left.st_dev == right.st_dev and left.st_ino == right.st_ino
 

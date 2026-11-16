@@ -29,6 +29,7 @@ from .security import (
     PRIVATE_FILE_MODE,
     _assert_owned,
     _unsafe,
+    _writable_by_others,
     is_daemon_socket_listener_active,
 )
 
@@ -94,12 +95,12 @@ async def verify_private_daemon_runtime(instanceId: str) -> None:
     await _verify_canonical_ancestors(home)
     home_stat = os.lstat(home)
     _assert_owned_directory(home_stat, home)
-    if stat.S_IMODE(home_stat.st_mode) & 0o022:
+    if _writable_by_others(home_stat):
         raise _unsafe("Runtime home is writable by another user.", home)
     for ancestor in (get_daemon_dir(), get_daemon_instances_dir()):
         info = os.lstat(ancestor)
         _assert_owned_directory(info, ancestor)
-        if stat.S_IMODE(info.st_mode) & 0o022:
+        if _writable_by_others(info):
             raise _unsafe("Daemon directory is writable by another user.", ancestor)
     _verify_private_tree(daemon_instance_dir(instance_id), daemon_socket_path(instance_id), instance_id)
 
@@ -192,8 +193,8 @@ def _ensure_owned_directory(target: str) -> None:
         info = os.lstat(target)
         created = True
     _assert_owned_directory(info, target)
-    if stat.S_IMODE(info.st_mode) & 0o022:
-        raise _unsafe("Daemon path is group/world-writable.", target)
+    if _writable_by_others(info):
+        raise _unsafe("Daemon path is writable by another user.", target)
     if created:
         os.chmod(target, PRIVATE_DIRECTORY_MODE)
 
@@ -231,7 +232,7 @@ async def _verify_canonical_ancestors(target: str) -> None:
             raise _unsafe("Daemon ancestor is not a canonical directory.", current)
         mode = stat.S_IMODE(info.st_mode)
         trusted_sticky_root = info.st_uid == 0 and bool(mode & stat.S_ISVTX)
-        if mode & 0o022 and not trusted_sticky_root:
+        if _writable_by_others(info) and not trusted_sticky_root:
             raise _unsafe("Daemon ancestor is writable by another user.", current)
         if hasattr(os, "getuid") and info.st_uid not in (os.getuid(), 0):
             raise _unsafe("Daemon ancestor has an untrusted owner.", current)
