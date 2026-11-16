@@ -82,20 +82,25 @@ providerProfiles:
   claude:
     kind: anthropic
     defaultModel: claude-sonnet-5-5
-    auth: { kind: anthropic_api_key, envVar: ANTHROPIC_API_KEY }
+    auth:
+      kind: anthropic_api_key
+      envVar: ANTHROPIC_API_KEY
 
   gpt:
     kind: openai
     apiMode: responses
     defaultModel: your-openai-model
-    auth: { kind: openai_api_key, envVar: OPENAI_API_KEY }
+    auth:
+      kind: openai_api_key
+      envVar: OPENAI_API_KEY
 
   local:                                   # llama.cpp, vLLM, Ollama: anything OpenAI-compatible
     kind: openai
     apiMode: chat_completions
     baseUrl: http://127.0.0.1:8080/v1
     defaultModel: your-local-model
-    auth: { kind: none }
+    auth:
+      kind: none
 ```
 
 **3. Run the example above**, or skip the code and use the command line:
