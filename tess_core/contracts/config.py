@@ -7,7 +7,7 @@ Producers: ``tess_core/config/resolution.py`` (``resolve_config``),
 
 from __future__ import annotations
 
-from typing import Any, Literal, NotRequired, TypedDict, Union, get_args
+from typing import Any, Literal, TypedDict, Union, get_args
 
 
 PermissionMode = Literal["default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"]
@@ -30,15 +30,18 @@ RuntimeSecretPurpose = Literal[
 ]
 
 
-class RuntimeSecretRef(TypedDict):
-    """An opaque reference to a secret the runtime holds. It carries no secret material."""
+class _RuntimeSecretRefRequired(TypedDict):
     kind: Literal["runtime_secret"]
     id: str
     purpose: RuntimeSecretPurpose
     version: Literal[1]
-    backend: NotRequired[Literal["macos_keychain", "linux_secret_service", "encrypted_file"]]
-    installation_id: NotRequired[str]
-    account_id: NotRequired[str]
+
+
+class RuntimeSecretRef(_RuntimeSecretRefRequired, total=False):
+    """An opaque reference to a secret the runtime holds. It carries no secret material."""
+    backend: Literal["macos_keychain", "linux_secret_service", "encrypted_file"]
+    installation_id: str
+    account_id: str
 
 
 RuntimeSecretValue = Union[str, RuntimeSecretRef]

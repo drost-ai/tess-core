@@ -381,5 +381,41 @@ class ContractSyncTests(unittest.TestCase):
         self.assertEqual(validate(session, SessionRecord, strict=True), [])
 
 
+class OptionalKeyTests(unittest.TestCase):
+    """Contract modules postpone annotation evaluation, which hides a
+    ``NotRequired`` marker from ``TypedDict``: the key is then counted as
+    required. Optional keys are declared on a ``total=False`` class instead."""
+
+    def test_no_contract_marks_optional_keys_per_key(self) -> None:
+        import importlib
+        import pkgutil
+        import typing
+
+        import tess_core.contracts as contracts
+
+        marked: list[str] = []
+        for info in pkgutil.iter_modules(contracts.__path__):
+            module = importlib.import_module(f"tess_core.contracts.{info.name}")
+            for name, schema in vars(module).items():
+                if not typing.is_typeddict(schema) or schema.__module__ != module.__name__:
+                    continue
+                hints = typing.get_type_hints(schema, include_extras=True)
+                marked += [
+                    f"{info.name}.{name}.{key}"
+                    for key, hint in hints.items()
+                    if typing.get_origin(hint) in (typing.NotRequired, typing.Required)
+                ]
+        self.assertEqual(marked, [])
+
+    def test_secret_reference_validates_without_its_optional_keys(self) -> None:
+        from tess_core.contracts.config import ResolvedConfig, RuntimeSecretRef
+
+        reference = {"kind": "runtime_secret", "id": "secret-1", "purpose": "provider_oauth_token", "version": 1}
+        self.assertEqual(validate(reference, RuntimeSecretRef, strict=True), [])
+        self.assertFalse([e for e in validate({"openaiToken": reference}, ResolvedConfig) if "openaiToken" in e])
+        self.assertEqual(validate({**reference, "backend": "encrypted_file"}, RuntimeSecretRef, strict=True), [])
+        self.assertEqual(validate({"kind": "runtime_secret"}, RuntimeSecretRef)[0], "missing required key 'id'")
+
+
 if __name__ == "__main__":
     unittest.main()
