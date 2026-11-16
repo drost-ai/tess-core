@@ -25,6 +25,32 @@ The model calls the `Agent` tool:
 Sub-agents need the task daemon, so start the runtime with `daemon_enabled=True` (the
 default).
 
+## Waiting for sub-agents
+
+`run_turn` returns when the parent's turn ends, which is usually before its children have
+finished. They are still working, and when one reports, the runtime starts another turn in
+the parent to read the result. A program that stops the runtime straight after `run_turn`
+stops the children too, and their work is lost without a word.
+
+A long-lived host has nothing to do: it stays up, and the results arrive as events. A
+script that runs one request and exits should wait first:
+
+```python
+result = await session.run_turn("Start a sub-agent to audit the dependencies.")
+await runtime.wait_until_idle()      # children done, and the parent has read what they sent
+await runtime.stop()
+```
+
+`wait_until_idle()` returns when no turn is running or queued, no sub-agent is working, and
+no sub-agent message is waiting to be read. Pass `timeout=` in seconds to give up with a
+`TimeoutError` that names what was still going on. It does not wait for background shell
+commands, monitors or scheduled jobs.
+
+The parent's follow-up turn is announced like any other: `turn.started` with the origin
+`child_message`, then `message.assistant` and `turn.completed`. A sub-agent's own steps
+arrive in the parent's event stream as `subagent.trace`, and its messages as
+`subagent.message`.
+
 ## Talking to each other
 
 `SendMessage` carries messages in both directions:

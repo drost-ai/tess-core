@@ -65,6 +65,7 @@ async def main():
         result = await session.run_turn("List the Python files here and say what each one does.")
         print(result["text"])
         print("session:", session.id)
+        await runtime.wait_until_idle()   # let any sub-agents finish and report
     finally:
         await runtime.stop()
 
@@ -84,6 +85,9 @@ Three things just happened:
 3. `run_turn` ran a **turn**: the model read your prompt, called tools such as `Glob` and
    `Read`, and answered. The result has `text`, `usage`, `model`, `toolCount`,
    `stopReason` and `estimatedCostUsd`.
+
+`wait_until_idle()` matters when a turn starts sub-agents: they keep working after the turn
+returns, and stopping the runtime stops them. With nothing running it returns at once.
 
 `session_options` is a function because the runtime calls it every time a session is
 opened or reopened, including when it wakes one by itself. It receives the session id and

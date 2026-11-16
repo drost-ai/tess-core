@@ -193,6 +193,7 @@ See [Tools](tools.md) for the built-in set.
 ```python
 runtime.status()            # sync: sessions, daemon, scheduler, pid, home
 await runtime.inspect()     # async: a deeper report
+await runtime.wait_until_idle(timeout=None)   # until turns and sub-agents are done
 runtime.scheduler           # see the scheduler guide
 ```
 

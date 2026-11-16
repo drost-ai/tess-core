@@ -336,6 +336,18 @@ class Runtime:
     def stopped(self) -> bool:
         return self._stopped
 
+    async def wait_until_idle(self, timeout: float | None = None) -> None:
+        """Wait until the runtime has finished what its turns started: no turn
+        running or queued, no sub-agent still working, and no sub-agent
+        message left unread by its parent. Call it between a turn and
+        ``stop()`` when the turn may have started sub-agents, since stopping
+        stops them too. Background commands, monitors and scheduled jobs are
+        not waited for. Raises ``TimeoutError``, naming what is still going
+        on, if ``timeout`` seconds pass first."""
+        from .idle_wait import wait_until_idle
+
+        await wait_until_idle(self, timeout)
+
     async def inspect(self) -> dict[str, Any]:
         """``status()`` plus what lives on disk: every session's children and
         every monitor delivery, with ids and lifecycle reasons only."""

@@ -33,6 +33,7 @@ async def main():
     session = await runtime.sessions.open()
     result = await session.run_turn("Find every TODO in this repo and group them by owner.")
     print(result["text"])
+    await runtime.wait_until_idle()   # let any sub-agents finish and report
     await runtime.stop()
 
 asyncio.run(main())
@@ -147,6 +148,7 @@ async def main():
     session = await runtime.sessions.open()
     result = await session.run_turn("Read the codebase here and orient yourself. What are we building here?")
     print(result["text"])
+    await runtime.wait_until_idle()   # let any sub-agents finish and report
     await runtime.stop()
 
 
