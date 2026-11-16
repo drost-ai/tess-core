@@ -259,6 +259,10 @@ async def prepare_subagent(args: dict[str, Any]) -> dict[str, Any]:
     metadata["launchGroupId"] = launch_group_id
     metadata["worktreePath"] = worktree_path
     metadata["effectiveAgentAuthority"] = child_authority
+    # The child is restored in another process: it needs the parent's registry.
+    from ..session.persistence import stamp_provider_registry_metadata
+
+    stamp_provider_registry_metadata(child_session, config)
     if runtime_contract:
         metadata["subagentRuntimeContract"] = runtime_contract
     metadata["childSessionIds"] = []

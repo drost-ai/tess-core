@@ -209,6 +209,28 @@ class ProviderRegistryTests(TessCoreTestCase):
             asyncio.run(check())
 
 
+    def test_sub_agent_session_carries_the_registry_of_its_parent(self):
+        from tess_core import start_runtime
+        from tess_core.subagents import prepare_subagent
+        from tess_core.tasks.runners.subagent import _session_config_options as child_options
+        async def check():
+            runtime = await start_runtime(str(self.home), cwd=str(self.workspace), daemon_enabled=False, provider_registry=self.path, session_options=lambda *_: SessionOptions(provider="custom", extra={"settingSources": ""}))
+            try:
+                session = await runtime.sessions.open()
+                live = runtime.sessions.live(session.id)
+                context = {"session": live.record, "config": live.config, "interactive": False, "cwd": str(self.workspace), "persist_session": lambda: None}
+                child = (await prepare_subagent({"context": context, "description": "child", "prompt": "test", "runInBackground": True}))["childSession"]
+                # The worker process restores the child from its own record.
+                options = child_options(child, str(self.home))
+                self.assertEqual(options["providerRegistry"], str(self.path))
+                self.assertEqual(options["provider"], "custom")
+                restored = await resolve_config(options, str(self.workspace))
+                self.assertEqual((restored["providerProfileName"], restored["model"]), ("custom", "local-test"))
+            finally:
+                await runtime.stop()
+        with mock.patch.dict(os.environ, {"SYNTHETIC_TOKEN": "fake-runtime-token"}):
+            asyncio.run(check())
+
     def test_existing_session_keeps_its_bound_profile_when_the_opener_selection_changes(self):
         from tess_core import start_runtime
         from tess_core.agent.turn_session import resolve_effective_provider_turn_binding

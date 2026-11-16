@@ -61,6 +61,23 @@ async def resolve_session(options: dict[str, Any], config: dict[str, Any], launc
     return created
 
 
+def stamp_provider_registry_metadata(session: dict[str, Any], config: dict[str, Any]) -> None:
+    """Record where a session's provider registry lives, so a process that
+    restores the session later (a resumed run, a sub-agent worker) resolves the
+    same profiles and credentials instead of the built-in defaults."""
+    registry = config.get("providerRegistry")
+    if registry is None:
+        return
+    metadata = session.setdefault("metadata", {})
+    metadata["tessCoreProviderRegistryPath"] = str(registry.path)
+    if config.get("providerAuthPath") is not None:
+        metadata["tessCoreProviderAuthPath"] = str(config["providerAuthPath"])
+    metadata["tessCoreSettingsSources"] = list(config.get("settingsSources") or [])
+    explicit = config.get("inlineSettings")
+    if isinstance(explicit, str) and not explicit.lstrip().startswith(("{", "[")):
+        metadata["tessCoreSettingsPath"] = explicit
+
+
 async def persist_session(
     session: SessionRecord,
     config: dict[str, Any],
@@ -79,16 +96,7 @@ async def persist_session(
             return None
         checkpoint_before = _session_persistence_checkpoint(session)
         snapshot = _copy_session_for_persist(session)
-        registry = config.get("providerRegistry")
-        if registry is not None:
-            metadata = snapshot.setdefault("metadata", {})
-            metadata["tessCoreProviderRegistryPath"] = str(registry.path)
-            if config.get("providerAuthPath") is not None:
-                metadata["tessCoreProviderAuthPath"] = str(config["providerAuthPath"])
-            metadata["tessCoreSettingsSources"] = list(config.get("settingsSources") or [])
-            explicit = config.get("inlineSettings")
-            if isinstance(explicit, str) and not explicit.lstrip().startswith(("{", "[")):
-                metadata["tessCoreSettingsPath"] = explicit
+        stamp_provider_registry_metadata(snapshot, config)
         repair = repair_session_transcript(snapshot)
         await hydrate_session_workspace_metadata(snapshot, {"includePullRequest": False})
         if persist_options.get("touch", True):
