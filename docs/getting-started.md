@@ -12,8 +12,12 @@ off. It takes about ten minutes.
 
 ## Install
 
+With [uv](https://docs.astral.sh/uv/):
+
 ```sh
-pip install "tess-core @ git+https://github.com/drost-ai/tess-core.git"
+mkdir my-agent && cd my-agent
+uv venv --python 3.12
+uv pip install "tess-core @ git+https://github.com/drost-ai/tess-core.git"
 ```
 
 Tess Core has no runtime dependencies, so this installs exactly one package.
@@ -68,7 +72,7 @@ asyncio.run(main())
 ```
 
 ```sh
-python agent.py
+uv run agent.py
 ```
 
 Three things just happened:
@@ -172,7 +176,7 @@ all come back. [Sessions and storage](storage.md) describes what is on disk.
 The same runtime is available from the command line:
 
 ```sh
-python -m tess_core run -p "Explain this repository in three sentences" \
+uv run python -m tess_core run -p "Explain this repository in three sentences" \
     --provider anthropic --permission-mode default --output-format json
 ```
 

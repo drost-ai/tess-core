@@ -129,7 +129,7 @@ scripts and CI jobs that call it:
 
 ```bash
 TESS_CORE_HEADLESS_PROVIDER_RESPONSES='[{"model":"scripted","stopReason":"end_turn","usage":{"input_tokens":1,"output_tokens":1},"content":[{"type":"text","text":"ok"}]}]' \
-    python -m tess_core run -p "anything" --output-format json
+    uv run python -m tess_core run -p "anything" --output-format json
 ```
 
 `TESS_CORE_HEADLESS_PROVIDER_RESPONSES_FILE` reads the same list from a file.
@@ -139,7 +139,7 @@ TESS_CORE_HEADLESS_PROVIDER_RESPONSES='[{"model":"scripted","stopReason":"end_tu
 ```bash
 git clone https://github.com/drost-ai/tess-core.git
 cd tess-core
-python -m venv .venv && .venv/bin/pip install -e ".[dev]"
+uv venv && uv pip install -e ".[dev]"
 .venv/bin/pytest -n auto
 ```
 

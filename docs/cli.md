@@ -5,7 +5,7 @@ It is meant for scripts, CI jobs and quick checks. For an application, use the
 [Python API](embedding.md).
 
 ```bash
-python -m tess_core run -p "Summarise the changes in this repository" --provider anthropic
+uv run python -m tess_core run -p "Summarise the changes in this repository" --provider anthropic
 ```
 
 ## `run`
@@ -43,7 +43,7 @@ being signed in to another tool does not change which provider or credential a r
 To use a [provider registry](providers.md) file, pass it:
 
 ```sh
-python -m tess_core run -p "..." --provider-registry providers.yaml --provider claude
+uv run python -m tess_core run -p "..." --provider-registry providers.yaml --provider claude
 ```
 
 Resolution is then strict, as it is for `start_runtime`: the built-in profiles, the
@@ -76,7 +76,7 @@ ending with `result`, which carries the same object as `json`. The events are th
 [event catalogue](events.md). Image data is redacted and very long strings are truncated.
 
 ```bash
-python -m tess_core run -p "Run the tests and report" --provider anthropic \
+uv run python -m tess_core run -p "Run the tests and report" --provider anthropic \
     --output-format stream-json | jq -r 'select(.event == "tool.started") | .data.name'
 ```
 
@@ -98,7 +98,7 @@ call at all. They do not take permission rules: `--allowed-tools "Bash(git diff:
 refused with an explanation. A read-only review needs nothing else:
 
 ```bash
-python -m tess_core run -p "Review src/ for bugs" --provider anthropic \
+uv run python -m tess_core run -p "Review src/ for bugs" --provider anthropic \
     --tools Read,Glob,Grep
 ```
 
@@ -113,7 +113,7 @@ permissions:
 ```
 
 ```bash
-python -m tess_core run -p "Fix the failing test" --provider anthropic \
+uv run python -m tess_core run -p "Fix the failing test" --provider anthropic \
     --runtime-home ./ci-agent --permission-mode acceptEdits
 ```
 
@@ -123,9 +123,9 @@ See [Security](security.md) for the modes and the rule syntax.
 ### Continuing a conversation
 
 ```bash
-python -m tess_core run -p "Start a changelog entry" --provider anthropic --output-format json \
+uv run python -m tess_core run -p "Start a changelog entry" --provider anthropic --output-format json \
     | jq -r .sessionId > session.txt
-python -m tess_core run -p "Add the migration notes" --session "$(cat session.txt)"
+uv run python -m tess_core run -p "Add the migration notes" --session "$(cat session.txt)"
 ```
 
 ### In CI
@@ -139,7 +139,7 @@ directory except `settings/`:
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   run: |
-    python -m tess_core run \
+    uv run python -m tess_core run \
       -p "Review the diff against origin/main. Reply with a list of problems, or 'OK'." \
       --provider anthropic --tools Read,Glob,Grep,Bash \
       --runtime-home ci-agent --no-session-persistence
