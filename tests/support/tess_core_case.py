@@ -122,4 +122,12 @@ class TessCoreTestCase(unittest.TestCase):
             os.environ.pop("TESS_CORE_HOME", None)
         else:
             os.environ["TESS_CORE_HOME"] = previous
+        # A process the test started may still be writing its last file into the
+        # home as it exits; give it a moment before treating that as a failure.
+        for _ in range(20):
+            try:
+                root.cleanup()
+                return
+            except OSError:
+                time.sleep(0.05)
         root.cleanup()

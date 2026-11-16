@@ -25,6 +25,7 @@ async def _save_blob_content(server: str, uri: str, data: str) -> str:
     raw = base64.b64decode(data)
     target = target_dir / _blob_file_name(uri, raw)
     target.write_bytes(raw)
+    _mark_newest(target_dir, target)
     _cleanup_blob_dir(target_dir, keep=int(_knob("mcp.blob_keep")))
     return str(target)
 
@@ -40,6 +41,18 @@ def _blob_file_name(uri: str, raw: bytes) -> str:
     stem = Path(basename).stem or _sanitize_name(uri)
     digest = hashlib.sha256(raw).hexdigest()[:16]
     return f"{_sanitize_name(stem)}-{digest}{ext}"
+
+
+def _mark_newest(target_dir: Path, target: Path) -> None:
+    """Give the blob just saved a modification time later than every other.
+    Two files written within one tick of the file system's clock would
+    otherwise tie, and cleanup could delete the newer of them."""
+    try:
+        others = [path.stat().st_mtime_ns for path in target_dir.iterdir() if path != target and path.is_file()]
+        stamp = max([target.stat().st_mtime_ns, *(value + 1 for value in others)])
+        os.utime(target, ns=(stamp, stamp))
+    except OSError:
+        pass
 
 
 def _cleanup_blob_dir(target_dir: Path, keep: int = 64) -> None:

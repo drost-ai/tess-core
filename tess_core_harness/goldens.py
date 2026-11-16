@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 import difflib
 import json
 from pathlib import Path
@@ -63,7 +65,11 @@ def expected_observations(scenario: Scenario, goldens_dir: str | None = None) ->
 
 def _scenario_golden_dir(scenario: Scenario, goldens_dir: str | None) -> Path:
     root = DEFAULT_GOLDENS_DIR if goldens_dir is None else Path(goldens_dir)
-    return root / scenario.id
+    # A scenario whose outcome legitimately differs by operating system (how a
+    # dead, unreaped process is reported, for one) keeps a recording per
+    # platform beside the default: <id>@linux, <id>@darwin.
+    specific = root / f"{scenario.id}@{sys.platform}"
+    return specific if specific.is_dir() else root / scenario.id
 
 
 def _manifest_for(scenario: Scenario) -> dict[str, Any]:

@@ -1,0 +1,141 @@
+[
+  {
+    "driver": "ensure_daemon",
+    "state": {
+      "remote": true,
+      "socketPath": "<tmp>/tess-core-<socket-scope>.sock"
+    },
+    "status": "passed"
+  },
+  {
+    "driver": "daemon_subscribe",
+    "sessionId": "<uuid:1>",
+    "status": "passed"
+  },
+  {
+    "command": "<python> -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
+    "driver": "start_background_task",
+    "result": {
+      "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "taskId": "<uuid:5>",
+      "task_id": "<uuid:5>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:5>"
+  },
+  {
+    "driver": "read_task_output",
+    "result": {
+      "output": "background task ok\n",
+      "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "taskId": "<uuid:5>",
+      "truncated": false
+    },
+    "status": "passed",
+    "taskId": "<uuid:5>"
+  },
+  {
+    "driver": "create_monitor",
+    "monitorId": "<uuid:2>",
+    "status": "passed",
+    "taskId": "<uuid:5>"
+  },
+  {
+    "driver": "get_daemon_bootstrap",
+    "status": "passed",
+    "taskTotal": 2
+  },
+  {
+    "driver": "run_worker_entrypoint",
+    "meta": {
+      "command": "printf worker-entrypoint-ok",
+      "cwd": "<workspace>",
+      "detailStatus": "completed",
+      "exitCode": 0,
+      "finishedAt": "<timestamp>",
+      "id": "worker-entrypoint",
+      "outputFile": "<runtime-home>/worker-entrypoints/worker-entrypoint.output.log",
+      "pid": "<pid:6>",
+      "runnerPid": "<pid:7>",
+      "signal": null,
+      "status": "completed",
+      "summary": "Task completed successfully.",
+      "taskId": "worker-entrypoint",
+      "terminalEventOwner": "task_runtime",
+      "terminalTransitionId": "<uuid:16>",
+      "updatedAt": "<timestamp>"
+    },
+    "output": "worker-entrypoint-ok",
+    "returnCode": 0,
+    "runnerReturnCode": 0,
+    "status": "passed",
+    "stderr": "",
+    "stdout": "",
+    "taskId": "worker-entrypoint"
+  },
+  {
+    "driver": "seed_recovery_task",
+    "pid": "<pid:4>",
+    "status": "passed",
+    "taskId": "recovery"
+  },
+  {
+    "driver": "ensure_daemon",
+    "state": {
+      "remote": true,
+      "socketPath": "<tmp>/tess-core-<socket-scope>.sock"
+    },
+    "status": "passed"
+  },
+  {
+    "driver": "daemon_subscribe",
+    "sessionId": "<uuid:1>",
+    "status": "passed"
+  },
+  {
+    "command": "<python> -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
+    "driver": "start_background_task",
+    "result": {
+      "outputFile": "<runtime-home>/tasks/<uuid:7>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:7>/output.log",
+      "taskId": "<uuid:7>",
+      "task_id": "<uuid:7>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:7>"
+  },
+  {
+    "driver": "stop_task",
+    "status": "passed",
+    "stopped": {
+      "changed": true,
+      "note": "Task stopped by deliberate request.",
+      "previousStatus": "running",
+      "status": "stopped",
+      "taskId": "<uuid:7>",
+      "transitionId": "<uuid:8>"
+    },
+    "taskId": "<uuid:7>"
+  },
+  {
+    "driver": "start_health_check",
+    "result": {
+      "taskId": "<uuid:9>",
+      "task_id": "<uuid:9>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:9>"
+  },
+  {
+    "driver": "read_task_output",
+    "result": {
+      "output": "[<timestamp>] status=failed measured_bytes=17 truncated=false\nhealth-attempt-1\n[<timestamp>] status=failed measured_bytes=17 truncated=false\nhealth-attempt-2\n[<timestamp>] status=ok measured_bytes=17 truncated=false\nhealth-attempt-3\n",
+      "outputFile": "<runtime-home>/tasks/<uuid:9>/output.log",
+      "taskId": "<uuid:9>",
+      "truncated": false
+    },
+    "status": "passed",
+    "taskId": "<uuid:9>"
+  }
+]

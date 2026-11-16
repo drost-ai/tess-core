@@ -118,7 +118,7 @@
             "expectedCommandDigest": "<expected-command-digest>",
             "observedCommandDigest": "<observed-command-digest>",
             "pid": "<pid:2>",
-            "platform": "darwin",
+            "platform": "<platform>",
             "processGroupId": "<pid:2>",
             "schemaVersion": 1,
             "spawnedAt": "<timestamp>",

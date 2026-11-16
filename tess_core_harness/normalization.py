@@ -51,6 +51,12 @@ class NormalizationContext:
                 ): count
                 for fingerprint, count in value.items()
             }
+        # What differs between operating systems, not between runs.
+        if value.get("platform") in ("darwin", "linux", "win32"):
+            value["platform"] = "<platform>"
+        for key in ("shellPath", "shell_path"):
+            if isinstance(value.get(key), str):
+                value[key] = "<shell>"
         for key in ("expectedCommandDigest", "expected_command_digest"):
             if key in value:
                 value[key] = "<expected-command-digest>"
@@ -245,6 +251,10 @@ class NormalizationContext:
             (Path(self.sandbox.run_dir), "<run-dir>"),
             (Path(REPO_ROOT), "<repo>"),
             (Path(tempfile.gettempdir()), "<tmp>"),
+            # The system temp root is /tmp on Linux and elsewhere on macOS. A
+            # literal /tmp is marked on every platform, so a recording made on
+            # one compares equal on the other.
+            (Path("/tmp"), "<tmp>"),
         ]
         replacements = _path_replacements(items)
         replacements.extend(_home_relative_replacements(items))

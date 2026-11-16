@@ -1,0 +1,229 @@
+{
+  "area": "tasks",
+  "capture": {
+    "include": [
+      "session",
+      "daemon_state",
+      "daemon_events",
+      "daemon_bootstrap",
+      "task_driver_results",
+      "task_records",
+      "task_metadata",
+      "task_outputs",
+      "monitor_records",
+      "health_checks",
+      "worker_results",
+      "workspace_tree",
+      "step_results"
+    ]
+  },
+  "id": "tasks.daemon-task-pack",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "daemon task harness\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "create_session": {
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions",
+        "provider": "openai"
+      }
+    },
+    {
+      "save_session": {}
+    },
+    {
+      "ensure_daemon": {}
+    },
+    {
+      "daemon_subscribe": {
+        "afterCursor": 0
+      }
+    },
+    {
+      "start_background_task": {
+        "alias": "background",
+        "script": "from pathlib import Path\nPath('background.txt').write_text('background artifact\\n', encoding='utf-8')\nprint('background task ok')",
+        "title": "scenario background"
+      }
+    },
+    {
+      "wait_task_status": {
+        "alias": "background",
+        "event": "task.completed",
+        "status": "completed",
+        "timeoutSeconds": 8
+      }
+    },
+    {
+      "read_task_output": {
+        "alias": "background"
+      }
+    },
+    {
+      "assert_task_output": {
+        "alias": "background",
+        "contains": "background task ok"
+      }
+    },
+    {
+      "assert_daemon_event": {
+        "eventsInclude": [
+          "task.updated",
+          "task.completed"
+        ]
+      }
+    },
+    {
+      "create_monitor": {
+        "alias": "background-monitor",
+        "checkIntervalMs": 2000,
+        "goal": "watch background completion",
+        "taskId": "background"
+      }
+    },
+    {
+      "get_daemon_bootstrap": {}
+    },
+    {
+      "assert_bootstrap": {
+        "minMonitors": 1,
+        "minTasks": 1
+      }
+    },
+    {
+      "run_worker_entrypoint": {
+        "alias": "worker-entrypoint",
+        "command": "printf worker-entrypoint-ok"
+      }
+    },
+    {
+      "seed_recovery_task": {
+        "alias": "recovery",
+        "output": "still running before restart\\n",
+        "title": "restart recovery"
+      }
+    },
+    {
+      "restart_daemon": {}
+    },
+    {
+      "wait_task_status": {
+        "alias": "recovery",
+        "statusIn": [
+          "terminated",
+          "stopped"
+        ],
+        "timeoutSeconds": 10
+      }
+    },
+    {
+      "assert_task_record": {
+        "alias": "recovery",
+        "detailStatus": "daemon_lost",
+        "metadataIncludes": [
+          "process_kill_outcome"
+        ],
+        "status": "stopped"
+      }
+    },
+    {
+      "daemon_subscribe": {
+        "afterCursor": 0
+      }
+    },
+    {
+      "start_background_task": {
+        "alias": "stoppable",
+        "script": "import time\nprint('stoppable task started', flush=True)\ntime.sleep(30)",
+        "title": "scenario stoppable"
+      }
+    },
+    {
+      "wait_task_status": {
+        "alias": "stoppable",
+        "status": "running",
+        "timeoutSeconds": 5
+      }
+    },
+    {
+      "stop_task": {
+        "alias": "stoppable"
+      }
+    },
+    {
+      "wait_task_status": {
+        "alias": "stoppable",
+        "statusIn": [
+          "terminated",
+          "stopped"
+        ],
+        "timeoutSeconds": 5
+      }
+    },
+    {
+      "start_health_check": {
+        "alias": "health",
+        "backoffMultiplier": 1,
+        "failureThreshold": 3,
+        "intervalMs": 1000,
+        "maxIntervalMs": 1000,
+        "scriptTemplate": "fail_twice_then_succeed",
+        "timeoutMs": 1000,
+        "title": "scenario health"
+      }
+    },
+    {
+      "wait_health_check": {
+        "alias": "health",
+        "event": "health_check.recovered",
+        "requireSuccess": true,
+        "status": "active",
+        "timeoutSeconds": 10
+      }
+    },
+    {
+      "read_task_output": {
+        "alias": "health"
+      }
+    },
+    {
+      "assert_task_output": {
+        "alias": "health",
+        "contains": "health-attempt-3"
+      }
+    },
+    {
+      "assert_file_exists": {
+        "path": "background.txt"
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "session",
+          "daemon_state",
+          "daemon_events",
+          "daemon_bootstrap",
+          "task_driver_results",
+          "task_records",
+          "task_metadata",
+          "task_outputs",
+          "monitor_records",
+          "health_checks",
+          "worker_results",
+          "workspace_tree",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "title": "Daemon Task Worker Pack"
+}

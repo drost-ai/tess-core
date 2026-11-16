@@ -15,7 +15,7 @@
       "totalTokenEstimate": "<token-estimate>"
     },
     "profile": "tool_heavy",
-    "renderedPrompt": "<context_reduction_summary>\npressure_level=high\nreactive_attempt=1\nselected_mode=partial_compaction\nreinjection_summary=recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17 | relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py\nreinjection=recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17\nreinjection=relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py\n</context_reduction_summary>",
+    "renderedPrompt": "<context_reduction_summary>\npressure_level=high\nreactive_attempt=1\nselected_mode=partial_compaction\nreinjection_summary=recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17 | relevant files: <tmp>/workspace/file0.py, <tmp>/workspace/file1.py\nreinjection=recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17\nreinjection=relevant files: <tmp>/workspace/file0.py, <tmp>/workspace/file1.py\n</context_reduction_summary>",
     "summary": {
       "applied": true,
       "appliedModes": [
@@ -34,9 +34,9 @@
       "reactiveAttempt": 1,
       "reinjectionLines": [
         "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17",
-        "relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py"
+        "relevant files: <tmp>/workspace/file0.py, <tmp>/workspace/file1.py"
       ],
-      "reinjectionSummary": "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17 | relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py",
+      "reinjectionSummary": "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17 | relevant files: <tmp>/workspace/file0.py, <tmp>/workspace/file1.py",
       "selectedMode": "partial_compaction",
       "steps": [
         {
@@ -56,9 +56,9 @@
           "mode": "partial_compaction",
           "reinjectionLines": [
             "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17",
-            "relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py"
+            "relevant files: <tmp>/workspace/file0.py, <tmp>/workspace/file1.py"
           ],
-          "reinjectionSummary": "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17 | relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py",
+          "reinjectionSummary": "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17 | relevant files: <tmp>/workspace/file0.py, <tmp>/workspace/file1.py",
           "requiresReinjection": true,
           "tokensSavedEstimate": "<token-estimate>"
         }
@@ -82,7 +82,7 @@
       "totalTokenEstimate": "<token-estimate>"
     },
     "profile": "plain",
-    "renderedPrompt": "<context_reduction_summary>\npressure_level=critical\nreactive_attempt=2\nselected_mode=partial_compaction\nreinjection_summary=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026\nreinjection=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026\n</context_reduction_summary>",
+    "renderedPrompt": "<context_reduction_summary>\npressure_level=critical\nreactive_attempt=2\nselected_mode=partial_compaction\nreinjection_summary=recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026 | assistant findings: plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app.py and pytest | plain context message 41 for <tmp>/workspace/app\u2026\nreinjection=recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app.py and pytest | plain context message 41 for <tmp>/workspace/app\u2026\n</context_reduction_summary>",
     "summary": {
       "applied": true,
       "appliedModes": [
@@ -99,10 +99,10 @@
       "pressureLevel": "critical",
       "reactiveAttempt": 2,
       "reinjectionLines": [
-        "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026",
-        "assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026"
+        "recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026",
+        "assistant findings: plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app.py and pytest | plain context message 41 for <tmp>/workspace/app\u2026"
       ],
-      "reinjectionSummary": "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026",
+      "reinjectionSummary": "recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026 | assistant findings: plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app.py and pytest | plain context message 41 for <tmp>/workspace/app\u2026",
       "selectedMode": "partial_compaction",
       "steps": [
         {
@@ -112,10 +112,10 @@
           "droppedMessageCount": 41,
           "mode": "partial_compaction",
           "reinjectionLines": [
-            "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026",
-            "assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026"
+            "recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026",
+            "assistant findings: plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app.py and pytest | plain context message 41 for <tmp>/workspace/app\u2026"
           ],
-          "reinjectionSummary": "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026",
+          "reinjectionSummary": "recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026 | assistant findings: plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app.py and pytest | plain context message 41 for <tmp>/workspace/app\u2026",
           "requiresReinjection": true,
           "tokensSavedEstimate": "<token-estimate>"
         }
@@ -139,7 +139,7 @@
       "totalTokenEstimate": "<token-estimate>"
     },
     "profile": "plain",
-    "renderedPrompt": "<context_reduction_summary>\npressure_level=high\nreactive_attempt=1\nselected_mode=partial_compaction\nreinjection_summary=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026\nreinjection=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026\n</context_reduction_summary>",
+    "renderedPrompt": "<context_reduction_summary>\npressure_level=high\nreactive_attempt=1\nselected_mode=partial_compaction\nreinjection_summary=recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026 | assistant findings: plain context message 33 for <tmp>/workspace/app.py and pytest | plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app\u2026\nreinjection=recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 33 for <tmp>/workspace/app.py and pytest | plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app\u2026\n</context_reduction_summary>",
     "summary": {
       "applied": true,
       "appliedModes": [
@@ -156,10 +156,10 @@
       "pressureLevel": "high",
       "reactiveAttempt": 1,
       "reinjectionLines": [
-        "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026",
-        "assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026"
+        "recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026",
+        "assistant findings: plain context message 33 for <tmp>/workspace/app.py and pytest | plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app\u2026"
       ],
-      "reinjectionSummary": "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026",
+      "reinjectionSummary": "recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026 | assistant findings: plain context message 33 for <tmp>/workspace/app.py and pytest | plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app\u2026",
       "selectedMode": "partial_compaction",
       "steps": [
         {
@@ -169,10 +169,10 @@
           "droppedMessageCount": 40,
           "mode": "partial_compaction",
           "reinjectionLines": [
-            "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026",
-            "assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026"
+            "recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026",
+            "assistant findings: plain context message 33 for <tmp>/workspace/app.py and pytest | plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app\u2026"
           ],
-          "reinjectionSummary": "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026",
+          "reinjectionSummary": "recent requests: plain context message 34 for <tmp>/workspace/app.py and pytest | plain context message 36 for <tmp>/workspace/app.py and pytest | plain context message 38 for <tmp>/workspace/app.py and pytest | plain context message 40 for <tmp>/workspace/app.py\u2026 | assistant findings: plain context message 33 for <tmp>/workspace/app.py and pytest | plain context message 35 for <tmp>/workspace/app.py and pytest | plain context message 37 for <tmp>/workspace/app.py and pytest | plain context message 39 for <tmp>/workspace/app\u2026",
           "requiresReinjection": true,
           "tokensSavedEstimate": "<token-estimate>"
         }

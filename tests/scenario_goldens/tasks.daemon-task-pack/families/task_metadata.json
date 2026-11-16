@@ -25,7 +25,7 @@
       "expectedCommandDigest": "<expected-command-digest>",
       "observedCommandDigest": "<observed-command-digest>",
       "pid": "<pid:2>",
-      "platform": "darwin",
+      "platform": "<platform>",
       "processGroupId": "<pid:2>",
       "schemaVersion": 1,
       "spawnedAt": "<timestamp>",
@@ -69,7 +69,7 @@
       "expectedCommandDigest": "<expected-command-digest>",
       "observedCommandDigest": "<observed-command-digest>",
       "pid": "<pid:3>",
-      "platform": "darwin",
+      "platform": "<platform>",
       "processGroupId": "<pid:3>",
       "schemaVersion": 1,
       "spawnedAt": "<timestamp>",
@@ -109,7 +109,7 @@
       "expectedCommandDigest": "<expected-command-digest>",
       "observedCommandDigest": "<observed-command-digest>",
       "pid": "<pid:4>",
-      "platform": "darwin",
+      "platform": "<platform>",
       "processGroupId": "<pid:4>",
       "schemaVersion": 1,
       "spawnedAt": "<timestamp>",
@@ -145,7 +145,7 @@
         "PATH": "/bin:/usr/bin",
         "SHELL": "/bin/sh",
         "TERM": "dumb",
-        "TMPDIR": "<runtime-home>/tmp",
+        "TMPDIR": "<runtime-home><tmp>",
         "TZ": "UTC",
         "USER": "tess-core"
       },
@@ -159,7 +159,7 @@
         "network": false
       },
       "schemaVersion": 1,
-      "shellPath": "/bin/sh",
+      "shellPath": "<shell>",
       "shellPolicy": {
         "reason": "control_character",
         "safe": false
@@ -192,7 +192,7 @@
       "expectedCommandDigest": "<expected-command-digest>",
       "observedCommandDigest": "<observed-command-digest>",
       "pid": "<pid:5>",
-      "platform": "darwin",
+      "platform": "<platform>",
       "processGroupId": "<pid:5>",
       "schemaVersion": 1,
       "spawnedAt": "<timestamp>",

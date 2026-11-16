@@ -1,0 +1,25 @@
+{
+  "activeTasks": 0,
+  "attachedClients": 1,
+  "authTokenId": "<auth-token-id>",
+  "cursor": 20,
+  "cwd": "<workspace>",
+  "epoch": "<uuid:3>",
+  "instanceId": "harness-daemon-instance",
+  "mode": "detached_python",
+  "phase": "running",
+  "pid": "<pid:1>",
+  "protocolVersion": 2,
+  "socketPath": "<tmp>/tess-core-<socket-scope>.sock",
+  "startedAt": "<timestamp>",
+  "status": "running",
+  "supervisor": {
+    "activeTasks": 0,
+    "attachedClients": 1,
+    "supervisorId": "<uuid:4>",
+    "watchedSessions": 1
+  },
+  "supervisorId": "<uuid:4>",
+  "updatedAt": "<timestamp>",
+  "watchedSessions": 1
+}

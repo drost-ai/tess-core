@@ -142,7 +142,7 @@ TESS_CORE_HEADLESS_PROVIDER_RESPONSES='[{"model":"scripted","stopReason":"end_tu
 git clone https://github.com/drost-ai/tess-core.git
 cd tess-core
 uv venv && uv pip install -e ".[dev]"
-.venv/bin/pytest -n auto
+uv run pytest -n auto
 ```
 
 The suite uses scripted providers throughout and needs no network or credentials.

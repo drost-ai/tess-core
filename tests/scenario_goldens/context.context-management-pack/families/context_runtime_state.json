@@ -16,7 +16,7 @@
   },
   "compaction": {
     "appliedModes": [],
-    "checkpointPath": "/tmp/checkpoint.json",
+    "checkpointPath": "<tmp>/checkpoint.json",
     "compactionModel": null,
     "compactionProvider": null,
     "compactions": null,

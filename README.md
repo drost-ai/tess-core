@@ -302,7 +302,7 @@ Issues and pull requests are welcome. Run the suite before you send one:
 
 ```sh
 uv venv && uv pip install -e ".[dev,encrypted-credentials,chatgpt-account]" pyyaml
-.venv/bin/python -m pytest -q -n auto
+uv run pytest -q -n auto
 ```
 
 The tests need no network and no API keys.

@@ -1,0 +1,96 @@
+[
+  {
+    "backoffMultiplier": 1,
+    "bodyLimitBytes": 262144,
+    "command": "<python> -c '\nfrom pathlib import Path\np = Path('\"'\"'health-count.txt'\"'\"')\nn = int(p.read_text()) if p.exists() else 0\np.write_text(str(n + 1))\nprint(f\"health-attempt-{n + 1}\")\nraise SystemExit(1 if n < 2 else 0)\n'",
+    "consecutiveFailures": 0,
+    "createdAt": "<timestamp>",
+    "currentIntervalMs": 1000,
+    "cwd": "<workspace>",
+    "executionPolicy": {
+      "authorityFingerprint": "<health-authority-fingerprint:1>",
+      "authorizedAt": "<timestamp>",
+      "environment": {
+        "HOME": "<runtime-home>",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "LOGNAME": "tess-core",
+        "PATH": "/bin:/usr/bin",
+        "SHELL": "/bin/sh",
+        "TERM": "dumb",
+        "TMPDIR": "<runtime-home><tmp>",
+        "TZ": "UTC",
+        "USER": "tess-core"
+      },
+      "maxRedirects": 3,
+      "permissionMode": "bypassPermissions",
+      "permissionSource": "approved",
+      "sandbox": {
+        "backend": "none",
+        "filesystem": "workspace-write",
+        "mode": "disabled",
+        "network": false
+      },
+      "schemaVersion": 1,
+      "shellPath": "<shell>",
+      "shellPolicy": {
+        "reason": "control_character",
+        "safe": false
+      }
+    },
+    "expectedBodyPolicy": "ignore",
+    "failureThreshold": 3,
+    "generation": 1,
+    "intervalMs": 1000,
+    "lastError": null,
+    "lastExitCode": 0,
+    "lastFailureAt": "<timestamp>",
+    "lastMeasuredBytes": 17,
+    "lastOutputArtifacts": [
+      {
+        "artifactId": "<uuid:15>",
+        "bytes": 17,
+        "contentType": "text",
+        "createdAt": "<timestamp>",
+        "family": "bash",
+        "filePath": "<runtime-home>/tool-artifacts/<uuid:1>/<uuid:15>.stdout.txt",
+        "lines": 1,
+        "sessionId": "<uuid:1>",
+        "sourceBytes": 17,
+        "toolName": "TaskHealthCheck"
+      }
+    ],
+    "lastOutputTruncated": false,
+    "lastProcessIdentity": {
+      "expectedCommandDigest": "<expected-command-digest>",
+      "observedCommandDigest": "<observed-command-digest>",
+      "pid": "<pid:5>",
+      "platform": "<platform>",
+      "processGroupId": "<pid:5>",
+      "schemaVersion": 1,
+      "spawnedAt": "<timestamp>",
+      "startToken": "<process-start-token>"
+    },
+    "lastResponseSnippet": "health-attempt-3",
+    "lastRunAt": "<timestamp>",
+    "lastSignal": null,
+    "lastStatusCode": null,
+    "lastSuccessAt": "<timestamp>",
+    "lastTerminated": false,
+    "lastTimedOut": false,
+    "maxIntervalMs": 1000,
+    "mode": "command",
+    "outputFile": "<runtime-home>/tasks/<uuid:9>/output.log",
+    "outputLimitBytes": 131072,
+    "revision": 10,
+    "schemaVersion": 2,
+    "sessionId": "<uuid:1>",
+    "specDigest": "<health-spec-digest:1>",
+    "startedAt": "<timestamp>",
+    "status": "active",
+    "taskId": "<uuid:9>",
+    "timeoutMs": 1000,
+    "title": "scenario health",
+    "updatedAt": "<timestamp>"
+  }
+]
