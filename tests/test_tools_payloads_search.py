@@ -73,6 +73,39 @@ class ToolPayloadSearchTests(TessCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_dependency_and_build_folders_stay_out_of_search_results_at_any_depth(self):
+        root, home, base, previous = self.temp_context()
+        try:
+            # A monorepo, itself under a folder named like an ignored one.
+            workspace = base / "tmp" / "project"
+            noisy = ("node_modules/pkg", ".venv/lib/site-packages/dep", "packages/web/node_modules/dep", "packages/web/dist", "build", "vendor/lib", "services/api/__pycache__")
+            for folder in (*noisy, "src", "packages/web/src"):
+                (workspace / folder).mkdir(parents=True)
+            for folder in noisy:
+                for index in range(20):
+                    (workspace / folder / f"f{index}.py").write_text("needle\n", encoding="utf-8")
+            (workspace / "src" / "app.py").write_text("needle app\n", encoding="utf-8")
+            (workspace / "packages" / "web" / "src" / "index.py").write_text("before\nneedle web\nafter\n", encoding="utf-8")
+            kept = [str(workspace / "packages" / "web" / "src" / "index.py"), str(workspace / "src" / "app.py")]
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=config["permissionMode"])
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}
+
+            async def no_ripgrep():
+                return None
+
+            for options in (None, {"search": {"resolveBinary": no_ripgrep}}):
+                tools = {tool.name: tool for tool in core.create_builtin_tools(options)}
+                with self.subTest(search="built-in" if options else "ripgrep"):
+                    self.assertEqual(json.loads(run(tools["Glob"].handler({"pattern": "**/*.py"}, context))["content"])["matches"], kept)
+                    self.assertEqual(json.loads(run(tools["Grep"].handler({"pattern": "needle"}, context))["content"])["matches"], kept)
+                    counted = json.loads(run(tools["Grep"].handler({"pattern": "needle", "output_mode": "count"}, context))["content"])["matches"]
+                    self.assertEqual(counted, [f"{path}:1" for path in kept])
+                    lines = json.loads(run(tools["Grep"].handler({"pattern": "needle", "output_mode": "content", "glob": "*.py", "-C": 1}, context))["content"])["matches"]
+                    self.assertEqual(lines, [f"{kept[0]}-1-before", f"{kept[0]}:2:needle web", f"{kept[0]}-3-after", "--", f"{kept[1]}:1:needle app", "--"])
+        finally:
+            self.restore_home(root, previous)
+
     def test_shell_and_task_output_manifests_persist_artifacts_match_reference(self):
         root, home, workspace, previous = self.temp_context()
         try:

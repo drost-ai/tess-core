@@ -7,6 +7,7 @@ import asyncio
 import math
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -157,6 +158,7 @@ def _grep_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
             offset=offset,
             sampleItems=head_limit,
             sampleBytes=policy["grepInlineBytes"],
+            accept=_grep_record_filter(search_path),
             abortSignal=context.get("abortSignal"),
         )
         if acquisition["aborted"]:
@@ -272,6 +274,43 @@ async def _resolve_glob_search(pattern: str, requested_path: Any, context: ToolC
         "pattern": pattern,
         "searchPath": await _authorize_path(_require_string(requested_path, "path"), context, "Glob") if requested_path else (context.get("cwd") or context["session"]["cwd"]),
     }
+
+
+_GREP_RECORD_PATH = re.compile(r"^(?P<path>.*?)(?:[:-]\d+[:-]|:\d+$)")
+
+
+def _grep_record_filter(search_path: str):
+    """Accept search output line by line, dropping lines from ignored folders
+    and the group separators those lines would leave behind."""
+    last_was_separator = True  # nothing kept yet: a leading separator separates nothing
+
+    def accept(record: str) -> bool:
+        nonlocal last_was_separator
+        if record == "--":
+            if last_was_separator:
+                return False
+            last_was_separator = True
+            return True
+        if not _grep_record_is_kept(record, search_path):
+            return False
+        last_was_separator = False
+        return True
+
+    return accept
+
+
+def _grep_record_is_kept(record: str, search_path: str) -> bool:
+    """Whether a line of search output is from outside the dependency, build
+    and cache folders, wherever below the search root they sit. ripgrep is
+    given those folders as exclusions at the root only; a monorepo keeps them
+    deeper (packages/web/node_modules), and they would flood the results."""
+    root = search_path.rstrip(os.sep) + os.sep
+    if not record.startswith(root):
+        return True  # a separator, or a search of one named file
+    remainder = record[len(root):]
+    found = _GREP_RECORD_PATH.match(remainder)
+    relative = found.group("path") if found else remainder
+    return bool(filter_default_ignored_glob_matches([relative]))
 
 
 def _below_search_root(record: str, search_path: str) -> str:
