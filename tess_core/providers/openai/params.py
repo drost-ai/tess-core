@@ -235,6 +235,9 @@ def convert_messages_to_input(messages: list[dict[str, Any]]) -> list[dict[str, 
                 out.append({"type": "message", "role": "user", "content": content})
             elif isinstance(content, list):
                 user_content, function_outputs = _convert_responses_user_content(content)
+                # Function outputs answer the calls before them; anything else in the turn
+                # (such as an image a tool returned) follows them.
+                out.extend(function_outputs)
                 if user_content:
                     out.append(
                         {
@@ -243,7 +246,6 @@ def convert_messages_to_input(messages: list[dict[str, Any]]) -> list[dict[str, 
                             "content": _collapse_responses_text_content(user_content),
                         }
                     )
-                out.extend(function_outputs)
             continue
         assistant_text = content if isinstance(content, str) else "".join(block.get("text", "") for block in content or [] if block.get("type") == "text")
         if assistant_text:
@@ -327,9 +329,11 @@ def convert_messages_to_chat_completions(system: str, messages: list[dict[str, A
                 out.append({"role": "user", "content": content})
             elif isinstance(content, list):
                 user_content, tool_messages = _convert_chat_user_content(content)
+                # Tool results must directly follow the assistant message that called the
+                # tools; anything else in the turn (such as an image a tool returned) after.
+                out.extend(tool_messages)
                 if user_content:
                     out.append({"role": "user", "content": _collapse_chat_text_content(user_content)})
-                out.extend(tool_messages)
             continue
         if isinstance(content, str):
             out.append({"role": "assistant", "content": content})

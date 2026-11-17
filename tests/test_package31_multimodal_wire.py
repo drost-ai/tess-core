@@ -96,6 +96,38 @@ class Package31MultimodalWireTests(unittest.TestCase):
         anthropic = testing.build_anthropic_messages_payload({**request, "model": "claude-sonnet-4-6"})
         self.assertEqual(anthropic["messages"][0]["content"][1], block)
 
+    def test_an_image_a_tool_returned_follows_the_tool_results_on_openai_wires(self):
+        # Chat Completions refuses a request whose tool calls are not answered by the
+        # very next messages (DeepSeek: "An assistant message with 'tool_calls' must be
+        # followed by tool messages"), so the image must come after every tool result.
+        request = {
+            "model": "gpt-5.4",
+            "system": "system",
+            "messages": [
+                {"role": "user", "content": "read both files"},
+                {"role": "assistant", "content": [
+                    {"type": "tool_use", "id": "call_1", "name": "Read", "input": {"file_path": "a.png"}},
+                    {"type": "tool_use", "id": "call_2", "name": "Read", "input": {"file_path": "b.txt"}},
+                ]},
+                {"role": "user", "content": [
+                    {"type": "tool_result", "tool_use_id": "call_1", "content": "a.png attached"},
+                    _block(b"img"),
+                    {"type": "tool_result", "tool_use_id": "call_2", "content": "b text"},
+                ]},
+            ],
+            "tools": [],
+        }
+        chat = testing.build_chat_completions_create_params(request)["messages"]
+        self.assertEqual([m["role"] for m in chat], ["system", "user", "assistant", "tool", "tool", "user"])
+        self.assertEqual([m.get("tool_call_id") for m in chat[3:5]], ["call_1", "call_2"])
+        self.assertEqual(chat[5]["content"][0]["image_url"]["url"], "data:image/png;base64,aW1n")
+        items = testing.build_responses_create_params({"request": request})["input"]
+        self.assertEqual(
+            [item.get("type") for item in items],
+            ["message", "function_call", "function_call", "function_call_output", "function_call_output", "message"],
+        )
+        self.assertEqual(items[5]["content"][0]["type"], "input_image")
+
     def test_token_preflight_and_serialization_use_the_same_four_image_set(self):
         with tempfile.TemporaryDirectory(prefix="tess-core-p31-wire-") as cwd:
             config = _config(cwd)
