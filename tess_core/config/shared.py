@@ -118,3 +118,46 @@ BUILTIN_AGENTS: dict[str, AgentDefinition] = {
         "prompt": "You are a debugging specialist. Reproduce issues, isolate causes, propose the smallest defensible fix, and verify the result.",
     },
 }
+
+
+# Whether a model takes image inputs. One rule for every place that asks: loading a
+# profile, attaching an image to a tool result, and sending a request with images.
+# A declaration wins (capabilities.imageInput, then supportsVision or an older spelling);
+# without one, the model's name decides.
+
+def declared_image_input(profile: dict | None) -> bool | None:
+    """The profile's own answer to "does this model take images?", or None if it is silent."""
+    profile = profile if isinstance(profile, dict) else {}
+    capabilities = profile.get("capabilities")
+    if isinstance(capabilities, dict) and isinstance(capabilities.get("imageInput"), bool):
+        return capabilities["imageInput"]
+    for key in ("supportsVision", "supports_vision", "vision"):
+        if isinstance(profile.get(key), bool):
+            return profile[key]
+    if isinstance(capabilities, dict):
+        for key in ("vision", "image_inputs", "imageInputs", "multimodal"):
+            if isinstance(capabilities.get(key), bool):
+                return capabilities[key]
+    if isinstance(capabilities, list):
+        named = {str(item).strip().lower() for item in capabilities}
+        if named & {"vision", "image_inputs", "image-inputs"}:
+            return True
+    return None
+
+
+def model_implies_image_input(
+    kind: str | None, model: str | None, base_url: str | None = None, api_mode: str | None = None
+) -> bool:
+    """What a model's name says about image input, for profiles that do not declare it."""
+    name = str(model or "").strip().lower()
+    if not name:
+        return False
+    if kind == "anthropic":
+        return name.startswith("claude-")
+    if kind != "openai":
+        return False
+    base = str(base_url or "").strip().lower()
+    official = str(api_mode or "").strip().lower() == "codex" or not base or "api.openai.com" in base or "chatgpt.com" in base
+    if official and name.startswith(("gpt-4", "gpt-5", "gpt-6", "o3", "o4")):
+        return True
+    return any(marker in name for marker in ("vision", "vl", "multimodal", "omni"))

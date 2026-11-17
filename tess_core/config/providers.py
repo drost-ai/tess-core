@@ -32,6 +32,8 @@ from .shared import (
     MAX_PROVIDER_ENCODED_IMAGE_REQUEST_BYTES,
     MAX_PROVIDER_IMAGE_INPUT_BYTES,
     MAX_PROVIDER_IMAGE_INPUT_COUNT,
+    declared_image_input,
+    model_implies_image_input,
 )
 
 from .credentials import _resolve_anthropic_credentials, _resolve_openai_credential
@@ -381,22 +383,12 @@ def _resolve_provider_capabilities(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _default_image_input_capability(record: dict[str, Any]) -> bool:
-    for key in ("supportsVision", "supports_vision", "vision"):
-        if isinstance(record.get(key), bool):
-            return record[key]
-    capabilities = record.get("capabilities")
-    if isinstance(capabilities, dict):
-        for key in ("vision", "image_inputs", "imageInputs", "multimodal"):
-            if isinstance(capabilities.get(key), bool):
-                return capabilities[key]
-    model = str(record.get("defaultModel") or "").strip().lower()
-    if record.get("kind") == "anthropic":
-        return model.startswith("claude-") and bool(re.search(r"(?:opus|sonnet|haiku)-4-|claude-4", model))
-    if record.get("kind") != "openai":
-        return False
-    base_url = str(record.get("baseUrl") or "").strip().lower()
-    official = not base_url or bool(re.match(r"https://api\.openai\.com(?:/|$)", base_url))
-    return official and model.startswith(("gpt-5", "gpt-4"))
+    declared = declared_image_input(record)
+    if declared is not None:
+        return declared
+    return model_implies_image_input(
+        record.get("kind"), record.get("defaultModel"), record.get("baseUrl"), record.get("apiMode")
+    )
 
 def resolve_compaction_provider_profile_binding(args: dict[str, Any] | None = None) -> dict[str, Any] | None:
     args = dict(args or {})

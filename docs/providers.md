@@ -72,6 +72,12 @@ SessionOptions(provider="gpt", model="another-model", effort="low")
 
 Profile names are lowercase and yours to choose.
 
+**Images.** `capabilities.imageInput: true` says the model takes images (`supportsVision:
+true` is the same). Then images in a prompt reach it, and so do images a tool returns, such
+as a `Read` of a PNG. Without either, the model's name decides: Claude models, and OpenAI's
+own GPT-4, GPT-5, GPT-6 and o-series, take images; models on other services are treated as
+text-only. Declare it for any other model that can see.
+
 ## Credentials
 
 `auth` has a `kind` and, for every kind but `none`, an `envVar`:

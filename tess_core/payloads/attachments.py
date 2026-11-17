@@ -44,7 +44,9 @@ def resolve_runtime_provider_capabilities(config: dict[str, Any]) -> dict[str, A
         configured = profile.get("capabilities") if isinstance(profile.get("capabilities"), dict) else {}
     explicit_image_input = configured.get("imageInput")
     if not isinstance(explicit_image_input, bool):
-        explicit_image_input = _legacy_image_input_capability(profile)
+        from ..agent.shared import model_supports_image_inputs  # the agent package imports this module
+
+        explicit_image_input = model_supports_image_inputs(config, str(config.get("model") or ""))
     raw_mimes = configured.get("imageMimeTypes")
     image_mimes = _normalize_mime_types(raw_mimes) if isinstance(raw_mimes, list) else list(DEFAULT_IMAGE_INPUT_MIME_TYPES)
     return {
@@ -189,18 +191,6 @@ def _bounded_runtime_limit(value: Any, fallback: int, maximum: int) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
         return fallback
     return min(maximum, int(value))
-
-
-def _legacy_image_input_capability(profile: dict[str, Any]) -> bool:
-    for key in ("supportsVision", "supports_vision", "vision"):
-        if isinstance(profile.get(key), bool):
-            return profile[key]
-    capabilities = profile.get("capabilities")
-    if isinstance(capabilities, dict):
-        for key in ("vision", "image_inputs", "imageInputs", "multimodal"):
-            if isinstance(capabilities.get(key), bool):
-                return capabilities[key]
-    return False
 
 
 def _textify_legacy_image_placeholders(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:

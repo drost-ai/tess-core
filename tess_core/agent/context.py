@@ -76,8 +76,16 @@ async def prepare_provider_request(args: dict[str, Any]) -> dict[str, Any]:
         system_context = request_context.get("systemContext")
         if system_context and not _dynamic_context_belongs_in_messages(config):
             system = f"{system}\n\n{request_context['systemContext']}"
+        # A model that cannot see answers an image the user has just sent with a refusal.
+        # Images further back (sent before a switch to this model, say) are not a reason to
+        # refuse: admission below replaces them with a note and the request goes ahead.
+        newest_user = next(
+            (m for m in reversed(request_context.get("messages") or []) if isinstance(m, dict) and m.get("role") == "user"),
+            None,
+        )
         unsupported_image_inputs = (
-            request_has_image_inputs({"messages": request_context.get("messages") or []})
+            newest_user is not None
+            and request_has_image_inputs({"messages": [newest_user]})
             and not model_supports_image_inputs(config, active_model)
         )
         request_context = _normalize_request_context_messages(

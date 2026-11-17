@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..config.shared import declared_image_input, model_implies_image_input
 
 
 IMAGE_INPUT_UNSUPPORTED_MESSAGE = "This model does not support image inputs."
@@ -16,21 +17,22 @@ def request_has_image_inputs(request: dict[str, Any]) -> bool:
 
 
 def model_supports_image_inputs(config: dict[str, Any], model: str) -> bool:
+    """Whether `model` takes image inputs, by the rule tool-result attachments also use.
+
+    The session's capabilities.imageInput wins (a loaded profile always has one, declared or
+    inferred from its model); then the profile's own declaration; then the model's name.
+    """
     profile = config.get("providerProfile") or {}
-    explicit = _explicit_vision_support(profile)
-    if explicit is not None:
-        return explicit
-    provider = str(config.get("provider") or config.get("providerKind") or "").strip().lower()
-    normalized_model = str(model or "").strip().lower()
-    if provider == "anthropic":
-        return normalized_model.startswith("claude-")
-    if provider != "openai":
-        return False
-    mode = str(config.get("openaiApiMode") or profile.get("apiMode") or "").strip().lower()
-    base_url = str(config.get("openaiBaseUrl") or profile.get("baseUrl") or "").strip().lower()
-    if mode == "codex" or not base_url or "api.openai.com" in base_url or "chatgpt.com" in base_url:
-        return _openai_model_supports_images(normalized_model)
-    return _model_name_advertises_vision(normalized_model)
+    capabilities = config.get("providerCapabilities")
+    if isinstance(capabilities, dict) and isinstance(capabilities.get("imageInput"), bool):
+        return capabilities["imageInput"]
+    declared = declared_image_input(profile)
+    if declared is not None:
+        return declared
+    kind = str(config.get("provider") or config.get("providerKind") or "").strip().lower()
+    mode = config.get("openaiApiMode") or profile.get("apiMode")
+    base_url = config.get("openaiBaseUrl") or profile.get("baseUrl")
+    return model_implies_image_input(kind, model, base_url, mode)
 
 
 def unsupported_image_input_response(model: str) -> dict[str, Any]:
@@ -52,32 +54,3 @@ def _content_has_image_input(content: Any) -> bool:
         if block_type in ("image", "input_image"):
             return True
     return False
-
-
-def _explicit_vision_support(profile: dict[str, Any]) -> bool | None:
-    for key in ("supportsVision", "supports_vision", "vision"):
-        if key in profile and profile.get(key) is not None:
-            return bool(profile.get(key))
-    capabilities = profile.get("capabilities")
-    if isinstance(capabilities, dict):
-        for key in ("vision", "image_inputs", "imageInputs", "multimodal"):
-            if key in capabilities:
-                return bool(capabilities.get(key))
-    if isinstance(capabilities, list):
-        normalized = {str(item).strip().lower() for item in capabilities}
-        if "vision" in normalized or "image_inputs" in normalized or "image-inputs" in normalized:
-            return True
-    return None
-
-
-def _openai_model_supports_images(model: str) -> bool:
-    if not model:
-        return False
-    if model.startswith(("gpt-4o", "gpt-4.1", "gpt-5", "o3", "o4")):
-        return True
-    return _model_name_advertises_vision(model)
-
-
-def _model_name_advertises_vision(model: str) -> bool:
-    markers = ("vision", "vl", "multimodal", "omni", "gpt-4o")
-    return any(marker in model for marker in markers)
