@@ -88,7 +88,7 @@ def test_anthropic_uses_its_own_header_and_path(tmp_path, monkeypatch):
     (302, b"", ("failed", "unexpected_redirect")),
     (500, b"{}", ("failed", "invalid_provider_response")),
     (200, b"not json", ("failed", "invalid_provider_response")),
-    (200, b"x" * (600 * 1024), ("failed", "connection_unavailable")),
+    (200, b"x" * (9 * 1024 * 1024), ("failed", "invalid_provider_response")),  # more than the check reads
 ])
 def test_outcomes_are_codes_not_provider_text(tmp_path, monkeypatch, status, body, expected):
     result = asyncio.run(check_provider_connection(
@@ -106,3 +106,16 @@ def test_unreachable_timeouts_and_borrowed_auth_files(tmp_path, monkeypatch):
     missing = registry(tmp_path, monkeypatch, {"kind": "openai_api_key", "envVar": "SYNTHETIC_UNSET_KEY"})
     monkeypatch.delenv("SYNTHETIC_UNSET_KEY", raising=False)
     assert asyncio.run(check_provider_connection(missing, "p", transport=transport()))["code"] == "invalid_profile"
+
+
+def test_a_chatgpt_sized_catalogue_is_read_and_an_oversized_answer_is_not_a_network_failure(tmp_path, monkeypatch):
+    from tess_core.providers import connection
+    models = [{"slug": f"model-{i}", "visibility": "list", "base_instructions": "x" * 70_000} for i in range(13)]
+    models.append({"slug": "hidden", "visibility": "hide", "base_instructions": "x" * 70_000})
+    payload = json.dumps({"models": models}).encode()
+    assert len(payload) > 900_000  # larger than the half megabyte this check used to read
+    listed = asyncio.run(check_provider_connection(registry(tmp_path, monkeypatch, {"kind": "none"}), "p", transport=transport(payload=payload)))
+    assert (listed["state"], listed["models"]) == ("available", [f"model-{i}" for i in range(13)])
+    oversized = b'{"data": [], "pad": "' + b"x" * connection.MAX_BODY + b'"}'
+    refused = asyncio.run(check_provider_connection(registry(tmp_path, monkeypatch, {"kind": "none"}), "p", transport=transport(payload=oversized)))
+    assert refused == {"state": "failed", "code": "invalid_provider_response", "models": []}

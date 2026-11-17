@@ -123,3 +123,31 @@ def test_probe_round_trips_only_its_own_value_and_reports_backend_state():
     assert locked.probe() == 'locked'
     backend.fail = False
     assert store.consume(ref, account_id=account, purpose='provider_api_key')
+
+
+def test_a_managed_key_reaches_a_turn_as_the_credential_its_provider_reads(tmp_path):
+    """An OpenAI-kind profile with a keychain-held key used to resolve with no
+    credential, so its first request was answered "No credential is configured"."""
+    import asyncio
+    from tess_core.config import resolve_config
+    store, backend, installation, account = setup()
+    openai_ref = store.write(account, 'provider_api_key', {'api_key': secrets.token_urlsafe(24)})
+    anthropic_ref = store.write(account, 'provider_api_key', {'api_key': secrets.token_urlsafe(24)})
+    path = tmp_path / 'providers.json'
+    path.write_text(json.dumps({'profiles': {
+        'openai-key': {'kind': 'openai', 'defaultModel': 'synthetic', 'auth': {'kind': 'openai_api_key', 'credentialRef': openai_ref}},
+        'endpoint': {'kind': 'openai', 'apiMode': 'chat_completions', 'baseUrl': 'https://compatible.invalid/v1', 'defaultModel': 'synthetic',
+                     'auth': {'kind': 'openai_api_key', 'credentialRef': openai_ref}},
+        'claude': {'kind': 'anthropic', 'defaultModel': 'synthetic', 'auth': {'kind': 'anthropic_api_key', 'credentialRef': anthropic_ref}}}}))
+    registry = ProviderRegistry(path)
+    home, workspace = tmp_path / 'home', tmp_path / 'work'
+    home.mkdir(); workspace.mkdir()
+
+    def resolved(name):
+        return asyncio.run(resolve_config({'runtimeHome': str(home), 'providerRegistry': registry, 'provider': name, 'settingSources': ''}, str(workspace)))
+
+    for name in ('openai-key', 'endpoint'):
+        config = resolved(name)
+        assert config['openaiToken'] == openai_ref and config['apiKey'] is None
+    config = resolved('claude')
+    assert config['apiKey'] == anthropic_ref and config['openaiToken'] is None

@@ -366,6 +366,11 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
         strict_auth = registry.resolve_auth(selected_name, codex_auth_path=options.get("providerAuthPath"))
         anthropic_creds = {"apiKey": strict_auth.get("apiKey"), "authToken": strict_auth.get("authToken")}
         openai_token = strict_auth.get("openaiToken")
+        if resolved_provider == "openai" and openai_token is None and strict_auth.get("apiKey") is not None:
+            # A managed key comes back as ``apiKey`` whatever the provider; for an
+            # OpenAI-kind profile it is the bearer credential, or the turn has none.
+            openai_token = strict_auth["apiKey"]
+            anthropic_creds = {"apiKey": None, "authToken": None}
         custom_headers = strict_auth["customHeaders"]
 
     normalized_api_key = await normalize_runtime_secret_value(

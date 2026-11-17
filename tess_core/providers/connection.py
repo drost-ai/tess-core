@@ -20,7 +20,9 @@ from ..runtime.secrets import RuntimeSecretError, is_runtime_secret_ref, resolve
 from .anthropic_async_transport import AnthropicAsyncHttpConnectionOwner
 
 ANTHROPIC_VERSION = "2023-06-01"
-MAX_BODY = 512 * 1024
+# A ChatGPT account's catalogue carries every model's instructions and runs to
+# about a megabyte; the limit leaves room for it to grow.
+MAX_BODY = 8 * 1024 * 1024
 MAX_MODELS = 200
 
 
@@ -85,6 +87,9 @@ async def check_provider_connection(registry: ProviderRegistry, name: str, *, ti
         raise
     except asyncio.TimeoutError:
         return _result("failed", "timeout")
+    except ValueError:
+        # The provider answered, with more than this check reads: not a network failure.
+        return _result("failed", "invalid_provider_response")
     except Exception:
         return _result("failed", "connection_unavailable")
     finally:

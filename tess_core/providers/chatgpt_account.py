@@ -117,8 +117,20 @@ class Grant:
 
 
 def new_host_id() -> str:
-    """A stable per-host ``ext_agent_host_id``: made once, kept by the caller."""
-    return secrets.token_urlsafe(24)
+    """A stable per-host ``ext_agent_host_id``: made once, kept by the caller.
+    OpenAI accepts only a UUID in ``urn:uuid:`` form here; anything else is
+    refused as an invalid authorize request before the person can sign in."""
+    return f"urn:uuid:{uuid.uuid4()}"
+
+
+def is_host_id(value: Any) -> bool:
+    """Whether a saved host id is one OpenAI accepts. A host that kept an id
+    in another form replaces it with ``new_host_id()`` before signing in."""
+    try:
+        return (isinstance(value, str) and value.startswith("urn:uuid:")
+                and str(uuid.UUID(value[len("urn:uuid:"):])) == value[len("urn:uuid:"):])
+    except ValueError:
+        return False
 
 
 class SignIn:

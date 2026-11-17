@@ -159,3 +159,16 @@ def test_an_id_token_that_does_not_verify_is_refused(tamper):
             verify_id_token(token, jwks={"keys": [fake.jwk]}, issuer=OPENAI.issuer, audience="c", nonce="n", now=NOW)
         return
     assert failure(fake) == "id_token_invalid"
+
+
+def test_a_new_host_id_is_in_the_form_openai_accepts():
+    import uuid
+    from tess_core.providers.chatgpt_account import is_host_id, new_host_id
+    first, second = new_host_id(), new_host_id()
+    assert first != second and first.startswith("urn:uuid:")
+    assert str(uuid.UUID(first[9:])) == first[9:]
+    assert is_host_id(first)
+    for refused in ("H6RKtUgGPzBwvA-J4bdQAay_nu-8Kssv", "urn:uuid:not-a-uuid", str(uuid.uuid4()), "", None):
+        assert not is_host_id(refused)
+    attempt = SignIn(host_id=first, app_name="Tess-Agent", opener=FakeOpenAI())
+    assert dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(attempt.url).query))["ext_agent_host_id"] == first
