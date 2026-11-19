@@ -356,6 +356,37 @@ class GoogleInteractionsWireTests(unittest.TestCase):
         self.assertEqual((record["category"], record["status"], record["code"]), ("auth", 401, "authentication"))
         self.assertNotIn("wire-google-key", json.dumps(record))
 
+    def test_the_three_shapes_of_a_google_error_body(self):
+        from tess_core.providers.google.wire import google_error_fields
+
+        front_end = json.dumps([{"error": {"code": 400, "message": "API key not valid. Please pass a valid API key.", "status": "INVALID_ARGUMENT", "details": [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "API_KEY_INVALID"}, {"@type": "x", "message": "localized"}]}}])
+        sse = 'event: error\ndata: {"error":{"message":"Request contains an invalid argument.","code":"invalid_request"},"event_type":"error"}\n\n'
+        self.assertEqual(google_error_fields('{"error":{"message":"Unknown parameter.","code":"invalid_request"}}'), ("invalid_request", None, "Unknown parameter."))
+        self.assertEqual(google_error_fields(sse), ("invalid_request", None, "Request contains an invalid argument."))
+        self.assertEqual(google_error_fields(front_end), ("invalid_argument", "API_KEY_INVALID", "API key not valid. Please pass a valid API key."))
+        for junk in ("", "not json", "[]", "[1]", '{"error": "text"}', "data: nope"):
+            self.assertEqual(google_error_fields(junk), (None, None, None))
+
+    def test_a_key_google_does_not_recognise_is_an_authentication_failure(self):
+        # Google's front end answers an unknown key with 400, not 401.
+        body = [{"error": {"code": 400, "message": "API key not valid. Please pass a valid API key.", "status": "INVALID_ARGUMENT", "details": [{"reason": "API_KEY_INVALID"}]}}]
+        server, requests = self._server({"interactions": [{"status": 400, "body": body}]})
+        with self.assertRaises(ProviderRequestError) as caught:
+            asyncio.run(send_google_interactions_request(self._args(server, maxAttempts=3)))
+        record = caught.exception.record
+        self.assertEqual((record["category"], record["retryable"], record["errorType"]), ("auth", False, "API_KEY_INVALID"))
+        self.assertIn("API key not valid", record["rawMessage"])
+        self.assertEqual(len(requests), 1)
+
+    def test_an_error_sent_as_an_event_in_a_400_body_is_read(self):
+        sse = 'event: error\ndata: {"error":{"message":"Request contains an invalid argument.","code":"invalid_request"},"event_type":"error"}\n\n'
+        server, _ = self._server({"interactions": [{"status": 400, "rawBody": sse}]})
+        with self.assertRaises(ProviderRequestError) as caught:
+            asyncio.run(send_google_interactions_request(self._args(server)))
+        record = caught.exception.record
+        self.assertEqual((record["category"], record["status"], record["code"]), ("client_request", 400, "invalid_request"))
+        self.assertIn("invalid argument", record["rawMessage"])
+
     def test_a_json_error_with_a_success_status_is_still_an_error(self):
         server, _ = self._server({"interactions": [{"status": 200, "body": googleErrorBody("invalid_request", "The value is not supported.")}]})
         with self.assertRaises(ProviderRequestError) as caught:

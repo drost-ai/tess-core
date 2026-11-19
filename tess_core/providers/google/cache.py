@@ -18,6 +18,9 @@ GOOGLE_CACHE_SNAPSHOT_VERSION = 1
 # After this long without a call the cached prefix has probably been dropped. Google
 # does not publish the lifetime of an implicit cache entry; this is a working figure.
 IDLE_GAP_MS = 300_000
+# When a call adds fewer than about 2,050 tokens, Gemini 4 reads the last 2,050 tokens
+# of the previous request again at the full rate instead of caching all of it.
+REPROCESSED_TAIL_TOKENS = 2_050
 
 
 def minimum_cacheable_tokens(model: str | None) -> int:
@@ -67,11 +70,18 @@ def diagnose_google_cache(previous: Any, current: dict[str, Any], usage: dict[st
         rewritten = shrank or previous.get("compactions") != current.get("compactions")
         return "compaction_or_relief_rewrite" if rewritten else "message_prefix_changed"
     cached = _count(usage.get("cache_read_input_tokens"))
+    earlier = _count(previous.get("inputTokens"))
     if cached > 0:
+        # A full hit is the whole previous request, less the tail Gemini reads again
+        # when a call adds little. Much less than that is a hit on an older entry.
+        if earlier > REPROCESSED_TAIL_TOKENS and cached < 0.75 * (earlier - REPROCESSED_TAIL_TOKENS):
+            return "partial_cache_read"
         return "cache_read_observed"
     if "cache_read_input_tokens" not in usage:
         return "no_cache_usage_reported"
-    if cached + _count(usage.get("input_tokens")) < minimum_cacheable_tokens(model):
+    smallest = minimum_cacheable_tokens(model)
+    if cached + _count(usage.get("input_tokens")) < smallest or (earlier and earlier < smallest):
+        # This request, or the one it would have been served from, is too small to cache.
         return "below_cache_minimum"
     if _elapsed_ms(previous.get("at"), now) >= IDLE_GAP_MS:
         return "idle_gap_may_have_expired"

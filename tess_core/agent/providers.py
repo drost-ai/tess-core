@@ -254,8 +254,9 @@ def _observe_google_cache(session: dict[str, Any] | None, runtime: dict[str, Any
     if not isinstance(snapshot, dict) or not isinstance(session, dict):
         return
     metadata = session.setdefault("metadata", {})
-    snapshot = {**snapshot, "compactions": int(metadata.get("compactions") or 0), "at": now_iso()}
     usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    sent = sum(int(usage.get(key) or 0) for key in ("input_tokens", "cache_read_input_tokens"))
+    snapshot = {**snapshot, "compactions": int(metadata.get("compactions") or 0), "at": now_iso(), "inputTokens": sent}
     reason = diagnose_google_cache(previous, snapshot, usage, model=response.get("model"))
     snapshot.pop("prefixHash", None)
     metadata["googleCache"] = snapshot

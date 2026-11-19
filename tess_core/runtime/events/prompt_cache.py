@@ -18,7 +18,7 @@ _LOCAL_REASONS = {
     "anchor_identity_changed", "expected_after_eviction_intent", "ttl_5m_may_have_expired",
     "ttl_1h_may_have_expired", "unchanged_short_gap_likely_server_side", "partial_hit_prefix_changed",
     "cache_read_observed", "cache_write_without_read_observed", "no_cache_usage_reported",
-    "compatible_provider_unknown", "below_cache_minimum", "idle_gap_may_have_expired",
+    "compatible_provider_unknown", "below_cache_minimum", "idle_gap_may_have_expired", "partial_cache_read",
 }
 _PROVIDER_REASONS = PROMPT_CACHE_PROVIDER_REASONS
 _STATE_STATUSES = {"committed", "stale", "unavailable", "recorded"}

@@ -10,7 +10,6 @@ from ..error_evidence import ProviderWireError
 from ..openai._wire import (
     OpenAiWireStream as _SseStream,
     _drain_error_body,
-    _error_body_fields,
     _first_header,
     _retry_after_ms,
 )
@@ -69,10 +68,14 @@ class GoogleWireClient:
         content_type = str(response.headers.get("content-type") or "").lower()
         if response.status >= 400 or (content_type and "text/event-stream" not in content_type):
             body_text = await _drain_error_body(owner, response)
-            code, error_type, message = _error_body_fields(body_text)
+            code, error_type, message = google_error_fields(body_text)
             status = response.status if response.status >= 400 else None
             if status is None and not (code or message):
                 raise ValueError(f"Google transport received a malformed SSE response (content-type {content_type})")
+            if status == 400 and str(error_type or "").startswith("API_KEY"):
+                # Google answers a key it does not recognise with 400. It is a refused
+                # credential, and is reported as one.
+                status = 401
             raise ProviderWireError(
                 message or f"Google request failed with status {response.status}",
                 status=status,
@@ -85,3 +88,34 @@ class GoogleWireClient:
         stream = _SseStream(owner=owner, response=response, on_close=self._streams.discard)
         self._streams.add(stream)
         return stream
+
+
+def google_error_fields(body_text: str) -> tuple[str | None, str | None, str | None]:
+    """``(code, reason, message)`` from an error body, in any of the three shapes Google sends.
+
+    The Interactions API answers ``{"error": {"code": "invalid_request", "message": ...}}``,
+    or the same wrapped in one server-sent ``error`` event when a stream was asked for.
+    Google's front end, which refuses a request before the API sees it (an unknown key, a
+    disabled service), answers a JSON array holding ``{"error": {"code": 400, "status":
+    "INVALID_ARGUMENT", "details": [{"reason": "API_KEY_INVALID"}]}}``.
+    """
+    text = str(body_text or "").strip()
+    parsed: Any = None
+    for candidate in [text, *[line[5:].strip() for line in text.splitlines() if line.startswith("data:")]]:
+        try:
+            parsed = json.loads(candidate)
+            break
+        except ValueError:
+            continue
+    if isinstance(parsed, list):
+        parsed = next((item for item in parsed if isinstance(item, dict)), None)
+    error = parsed.get("error") if isinstance(parsed, dict) else None
+    if not isinstance(error, dict):
+        return None, None, None
+    code = error.get("code")
+    if not isinstance(code, str) or not code.strip():
+        code = str(error.get("status") or "").strip().lower() or None
+    details = error.get("details") if isinstance(error.get("details"), list) else []
+    reason = next((str(item["reason"]) for item in details if isinstance(item, dict) and isinstance(item.get("reason"), str)), None)
+    message = error.get("message")
+    return code, reason, str(message).strip() if isinstance(message, str) and message.strip() else None

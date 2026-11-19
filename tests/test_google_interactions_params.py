@@ -88,6 +88,19 @@ class GoogleStepConversionTests(unittest.TestCase):
         self.assertNotIn("is_error", steps[2])
         self.assertEqual(steps[4]["content"], [{"type": "text", "text": "A note from the host."}])
 
+    def test_a_tool_that_printed_nothing_answers_with_the_empty_string(self):
+        # Gemini refuses a text item with no text (400), and accepts the empty string.
+        calls = {"role": "assistant", "content": [{"type": "tool_use", "id": name, "name": "Bash", "input": {}} for name in ("a", "b", "c", "d")]}
+        steps = convert_messages_to_steps([calls, {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "a", "content": ""},
+            {"type": "tool_result", "tool_use_id": "b", "content": None},
+            {"type": "tool_result", "tool_use_id": "c", "content": [{"type": "text", "text": ""}, {"type": "text", "text": "kept"}]},
+            {"type": "tool_result", "tool_use_id": "d", "content": ""},
+            {"type": "image", "source": {"media_type": "image/png", "data": PNG}},
+        ]}])
+        results = [step["result"] for step in steps if step["type"] == "function_result"]
+        self.assertEqual(results, ["", "", [{"type": "text", "text": "kept"}], [{"type": "image", "mime_type": "image/png", "data": PNG}]])
+
     def test_a_user_image_is_content_and_a_broken_one_is_left_out(self):
         steps = convert_messages_to_steps([{"role": "user", "content": [
             {"type": "text", "text": "Look."},

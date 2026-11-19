@@ -157,7 +157,8 @@ def _user_steps(content: Any, tool_names: dict[str, str]) -> list[dict[str, Any]
     if results and images:
         # An image beside tool results is one a tool returned. It goes back inside the
         # last result, where Gemini reads it as part of the tool's answer.
-        results[-1]["result"] = [*results[-1]["result"], *images]
+        last = results[-1]["result"]
+        results[-1]["result"] = [*(last if isinstance(last, list) else []), *images]
         images = []
     steps = list(results)
     if parts or images:
@@ -185,7 +186,10 @@ def _function_result(block: dict[str, Any], tool_names: dict[str, str]) -> dict[
                 result.append(_text(str(item)))
     else:
         result.append(_text("" if raw is None else str(raw)))
-    step["result"] = result or [_text("")]
+    # Gemini refuses a text item with no text. A tool that printed nothing answers
+    # with the empty string, which it accepts.
+    result = [item for item in result if item.get("type") != "text" or item.get("text")]
+    step["result"] = result or ""
     if block.get("is_error") is True:
         step["is_error"] = True
     return step

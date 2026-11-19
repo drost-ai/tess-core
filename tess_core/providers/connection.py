@@ -103,7 +103,8 @@ async def check_provider_connection(registry: ProviderRegistry, name: str, *, ti
         return _result("failed", "connection_unavailable")
     finally:
         owner.close()
-    if status in {401, 403}:
+    if status in {401, 403} or (status == 400 and profile["kind"] == "google" and b"API_KEY_" in body):
+        # Google answers a key it does not recognise with 400 and the reason API_KEY_INVALID.
         return _result("failed", "authentication_denied")
     if status == 429:
         return _result("failed", "rate_limited")
@@ -132,7 +133,7 @@ async def check_provider_connection(registry: ProviderRegistry, name: str, *, ti
 
 # Gemini's catalogue lists every model the key can reach. A session needs one that
 # answers in text: the speech, image, video, embedding and real-time models are left out.
-_NOT_CHAT_MODELS = ("embedding", "-tts", "-image", "-live", "transcribe", "robotics", "omni", "native-audio", "computer-use", "decision")
+_NOT_CHAT_MODELS = ("embedding", "-tts", "-image", "banana", "-live", "transcribe", "robotics", "omni", "native-audio", "computer-use", "decision")
 
 
 def _gemini_chat_models(items: Any) -> list[str]:

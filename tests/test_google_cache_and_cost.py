@@ -76,6 +76,11 @@ class GoogleCacheDiagnosisTests(unittest.TestCase):
             ("idle_gap_may_have_expired", dict(previous=_previous(at=NOW - timedelta(minutes=9)), messages=SECOND, usage=MISS)),
             ("unchanged_short_gap_likely_server_side", dict(previous=previous, messages=SECOND, usage=MISS)),
             ("no_cache_usage_reported", dict(previous=previous, messages=SECOND, usage={"input_tokens": 6500})),
+            # Measured live: a full hit is the previous request less at most 2,050 re-read tokens.
+            ("cache_read_observed", dict(previous={**previous, "inputTokens": 25333}, messages=SECOND, usage={"input_tokens": 2263, "cache_read_input_tokens": 25333})),
+            ("cache_read_observed", dict(previous={**previous, "inputTokens": 8777}, messages=SECOND, usage={"input_tokens": 2358, "cache_read_input_tokens": 6728})),
+            ("partial_cache_read", dict(previous={**previous, "inputTokens": 25333}, messages=SECOND, usage={"input_tokens": 24872, "cache_read_input_tokens": 3321})),
+            ("below_cache_minimum", dict(previous={**previous, "inputTokens": 3320}, messages=SECOND, usage={"input_tokens": 4985, "cache_read_input_tokens": 0})),
         ]
         for expected, case in cases:
             with self.subTest(expected=expected):
@@ -89,7 +94,7 @@ class GoogleCacheDiagnosisTests(unittest.TestCase):
         self.assertEqual(self._reason(previous, SECOND, usage, model="gemini-2.5-flash"), "unchanged_short_gap_likely_server_side")
 
     def test_every_reason_survives_the_event_schema(self):
-        for reason in ("cache_read_observed", "below_cache_minimum", "idle_gap_may_have_expired", "message_prefix_changed"):
+        for reason in ("cache_read_observed", "below_cache_minimum", "idle_gap_may_have_expired", "partial_cache_read", "message_prefix_changed"):
             payload = prompt_cache_event_payload(google_cache_event("s1", HIT, reason))
             self.assertEqual((payload["phase"], payload["mode"], payload["ttl"], payload["placements"], payload["localReason"], payload["stateStatus"]), ("observed", "auto", "provider_default", ["automatic"], reason, "recorded"))
             self.assertEqual((payload["cacheReadInputTokens"], payload["cacheCreationInputTokens"]), (6000, 0))
@@ -123,7 +128,7 @@ class GoogleCacheObservationTests(TessCoreTestCase):
         self.assertEqual([event["cache_read_input_tokens"] for event in cache_events], [0, 5900, 0])
         self.assertEqual({event["session_id"] for event in cache_events}, {"s1"})
         kept = session["metadata"]["googleCache"]
-        self.assertEqual((kept["inputCount"], kept["compactions"]), (3, 0))
+        self.assertEqual((kept["inputCount"], kept["compactions"], kept["inputTokens"]), (3, 0, 6200))
         self.assertNotIn("prefixHash", kept)
         self.assertNotIn("hello", json.dumps(kept))
         self.assertEqual(second["usage"], {"input_tokens": 200, "output_tokens": 5, "cache_read_input_tokens": 5900, "cache_hit_input_tokens": 5900})
@@ -208,7 +213,7 @@ class Response:
 
 
 def _transport(status=200, payload=None, seen=None):
-    names = ["models/gemini-4-hydrogen", "models/gemini-4-neon", "models/gemini-3.8-flash", "models/gemini-3.8-flash-tts", "models/gemini-embedding-2", "models/gemini-3.1-flash-image", "models/gemini-3.8-live", "models/gemini-3.5-transcribe", "models/veo-3.1-generate-preview", "models/gemma-4-31b-it", "models/gemini-robotics-er-2-preview", "models/gemini-2.5-computer-use-preview-10-2025"]
+    names = ["models/gemini-4-hydrogen", "models/gemini-4-neon", "models/gemini-3.8-flash", "models/gemini-3.8-flash-tts", "models/gemini-embedding-2", "models/gemini-3.1-flash-image", "models/gemini-nano-banana-2.1", "models/gemini-3.8-live", "models/gemini-3.5-transcribe", "models/veo-3.1-generate-preview", "models/gemma-4-31b-it", "models/gemini-robotics-er-2-preview", "models/gemini-2.5-computer-use-preview-10-2025"]
     answer = payload if payload is not None else json.dumps({"models": [{"name": name, "inputTokenLimit": 1048576} for name in names] + [{"nope": 1}]}).encode()
 
     class Owner:
@@ -244,6 +249,8 @@ class GoogleConnectionAndStatusTests(unittest.TestCase):
             for status, payload, expected in (
                 (401, b"{}", ("failed", "authentication_denied")), (403, b"{}", ("failed", "authentication_denied")),
                 (429, b"{}", ("failed", "rate_limited")), (200, b'{"data": []}', ("failed", "invalid_provider_response")),
+                (400, b'[{"error": {"code": 400, "status": "INVALID_ARGUMENT", "details": [{"reason": "API_KEY_INVALID"}]}}]', ("failed", "authentication_denied")),
+                (400, b'{"error": {"code": "invalid_request"}}', ("failed", "invalid_provider_response")),
                 (200, b"not json", ("failed", "invalid_provider_response")), (200, b'{"models": []}', ("available", "models_listed")),
             ):
                 with self.subTest(status=status, payload=payload):
