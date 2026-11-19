@@ -146,8 +146,18 @@ def test_a_managed_key_reaches_a_turn_as_the_credential_its_provider_reads(tmp_p
     def resolved(name):
         return asyncio.run(resolve_config({'runtimeHome': str(home), 'providerRegistry': registry, 'provider': name, 'settingSources': ''}, str(workspace)))
 
-    for name in ('openai-key', 'endpoint'):
-        config = resolved(name)
-        assert config['openaiToken'] == openai_ref and config['apiKey'] is None
-    config = resolved('claude')
-    assert config['apiKey'] == anthropic_ref and config['openaiToken'] is None
+    try:
+        for name in ('openai-key', 'endpoint'):
+            config = resolved(name)
+            assert config['openaiToken'] == openai_ref and config['apiKey'] is None
+        config = resolved('claude')
+        assert config['apiKey'] == anthropic_ref and config['openaiToken'] is None
+    finally:
+        # resolve_config makes its runtime home and settings the process's own; the
+        # next test must not inherit a home that pytest is about to delete.
+        from tess_core.config._knobs import reset_configured_knobs
+        from tess_core.providers.token_budget import reset_configured_model_limit_rules
+        from tess_core.storage import reset_configured_runtime_home
+        reset_configured_runtime_home()
+        reset_configured_knobs()
+        reset_configured_model_limit_rules()
