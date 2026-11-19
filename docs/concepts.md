@@ -71,7 +71,7 @@ it is enforced in the runtime, not in the prompt.
 
 ## Provider
 
-A **provider profile** names a model endpoint: its kind (Anthropic or OpenAI-compatible),
+A **provider profile** names a model endpoint: its kind (Anthropic, OpenAI-compatible or Google),
 its default model, its API mode, and where its credential comes from. A session is bound
 to one profile when it is created and keeps it when reopened.
 

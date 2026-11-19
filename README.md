@@ -59,8 +59,8 @@ Tess Core is the runtime, in Python:
 
 - **Zero dependencies.** `dependencies = []`. The standard library, 86,000 lines you can
   read, and nothing else in your supply chain. No version conflicts with your application.
-- **Any model, one interface.** Anthropic, OpenAI (Responses and Chat Completions), any
-  OpenAI-compatible endpoint, a model on your own hardware. Choose per session.
+- **Any model, one interface.** Anthropic, OpenAI (Responses and Chat Completions), Google
+  Gemini, any OpenAI-compatible endpoint, a model on your own hardware. Choose per session.
 - **Complete, not assembled from parts.** The agent loop, 27 built-in tools, permissions,
   sub-agents, MCP, scheduling, background tasks and persistence are all here and already
   work together.
@@ -113,6 +113,13 @@ providerProfiles:
     auth:
       kind: anthropic_api_key
       envVar: ANTHROPIC_API_KEY
+
+  gemini:
+    kind: google
+    defaultModel: gemini-4-hydrogen
+    auth:
+      kind: google_api_key
+      envVar: GEMINI_API_KEY
 
   local:                                   # llama.cpp, vLLM, Ollama: anything OpenAI-compatible
     kind: openai
@@ -203,7 +210,7 @@ is a terminal coding agent in one file.
 | **Context that manages itself** | Token accounting before every request, automatic checkpoint compaction with verification, prompt caching, and oversized tool results moved out of the conversation into retrievable artifacts. |
 | **A scheduler** | Durable jobs (once, calendar, interval, in any time zone) that fire as agent turns or as your own handlers. The agent can schedule its own follow-ups. |
 | **Background work** | A supervisor daemon runs long shell tasks, watches them, and reports back; work continues while the conversation moves on. |
-| **Multi-provider** | Anthropic Messages, OpenAI Responses, OpenAI-compatible Chat Completions, sign-in with a ChatGPT account. Streaming, images, reasoning effort, usage and cost accounting, and recovery from interrupted streams. |
+| **Multi-provider** | Anthropic Messages, OpenAI Responses, OpenAI-compatible Chat Completions, Google Gemini, sign-in with a ChatGPT account. Streaming, images, reasoning effort, usage and cost accounting, and recovery from interrupted streams. |
 | **Observable** | Every turn, tool call, permission decision and provider request is an event your host receives. Nothing happens off the record. |
 
 ## Built for production
@@ -265,7 +272,7 @@ framework's worldview or a second language's toolchain, this is what Tess Core i
 ├──────────────────────────────────────────────────────────────────────────┤
 │  Authority    permission modes · rules · path confinement · hooks         │
 │  Context      token accounting · compaction · prompt cache · artifacts    │
-│  Providers    Anthropic · OpenAI Responses · Chat Completions · local     │
+│  Providers    Anthropic · OpenAI · Chat Completions · Gemini · local      │
 │  Storage      plain files under the runtime home, written atomically      │
 └──────────────────────────────────────────────────────────────────────────┘
 ```

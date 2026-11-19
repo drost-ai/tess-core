@@ -72,7 +72,7 @@ cancellation, which is honoured at every await.
 |---|---|
 | `runtime` | `start_runtime`, the `Runtime`, the session manager, session lifecycle, events, credentials |
 | `agent` | The agent loop: provider turns, tool dispatch, progress guard, cancellation, hooks |
-| `providers` | Clients for the Anthropic and OpenAI protocols, streaming, retries, usage |
+| `providers` | Clients for the Anthropic, OpenAI and Google protocols, streaming, retries, usage |
 | `tools` | The built-in tools, the tool registry, the permission engine |
 | `authority` | Path confinement, command inspection, the rules for what a child may do |
 | `sandbox` | Operating-system sandbox backends: Seatbelt on macOS, Bubblewrap on Linux |

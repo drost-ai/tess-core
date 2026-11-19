@@ -26,6 +26,14 @@ providerProfiles:
       kind: openai_api_key
       envVar: OPENAI_API_KEY
 
+  gemini:
+    kind: google
+    defaultModel: gemini-4-hydrogen
+    reasoningEffort: high
+    auth:
+      kind: google_api_key
+      envVar: GEMINI_API_KEY
+
   deepseek:
     kind: openai
     apiMode: chat_completions
@@ -57,12 +65,12 @@ SessionOptions(provider="gpt", model="another-model", effort="low")
 
 | Field | Meaning |
 |---|---|
-| `kind` | `anthropic` or `openai`. Any OpenAI-compatible service uses `openai`. |
+| `kind` | `anthropic`, `openai` or `google`. Any OpenAI-compatible service uses `openai`; `google` is Gemini. |
 | `apiMode` | For `openai`: `responses` or `chat_completions`. |
 | `defaultModel` | The model used when a session does not name one. |
 | `baseUrl` | The endpoint, for anything other than the provider's own. |
 | `auth` | Where the credential comes from. Required. |
-| `reasoningEffort` | Default reasoning effort for models that support it. |
+| `reasoningEffort` | Default reasoning effort for models that support it. On a `google` profile it is the model's thinking level. |
 | `openAiChatReasoningSummary` | For `openai`: ask for reasoning summaries (`auto`, `concise` or `detailed`). |
 | `anthropicThinkingDisplay` | For `anthropic`: how thinking is returned (`auto`, `summarized` or `hidden`). |
 | `maxContextLength`, `maxOutputTokens` | Limits used for token accounting and compaction. |
@@ -74,9 +82,9 @@ Profile names are lowercase and yours to choose.
 
 **Images.** `capabilities.imageInput: true` says the model takes images (`supportsVision:
 true` is the same). Then images in a prompt reach it, and so do images a tool returns, such
-as a `Read` of a PNG. Without either, the model's name decides: Claude models, and OpenAI's
-own GPT-4, GPT-5, GPT-6 and o-series, take images; models on other services are treated as
-text-only. Declare it for any other model that can see.
+as a `Read` of a PNG. Without either, the model's name decides: Claude models, Gemini
+models, and OpenAI's own GPT-4, GPT-5, GPT-6 and o-series, take images; models on other
+services are treated as text-only. Declare it for any other model that can see.
 
 ## Credentials
 
@@ -88,8 +96,12 @@ text-only. Declare it for any other model that can see.
 | `anthropic_auth_token` | An Anthropic bearer token |
 | `openai_api_key` | An OpenAI API key |
 | `openai_api_key_or_codex` | An OpenAI key or a Codex/ChatGPT token |
+| `google_api_key` | A Gemini API key, in the `x-goog-api-key` header |
 | `custom_bearer` | `Authorization: Bearer …` for compatible services |
 | `none` | No credential (a local server) |
+
+A profile takes only its own kind's credentials: a `google` profile takes
+`google_api_key` or `none`, and a key meant for one provider is never sent to another.
 
 The registry **never contains a credential**. Literal keys, and `Authorization`, API-key
 or cookie headers, are rejected when the file is loaded. Only the named environment
@@ -216,8 +228,86 @@ A model on your own machine is the same shape with a local `baseUrl` and
 
 Reasoning arrives as `message.assistant.thinking.partial` [events](events.md) when the
 profile asks for it: `openAiChatReasoningSummary: auto` on an `openai` profile,
-`anthropicThinkingDisplay: summarized` on an `anthropic` one. Raise the two timeouts, as
-above, for models that think for a long time before their first byte.
+`anthropicThinkingDisplay: summarized` on an `anthropic` one. A `google` profile sends
+Gemini's thought summaries without being asked. Raise the two timeouts, as above, for
+models that think for a long time before their first byte.
+
+## Google Gemini
+
+A `google` profile talks to Gemini through Google's Interactions API, with a key from
+[Google AI Studio](https://aistudio.google.com/apikey):
+
+```yaml
+schema_version: 1
+providerProfiles:
+  gemini:
+    kind: google
+    defaultModel: gemini-4-hydrogen
+    reasoningEffort: high
+    auth:
+      kind: google_api_key
+      envVar: GEMINI_API_KEY
+```
+
+```sh
+# .env
+GEMINI_API_KEY=...
+```
+
+```python
+SessionOptions(provider="gemini")
+```
+
+**Nothing is stored at Google.** Every request is sent with `store: false` and carries
+the whole conversation. The session on your disk is the only record of it, which is why
+a Gemini session can be compacted, forked, resumed, or reopened after a restart like any
+other. A profile cannot turn storage on.
+
+**Reasoning effort is the thinking level.** `reasoningEffort` (or a session's `effort`)
+becomes Gemini's `thinking_level`. Each model takes its own levels: `low` to `xhigh` on
+Gemini 4 Neon and Hydrogen, `low` to `high` on Gemini 4 Carbon and Argon and on 3.8
+Flash. A level the model does not take becomes the nearest one below it that it does,
+and `max` is the model's deepest. A model the runtime does not know is sent no level and
+thinks at its own default.
+
+**Thinking is kept, because Gemini requires it.** Gemini signs each step of its
+reasoning and expects those steps back, unchanged, on the next request. The runtime
+keeps them with the session and returns them in place. They are never sent to another
+provider.
+
+**Caching is automatic.** Gemini caches the beginning of a request when it matches the
+beginning of an earlier one, and bills the cached part at about a twentieth of the input
+price. There is nothing to configure: the runtime sends each request so that it begins
+with the one before it. See [prompt caching](context.md#prompt-caching) for how to see
+what the cache did.
+
+**Limits.** Gemini models have a 1,048,576-token context window and return up to 65,536
+tokens in one response, thinking included. Override either with `maxContextLength` and
+`maxOutputTokens`.
+
+**Tuning a request.** `requestOptions.generation_config` is merged into the request's
+generation settings, for example to turn thought summaries off:
+
+```yaml
+schema_version: 1
+providerProfiles:
+  gemini-quiet:
+    kind: google
+    defaultModel: gemini-4-hydrogen
+    requestOptions:
+      generation_config:
+        thinking_summaries: none
+        temperature: 0.2
+    auth:
+      kind: google_api_key
+      envVar: GEMINI_API_KEY
+```
+
+**Not supported.** Google's own server-side tools (Search, code execution, URL context,
+remote MCP), stored or chained interactions, background runs and responses longer than
+65,536 tokens, the Live API, and image, audio and video generation. Sign-in is by API
+key; Google Cloud credentials are not read. Use the runtime's own tools and MCP servers:
+they work with Gemini as with any other model.
 
 ## What a registry guarantees
 

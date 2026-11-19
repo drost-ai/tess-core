@@ -47,6 +47,30 @@ For providers that support it, the runtime arranges requests so the stable prefi
 prompt, tools, earlier conversation) is cached. Long sessions get cheaper and faster with
 no work from you. Cache behaviour is reported in usage and in `provider.*` events.
 
+How it is done depends on the provider:
+
+- **Anthropic** caches what a request marks. The runtime places the marks and moves them
+  forward as the conversation grows.
+- **OpenAI** caches automatically. The runtime gives each session a stable cache key so
+  its requests reach the same cache.
+- **Google Gemini** caches automatically and has nothing to mark or to key. A request is
+  served from cache when it begins exactly as an earlier one did, so the runtime builds
+  every request of a session to begin with the one before it.
+
+Every result's usage reports `cache_read_input_tokens`: the input served from cache. For
+Anthropic and Gemini, `input_tokens` is the input that was not.
+
+For Anthropic and Gemini sessions, each model call also emits a `provider.prompt_cache`
+event with what the cache did and one reason: `cache_read_observed`, or why not. The
+common misses are a first call (`warmup_no_previous_state`), a changed system prompt,
+tool list or thinking level, a rewritten conversation (`compaction_or_relief_rewrite`),
+a request too small to cache (`below_cache_minimum`: Gemini caches nothing under 4,096
+tokens) and a long pause (`idle_gap_may_have_expired`).
+
+Three things keep the cache warm: leave the system prompt and tool list alone during a
+session, put per-turn context such as the time in the turn rather than the system prompt,
+and expect one cold request after each compaction.
+
 ## Per-turn context from your host
 
 Some context is true now and should not be written into history: the user's local time, a
