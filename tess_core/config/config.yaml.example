@@ -237,6 +237,14 @@ knobs:
     compaction_preservation_ratio: 0.1
     # Default token level that triggers compaction when the profile does not declare compactionThresholdTokens. [10000..100000000]
     compaction_threshold_tokens: 200000
+    # Default attempts per Google Gemini request before the turn fails; per-call maxAttempts wins. [1..20]
+    google_max_attempts: 4
+    # Escalating retry backoff ladder in milliseconds for Google Gemini requests; attempts beyond the ladder reuse its last entry and a small random jitter is added on top. [0..600000]
+    google_retry_delays_ms:
+      - 1000
+      - 3000
+      - 5000
+      - 10000
     # Milliseconds to wait for a complete non-streaming provider JSON response. [1000..3600000]
     json_response_timeout_ms: 120000
     # Default provider context length in tokens when the profile does not declare maxContextLength and no model rule infers one. [8000..100000000]

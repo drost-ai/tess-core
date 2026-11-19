@@ -177,6 +177,8 @@ See [Configuration](../configuration.md) for how the files fit together.
 | `provider.compaction_headroom_ratio` | `0.25` | 0.01..0.9 | Fraction of the compaction threshold reserved as output headroom for the compaction model. |
 | `provider.compaction_preservation_ratio` | `0.1` | 0.01..0.9 | Fraction of the source transcript compaction aims to preserve verbatim. |
 | `provider.compaction_threshold_tokens` | `200000` | 10000..100000000 | Default token level that triggers compaction when the profile does not declare compactionThresholdTokens. |
+| `provider.google_max_attempts` | `4` | 1..20 | Default attempts per Google Gemini request before the turn fails; per-call maxAttempts wins. |
+| `provider.google_retry_delays_ms` | `[1000, 3000, 5000, 10000]` | 0..600000 | Escalating retry backoff ladder in milliseconds for Google Gemini requests; attempts beyond the ladder reuse its last entry and a small random jitter is added on top. |
 | `provider.json_response_timeout_ms` | `120000` | 1000..3600000 | Milliseconds to wait for a complete non-streaming provider JSON response. |
 | `provider.max_context_length` | `200000` | 8000..100000000 | Default provider context length in tokens when the profile does not declare maxContextLength and no model rule infers one. |
 | `provider.max_output_tokens` | `16384` | 256..1000000 | Fallback max output tokens per provider request when neither the request nor the provider profile specifies one. |

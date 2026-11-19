@@ -206,6 +206,7 @@ def _normalize_script(script: dict[str, Any] | None) -> dict[str, Any]:
             "count_tokens": script["attempts"],
             "responses": script["attempts"],
             "chat_completions": script["attempts"],
+            "interactions": script["attempts"],
             "connectionSetupDelayMs": script.get("connectionSetupDelayMs", 0),
         }
     return {
@@ -215,6 +216,7 @@ def _normalize_script(script: dict[str, Any] | None) -> dict[str, Any]:
         "chat_completions": script.get("chatCompletions")
         or script.get("chat_completions")
         or [_default_openai_chat_response()],
+        "interactions": script.get("interactions") or [_default_google_interactions_response()],
         "connectionSetupDelayMs": script.get("connectionSetupDelayMs", 0),
     }
 
@@ -369,3 +371,12 @@ def _default_messages_response() -> dict[str, Any]:
 
 def _default_count_tokens_response() -> dict[str, Any]:
     return {"body": {"input_tokens": 1}}
+
+
+def _default_google_interactions_response() -> dict[str, Any]:
+    from .google import googleInteractionEvents, googleInteractionsSseBody
+
+    return {
+        "contentType": "text/event-stream",
+        "rawBody": googleInteractionsSseBody(googleInteractionEvents([{"type": "text", "text": "ok"}])),
+    }

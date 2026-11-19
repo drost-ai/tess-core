@@ -226,7 +226,7 @@ engineering organisation asks of infrastructure:
 - **One process, no fleet.** No broker, queue or external service is required. It scales
   the way your application does.
 - **Bounded everything.** Startup, requests, tool output, frames, retries and cleanup all
-  have limits. 160 documented settings tune them, each with an environment override.
+  have limits. 162 documented settings tune them, each with an environment override.
 - **Tested like infrastructure.** More than 1,400 tests cover crash recovery, concurrent
   writers, process cleanup and provider failure modes, all runnable offline against
   scripted models.
