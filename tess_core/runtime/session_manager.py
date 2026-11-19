@@ -34,6 +34,7 @@ from .generation import create_runtime_session_binding
 from .session_components import prepare_runtime_session_components
 from .session_end import end_session, ended_marker
 from .session_handle import Session  # noqa: F401  (re-exported)
+from .session_credentials import SessionCredentialEnvironment
 from .session_idle import IdleSweeper
 from .session_monitors import MonitorIntake
 from .session_options import (  # noqa: F401  (re-exported: the package imports them from here)
@@ -196,6 +197,8 @@ class SessionManager:
         self.runtime = runtime
         self._live: dict[str, _LiveSession] = {}
         self._handles: dict[str, Session] = {}
+        # Per session, the credentials it read from the environment: in memory only, dropped when it ends.
+        self._credentials: dict[str, dict[str, str]] = {}
         self._opening: dict[str, Any] = {}
         self._ended: set[str] = set()
         self._subscribers: dict[str, list[Any]] = {}
@@ -235,6 +238,8 @@ class SessionManager:
         except BaseException as error:
             waiter.set_exception(error)
             waiter.exception()  # retrieved: nobody else may await it
+            if target not in self._handles:
+                self._credentials.pop(target, None)  # it never opened: nothing to give back to it
             raise
         finally:
             self._opening.pop(target, None)
@@ -264,6 +269,9 @@ class SessionManager:
         overrides = options.config_overrides(runtime.home)
         if runtime.provider_registry is not None:
             overrides["providerRegistry"] = runtime.provider_registry
+            # A session reopened after an idle unload reads its credentials again: it gets back
+            # the ones it was opened with when the environment no longer has them.
+            overrides["providerAuthEnvironment"] = SessionCredentialEnvironment(self._credentials.setdefault(session_id, {}))
             if record is not None and record.get("providerProfileName"):
                 # An existing session keeps the profile and model it is bound
                 # to (its turns resolve the session's own first); the opener's
@@ -358,6 +366,8 @@ class SessionManager:
             summary["queuedTurns"] += len(live.turns.queued())
             await self.release(session_id, live, reason, grace)
             summary["unfinishedCleanup"] += int(live.monitor_cleanup_pending)
+        if reason == "runtime_stopped":
+            self._credentials.clear()
         return summary
 
     # -- what the runtime and the host can ask ---------------------------
@@ -378,6 +388,7 @@ class SessionManager:
         outcome = await end_session(self, session_id, reason)
         self._ended.add(session_id)
         self._subscribers.pop(session_id, None)
+        self._credentials.pop(session_id, None)
         return outcome
 
     def subscribers_for(self, session_id: str) -> list[Any]:

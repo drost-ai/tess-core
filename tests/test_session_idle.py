@@ -13,7 +13,9 @@ import threading
 
 from tests.support.tess_core_case import *
 
-from tess_core import SessionOptions, start_runtime
+from tess_core import ProviderRegistry, SessionOptions, start_runtime
+from tess_core.config.registry import ProviderRegistryError
+from tess_core.runtime.secrets import resolve_runtime_secret
 from tess_core._utils import is_process_alive
 from tess_core.config._knobs import reset_configured_knobs
 from tess_core.runtime import host as host_module
@@ -123,6 +125,71 @@ class SessionIdleTests(TessCoreTestCase):
 
             run(scenario())
         finally:
+            self.restore_home(root, previous)
+
+    def test_a_reopened_session_keeps_the_credential_it_was_opened_with(self):
+        """A host may hold a key in the environment only while it opens a session. The turn that
+        reopens the session after an idle unload reads the key again, and must still find it."""
+        root, home, workspace, previous = self.temp_context()
+        variable = "TESS_CORE_IDLE_TEST_KEY"
+        try:
+            os.environ[KNOB] = "300"
+            registry = ProviderRegistry.from_document({"schema_version": 1, "providerProfiles": {"model": {
+                "kind": "openai", "apiMode": "chat_completions", "baseUrl": "http://127.0.0.1:9/v1",
+                "defaultModel": "gpt-5.4", "auth": {"kind": "custom_bearer", "envVar": variable}}}})
+
+            async def scenario():
+                listener = Listener()
+                runtime = await _start(home, workspace, listener, provider_registry=registry,
+                                       session_options=lambda sid, reason: SessionOptions(provider="model"))
+
+                async def key_in_use(handle):
+                    token = runtime.sessions.live(handle.id).config["openaiToken"]
+                    return bytes(await resolve_runtime_secret(token, token["purpose"])).decode()
+
+                async def idle_out(handle, times):
+                    await _wait(lambda: len(listener.closed) == times, label=f"idle close {times}")
+                    self.assertFalse(handle.is_open)
+
+                try:
+                    os.environ[variable] = "first-key"
+                    handle = await runtime.sessions.open()
+                    del os.environ[variable]                      # the host takes the key away again
+                    await handle.run_turn("hello", provider_override=_provider())
+                    await idle_out(handle, 1)
+
+                    # The turn reopens the session: the key is gone from the environment, and it has it.
+                    result = await handle.run_turn("again", provider_override=_provider())
+                    self.assertEqual(result["stopReason"], "end_turn")
+                    self.assertEqual(await key_in_use(handle), "first-key")
+                    self.assertEqual([reason for _, reason in listener.closed], ["idle"])
+
+                    # A key the environment holds wins: this is how a rotated key reaches the session.
+                    await idle_out(handle, 2)
+                    os.environ[variable] = "second-key"
+                    await handle.run_turn("rotated", provider_override=_provider())
+                    self.assertEqual(await key_in_use(handle), "second-key")
+
+                    # And it is the newest one that is kept once the environment loses it again.
+                    del os.environ[variable]
+                    await idle_out(handle, 3)
+                    await handle.run_turn("after", provider_override=_provider())
+                    self.assertEqual(await key_in_use(handle), "second-key")
+
+                    # Another session is not given this one's key.
+                    with self.assertRaises(ProviderRegistryError):
+                        await runtime.sessions.open()
+                    self.assertEqual(set(runtime.sessions._credentials), {handle.id})
+
+                    # Ending the session forgets it.
+                    await runtime.sessions.end(handle.id)
+                    self.assertEqual(runtime.sessions._credentials, {})
+                finally:
+                    await runtime.stop()
+
+            run(scenario())
+        finally:
+            os.environ.pop(variable, None)
             self.restore_home(root, previous)
 
     def test_a_session_with_a_live_child_still_closes(self):

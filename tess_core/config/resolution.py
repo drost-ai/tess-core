@@ -318,7 +318,7 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
     }
     profile_binding_inputs = {
         "providerRegistry": registry,
-        "providerAuthPath": options.get("providerAuthPath"),
+        "providerAuthPath": options.get("providerAuthPath"), "providerAuthEnvironment": options.get("providerAuthEnvironment"),
         "providerAuthProfile": selected_name,
         "providerProfiles": provider_profiles,
         "settings_env": settings_env,
@@ -363,7 +363,7 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
         }
     )
     if registry:
-        strict_auth = registry.resolve_auth(selected_name, codex_auth_path=options.get("providerAuthPath"))
+        strict_auth = registry.resolve_auth(selected_name, environment=options.get("providerAuthEnvironment"), codex_auth_path=options.get("providerAuthPath"))
         anthropic_creds = {"apiKey": strict_auth.get("apiKey"), "authToken": strict_auth.get("authToken")}
         openai_token = strict_auth.get("openaiToken")
         if resolved_provider == "openai" and openai_token is None and strict_auth.get("apiKey") is not None:

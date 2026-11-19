@@ -93,8 +93,15 @@ text-only. Declare it for any other model that can see.
 
 The registry **never contains a credential**. Literal keys, and `Authorization`, API-key
 or cookie headers, are rejected when the file is loaded. Only the named environment
-variable is read, and only when a request is made. Errors about the registry or a missing
+variable is read, each time a session is loaded: when you open it, and again when the
+runtime reopens it after closing it for being idle. Errors about the registry or a missing
 credential are redacted.
+
+A session keeps the credentials it was opened with. If the variable is no longer set when
+the runtime reopens the session, the session is given the value it last read from it, so a
+host may hold a key in the environment only while it opens a session. A value that is set
+always wins, which is how a rotated key reaches a session. The runtime holds these values
+in memory only, per session, until the session ends or the runtime stops.
 
 For hosts that manage credentials for their users, `auth` may instead hold a
 `credentialRef`: an opaque reference to a secret in the operating system keychain or an

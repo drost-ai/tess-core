@@ -6,7 +6,8 @@ nothing is queued for it, and ``sessions.idle_close_ms`` has passed since it
 last did anything, the runtime unloads it (``on_session_closed(id, "idle")``)
 exactly as a client's close would: the record is on disk, the handle stays
 valid, and the next ``run_turn`` reopens the session through the host's
-options and continues the transcript. Having children is not a reason to stay
+options and continues the transcript, with the credentials it was opened
+with (``session_credentials``). Having children is not a reason to stay
 open: their messages wait on disk and are discovered by the runtime, not held
 by the session.
 
