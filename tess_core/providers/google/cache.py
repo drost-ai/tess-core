@@ -15,9 +15,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 GOOGLE_CACHE_SNAPSHOT_VERSION = 1
-# After this long without a call the cached prefix has probably been dropped. Google
-# does not publish the lifetime of an implicit cache entry; this is a working figure.
-IDLE_GAP_MS = 300_000
+# After this long without a call the cached prefix may have been dropped. Google does
+# not publish the lifetime of an implicit cache entry. Measured on 2026-11-19, a request
+# sent 20 minutes after the previous one was still served in full from cache, so a miss
+# is put down to the pause only after an hour.
+IDLE_GAP_MS = 3_600_000
 # When a call adds fewer than about 2,050 tokens, Gemini 4 reads the last 2,050 tokens
 # of the previous request again at the full rate instead of caching all of it.
 REPROCESSED_TAIL_TOKENS = 2_050

@@ -74,7 +74,8 @@ class GoogleCacheDiagnosisTests(unittest.TestCase):
             ("compaction_or_relief_rewrite", dict(previous=previous, messages=[{"role": "user", "content": "A checkpoint."}, *SECOND[1:]], usage=MISS, compactions=1)),
             ("compaction_or_relief_rewrite", dict(previous=_previous(SECOND), messages=[{"role": "user", "content": "summary"}], usage=MISS)),
             ("below_cache_minimum", dict(previous=previous, messages=SECOND, usage={"input_tokens": 900, "cache_read_input_tokens": 0})),
-            ("idle_gap_may_have_expired", dict(previous=_previous(at=NOW - timedelta(minutes=9)), messages=SECOND, usage=MISS)),
+            ("idle_gap_may_have_expired", dict(previous=_previous(at=NOW - timedelta(minutes=61)), messages=SECOND, usage=MISS)),
+            ("unchanged_short_gap_likely_server_side", dict(previous=_previous(at=NOW - timedelta(minutes=20)), messages=SECOND, usage=MISS)),
             ("unchanged_short_gap_likely_server_side", dict(previous=previous, messages=SECOND, usage=MISS)),
             ("no_cache_usage_reported", dict(previous=previous, messages=SECOND, usage={"input_tokens": 6500})),
             # Measured live: a full hit is the previous request less at most 2,050 re-read tokens.

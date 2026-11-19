@@ -77,6 +77,8 @@ than it would have uncached. `gemini-3.8-flash` behaved the same way. When a cal
 fewer than about 2,050 tokens, Gemini reads the last 2,050 tokens of the previous
 request again at the full rate, so a loop of small tool results caches less: 62% in the
 same test with 300-token results. The saving grows with the conversation either way.
+A pause did not cost the cache: a request sent 20 minutes after the previous one was
+still served from it in full. Google does not publish how long an entry is kept.
 
 Three things keep the cache warm: leave the system prompt and tool list alone during a
 session, put per-turn context such as the time in the turn rather than the system prompt,
