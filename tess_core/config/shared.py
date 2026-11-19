@@ -45,9 +45,12 @@ VALID_EFFORT_LEVELS = ["low", "medium", "high", "max", "xhigh"]
 PROVIDER_MODELS = {
     "anthropic": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"],
     "openai": ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"],
+    "google": ["gemini-4-hydrogen", "gemini-4-neon", "gemini-4-carbon", "gemini-4-argon", "gemini-3.8-flash"],
 }
-PROVIDER_DEFAULT_MODEL = {"anthropic": DEFAULT_MODEL, "openai": "gpt-5.4"}
-PROVIDER_DEFAULT_EFFORT = {"anthropic": "high", "openai": "xhigh"}
+PROVIDER_KINDS = ("anthropic", "openai", "google")
+PROVIDER_DEFAULT_MODEL = {"anthropic": DEFAULT_MODEL, "openai": "gpt-5.4", "google": "gemini-4-hydrogen"}
+PROVIDER_DEFAULT_EFFORT = {"anthropic": "high", "openai": "xhigh", "google": "high"}
+DEFAULT_GOOGLE_API_KEY_ENV_VAR = "GEMINI_API_KEY"
 
 # Knob-derived image limits are deliberately absent: profile resolution
 # fills them live, and baking them at import time (before configure_knobs)
@@ -154,6 +157,9 @@ def model_implies_image_input(
         return False
     if kind == "anthropic":
         return name.startswith("claude-")
+    if kind == "google":
+        # Every Gemini chat model reads images; the embedding models do not.
+        return name.startswith("gemini-") and "embedding" not in name
     if kind != "openai":
         return False
     base = str(base_url or "").strip().lower()

@@ -9,6 +9,7 @@ from .shared import (
     DEFAULT_EFFORT,
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
+    PROVIDER_KINDS,
     PROVIDER_DEFAULT_EFFORT,
     PROVIDER_DEFAULT_MODEL,
     PROVIDER_MODELS,
@@ -31,7 +32,7 @@ def get_default_model_for_provider(provider: str) -> str:
     return PROVIDER_DEFAULT_MODEL[provider]
 
 def list_providers() -> list[str]:
-    return ["anthropic", "openai"]
+    return list(PROVIDER_KINDS)
 
 def list_provider_profiles(profiles: dict[str, Any] | None = None) -> list[str]:
     return sorted((profiles or BUILTIN_PROVIDER_PROFILES).keys())
@@ -62,6 +63,8 @@ def normalize_provider_name(input: str | None) -> str | None:
         return "anthropic"
     if normalized in ("openai", "codex", "openai-codex"):
         return "openai"
+    if normalized in ("google", "gemini"):
+        return "google"
     return None
 
 def normalize_provider_profile_name(input: str | None) -> str | None:

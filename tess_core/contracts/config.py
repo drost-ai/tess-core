@@ -16,7 +16,7 @@ PermissionMode = Literal["default", "acceptEdits", "bypassPermissions", "dontAsk
 # means the type and the set cannot drift, and every former copy imports it.
 PERMISSION_MODES: frozenset[str] = frozenset(get_args(PermissionMode))
 
-ProviderKind = Literal["anthropic", "openai"]
+ProviderKind = Literal["anthropic", "openai", "google"]
 
 OpenAiApiMode = Literal["chat_completions", "responses", "codex"]
 
@@ -206,6 +206,8 @@ class ResolvedConfig(_resolved_config_required, total=False):
     openaiApiMode: OpenAiApiMode
     openaiBaseUrl: str | None
     openaiCodexAuthPath: str | None
+    googleApiKey: RuntimeSecretValue | None
+    googleBaseUrl: str | None
     effort: str
     assistantName: str
     assistantDescription: str

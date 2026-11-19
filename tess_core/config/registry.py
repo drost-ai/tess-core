@@ -13,10 +13,20 @@ from typing import Any
 
 from ._yaml import parse_yaml_subset
 from .providers import resolve_provider_profile
+from .shared import PROVIDER_KINDS
 
 
 class ProviderRegistryError(ValueError):
     """A redacted registry/profile/credential configuration error."""
+
+
+# The ways a profile of each kind may authenticate. A kind takes only its own:
+# a credential is never handed to another provider's transport.
+_SUPPORTED_AUTH_KINDS: dict[str, frozenset[str]] = {
+    "anthropic": frozenset({"anthropic_api_key", "anthropic_auth_token", "custom_bearer", "none"}),
+    "openai": frozenset({"openai_api_key", "openai_api_key_or_codex", "custom_bearer", "none", "chatgpt"}),
+    "google": frozenset({"google_api_key", "none"}),
+}
 
 
 class ProviderRegistry:
@@ -76,8 +86,8 @@ class ProviderRegistry:
         for name, record in records.items():
             if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
                 raise ProviderRegistryError("Provider profile names must be ASCII identifiers")
-            if not isinstance(record, dict) or not isinstance(record.get("kind"), str) or record["kind"] not in {"anthropic", "openai"}:
-                raise ProviderRegistryError(f"Profile '{name}' requires kind anthropic or openai")
+            if not isinstance(record, dict) or not isinstance(record.get("kind"), str) or record["kind"] not in PROVIDER_KINDS:
+                raise ProviderRegistryError(f"Profile '{name}' requires kind anthropic, openai or google")
             self._validate_no_embedded_credentials(record, name)
             auth = record.get("auth")
             if not isinstance(auth, dict):
@@ -91,7 +101,7 @@ class ProviderRegistry:
                 try:
                     # A ChatGPT account is an OAuth bundle; every other managed credential is an API key.
                     purpose = 'provider_oauth_token' if auth.get('kind') == 'chatgpt' else 'provider_api_key'
-                    if (auth.get('kind') not in {'openai_api_key', 'anthropic_api_key', 'chatgpt'}
+                    if (auth.get('kind') not in {'openai_api_key', 'anthropic_api_key', 'google_api_key', 'chatgpt'}
                             or not is_runtime_secret_ref(ref) or ref.get('purpose') != purpose
                             or ref.get('backend') not in {'macos_keychain', 'linux_secret_service', 'encrypted_file'}
                             or set(ref) != {'kind', 'version', 'id', 'purpose', 'backend', 'installation_id', 'account_id'}
@@ -101,7 +111,7 @@ class ProviderRegistry:
                     _uuid(ref['account_id'])
                 except (ValueError, KeyError, TypeError, CredentialStoreError):
                     raise ProviderRegistryError('Invalid managed credential reference') from None
-            supported = {"anthropic_api_key", "anthropic_auth_token", "custom_bearer", "none"} if record["kind"] == "anthropic" else {"openai_api_key", "openai_api_key_or_codex", "custom_bearer", "none", "chatgpt"}
+            supported = _SUPPORTED_AUTH_KINDS[record["kind"]]
             if not isinstance(auth.get("kind"), str) or auth["kind"] not in supported:
                 raise ProviderRegistryError(f"Profile '{name}' has unsupported auth kind")
             if auth.get("envVar") is not None and (not isinstance(auth["envVar"], str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", auth["envVar"])):
@@ -130,8 +140,8 @@ class ProviderRegistry:
 
     @staticmethod
     def _validate_no_embedded_credentials(record: dict[str, Any], name: str) -> None:
-        credential_keys = {"apikey", "authtoken", "openaitoken", "accesstoken", "refreshtoken", "password", "secret", "anthropicapikey", "anthropicauthtoken"}
-        sensitive_headers = {"authorization", "proxyauthorization", "xapikey", "apikey", "cookie", "setcookie"}
+        credential_keys = {"apikey", "authtoken", "openaitoken", "accesstoken", "refreshtoken", "password", "secret", "anthropicapikey", "anthropicauthtoken", "googleapikey", "geminiapikey"}
+        sensitive_headers = {"authorization", "proxyauthorization", "xapikey", "xgoogapikey", "apikey", "cookie", "setcookie"}
         def normalized(key: Any) -> str:
             return re.sub(r"[^a-z0-9]", "", str(key).lower())
         def visit(value: Any) -> None:
@@ -172,7 +182,8 @@ class ProviderRegistry:
         """Return transport config fields, reading only the declared envVar.
 
         Pass an explicit environment (including {}) for deterministic resolution.
-        Anthropic API keys and bearer tokens retain their distinct transports.
+        Anthropic API keys and bearer tokens retain their distinct transports,
+        and a Google key comes back as ``googleApiKey``, its own field.
         Codex auth is an explicitly supplied token, never ambient auth-file lookup.
         """
         record = self._record(name)
@@ -188,8 +199,10 @@ class ProviderRegistry:
         if 'credentialRef' in auth:
             if auth['kind'] == 'chatgpt':
                 return {'openaiToken': copy.deepcopy(auth['credentialRef']), 'customHeaders': headers}
-            if auth['kind'] not in {'openai_api_key', 'anthropic_api_key'}:
+            if auth['kind'] not in {'openai_api_key', 'anthropic_api_key', 'google_api_key'}:
                 raise ProviderRegistryError('Managed credentials require API-key authentication')
+            if record['kind'] == 'google':
+                return {'googleApiKey': copy.deepcopy(auth['credentialRef']), 'customHeaders': headers}
             return {'apiKey': copy.deepcopy(auth['credentialRef']), 'customHeaders': headers}
         token = env.get(auth.get("envVar")) if auth.get("envVar") else None
         if not isinstance(token, str) or not token.strip():
@@ -198,6 +211,8 @@ class ProviderRegistry:
             raise ProviderRegistryError(f"Missing credential for profile '{name}'; set its declared auth.envVar")
         if record["kind"] == "openai":
             return {"openaiToken": token, "customHeaders": headers}
+        if record["kind"] == "google":
+            return {"googleApiKey": token, "customHeaders": headers}
         key = "authToken" if auth["kind"] in {"anthropic_auth_token", "custom_bearer"} else "apiKey"
         return {key: token, "customHeaders": headers}
 

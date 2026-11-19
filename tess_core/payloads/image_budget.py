@@ -344,6 +344,14 @@ def _valid_dimensions(width: int, height: int) -> dict[str, int]:
 
 def _estimate_measured_image_tokens(image: dict[str, Any], provider: str) -> int:
     width, height = image.get("width"), image.get("height")
+    if provider == "google":
+        # Gemini counts 258 tokens for an image up to 384 pixels a side, and
+        # 258 for each 768-pixel tile of a larger one.
+        if width and height:
+            if width <= 384 and height <= 384:
+                return 258
+            return 258 * math.ceil(width / 768) * math.ceil(height / 768)
+        return max(258, 258 * math.ceil(image["decodedBytes"] / (512 * 1024)))
     if width and height:
         if provider == "anthropic":
             return max(256, math.ceil(width * height / 750))

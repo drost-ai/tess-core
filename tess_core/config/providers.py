@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from .._utils import clone
+from ..providers.google.thinking import google_thinking_levels, resolve_google_thinking_level
 from ..providers.openai import is_codex_base_url
 from .defaults import (
     list_provider_profiles_for_kind,
@@ -36,7 +37,7 @@ from .shared import (
     model_implies_image_input,
 )
 
-from .credentials import _resolve_anthropic_credentials, _resolve_openai_credential
+from .credentials import _resolve_anthropic_credentials, _resolve_google_credential, _resolve_openai_credential
 
 def resolve_openai_api_mode(args: dict[str, Any] | None = None) -> str:
     args = dict(args or {})
@@ -151,11 +152,17 @@ def resolve_provider_profile(name: str, record: dict[str, Any], overrides: dict[
 def resolve_fallback_provider_profile_name(kind: str, profiles: dict[str, Any], currentName: str | None = None) -> str:
     if currentName and profiles.get(currentName, {}).get("kind") == kind:
         return currentName
-    preferred = "anthropic-console" if kind == "anthropic" else "openai"
-    if preferred in profiles:
+    preferred = {"anthropic": "anthropic-console", "openai": "openai"}.get(kind)
+    if preferred and preferred in profiles:
         return preferred
     matches = list_provider_profiles_for_kind(kind, profiles)
-    return matches[0] if matches else DEFAULT_PROVIDER_PROFILE_NAME
+    if matches:
+        return matches[0]
+    if kind == "google":
+        # No Google profile is built in: one must be declared, and the default
+        # profile is another provider's.
+        raise ValueError("No provider profile of kind google is configured; declare one under providerProfiles.")
+    return DEFAULT_PROVIDER_PROFILE_NAME
 
 def resolve_selected_provider_profile_name(args: dict[str, Any] | None = None) -> str:
     args = dict(args or {})
@@ -170,12 +177,16 @@ def resolve_selected_provider_profile_name(args: dict[str, Any] | None = None) -
     effective_kind = requested_kind or inferred_kind or DEFAULT_PROVIDER
     if effective_kind == "anthropic":
         return _resolve_anthropic_alias_profile_name(args)
+    if effective_kind == "google":
+        return resolve_fallback_provider_profile_name("google", profiles)
     return _resolve_openai_alias_profile_name(args)
 
 def infer_provider_for_model(model: str | None) -> str | None:
     normalized = model.strip().lower() if isinstance(model, str) else ""
     if normalized.startswith("claude-"):
         return "anthropic"
+    if normalized.startswith("gemini-"):
+        return "google"
     if normalized.startswith("gpt-") or normalized.startswith("o"):
         return "openai"
     return None
@@ -197,6 +208,8 @@ def model_supports_effort(provider: str, model: str) -> bool:
             or "opus-4-" in normalized
             or "sonnet-4-" in normalized
         )
+    if provider == "google":
+        return bool(google_thinking_levels(normalized))
     return normalized.startswith("gpt-5.4") or normalized.startswith("gpt-5")
 
 def model_supports_max_effort(provider: str, model: str) -> bool:
@@ -224,6 +237,8 @@ def model_supports_xhigh_effort(provider: str, model: str) -> bool:
             or "opus-4-7" in normalized
             or "opus-4-8" in normalized
         )
+    if provider == "google":
+        return "xhigh" in google_thinking_levels(normalized)
     # xhigh arrived with gpt-5.4; later minors (5.5, 5.6, …) keep it.
     match = re.match(r"gpt-5\.(\d+)", normalized)
     return bool(match and int(match.group(1)) >= 4)
@@ -243,6 +258,9 @@ def normalize_effort_for_model(provider: str, model: str, effort: str | None) ->
         if effort == "xhigh" and not model_supports_xhigh_effort(provider, model):
             return "high"
         return effort
+    if provider == "google":
+        # The effort a Gemini model is asked for is one of its own thinking levels.
+        return resolve_google_thinking_level(model, effort)
     return None
 
 def normalize_model_name(inputModel: str, providerHint: str | None = None) -> str:
@@ -404,6 +422,13 @@ def resolve_compaction_provider_profile_binding(args: dict[str, Any] | None = No
         available = ", ".join(sorted(provider_profiles))
         raise ValueError(f'Unknown compaction provider profile "{profile_name}". Available profiles: {available}')
     profile = resolve_provider_profile(profile_name, record)
+    if profile.get("kind") == "google":
+        return {
+            "profileName": profile_name,
+            "profile": profile,
+            "googleApiKey": _resolve_google_credential({"profile": profile, "settings_env": args.get("settings_env") or {}}),
+            "customHeaders": clone(profile.get("headers") or {}),
+        }
     if profile.get("kind") == "openai":
         return {
             "profileName": profile_name,

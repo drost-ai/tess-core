@@ -70,6 +70,8 @@ async def author_collaboration_update_with_provider(args: dict[str, Any]) -> str
                 "maxAttempts": 1,
             }
         )
+    elif provider != "anthropic":
+        raise RuntimeError("Collaboration update provider unsupported; use deterministic update")
     else:
         response = await send_anthropic_messages_request(
             {

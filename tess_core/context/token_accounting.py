@@ -84,6 +84,20 @@ async def measure_request_input_tokens(args: dict[str, Any] | None = None, **kwa
                 **_request_component_fields(request, config, images["estimatedInputTokens"]),
                 **image_fields,
             }
+    if config.get("provider") == "google":
+        # Gemini requests are sized by estimate: thought signatures and tool
+        # schemas are counted as the text they are sent as.
+        if _exact_token_count_required(config):
+            raise _normalize_mandatory_exact_failure(config, request["model"], RuntimeError("Exact token counting is unavailable for Google profiles."))
+        base, margin = _estimate_request_tokens(request, images["estimatedInputTokens"]), _context_knob("context.estimate_margin_tokens")
+        return {
+            "inputTokens": base + margin, "baseInputTokens": base, "safetyMarginTokens": margin, "source": "google_estimate",
+            "exactCountFallback": False, "measuredAt": measured_at, "provider": "google", "model": request["model"],
+            **_request_component_fields(request, config, images["estimatedInputTokens"]),
+            **image_fields,
+        }
+    if config.get("provider") != "openai":
+        raise ValueError(f"Unsupported provider kind: {config.get('provider')!r}")
     mode = config.get("openaiApiMode", "responses")
     exact_count_fallback = False
     resolved_config = await resolve_provider_config_secrets(config)

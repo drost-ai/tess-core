@@ -72,3 +72,28 @@ def _resolve_anthropic_credentials(args: dict[str, Any]) -> dict[str, Any]:
         return {"authToken": token}
     api_key = _resolve_provider_credential_env_value(env_var, args["settings_env"]) or args.get("explicitApiKey") or (args.get("storedApiKey") if env_var in ("ANTHROPIC_API_KEY", None) else None)
     return {"apiKey": api_key}
+
+
+def _resolve_google_credential(args: dict[str, Any]) -> Any:
+    """A Google profile's API key, read from the variable the profile names and nowhere else."""
+    profile = args["profile"]
+    if profile.get("kind") != "google":
+        return None
+    auth = profile.get("auth") or {}
+    if auth.get("kind") == "none":
+        return None
+    return _resolve_provider_credential_env_value(auth.get("envVar") or "GEMINI_API_KEY", args["settings_env"])
+
+
+async def resolve_google_api_key(profile: dict[str, Any], settings_env: dict[str, str], registry_auth: dict[str, Any] | None, profile_name: str) -> Any:
+    """The selected profile's Google key as a runtime secret reference, or None.
+
+    With a provider registry the registry's answer is the only one; without one the
+    key is read from the variable the profile names.
+    """
+    from ..runtime.secret_provider import normalize_runtime_secret_value
+
+    value = registry_auth.get("googleApiKey") if registry_auth is not None else _resolve_google_credential({"profile": profile, "settings_env": settings_env})
+    return await normalize_runtime_secret_value(
+        value=value, purpose="provider_api_key", idempotencyScope=f"config:{profile_name}:google-api-key"
+    )

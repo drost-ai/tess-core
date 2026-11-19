@@ -106,7 +106,7 @@ def coerce_working_context_document(value: Any) -> dict[str, Any] | None:
         "sourceRanges": source_ranges,
         "session": {
             "cwd": session["cwd"],
-            "provider": "openai" if session.get("provider") == "openai" else "anthropic",
+            "provider": session.get("provider") if session.get("provider") in ("openai", "google") else "anthropic",
             "model": session["model"],
             "effort": session.get("effort") if isinstance(session.get("effort"), str) else None,
             "permissionMode": session.get("permissionMode") if isinstance(session.get("permissionMode"), str) else "default",

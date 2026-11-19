@@ -53,6 +53,8 @@ async def check_provider_connection(registry: ProviderRegistry, name: str, *, ti
         profile = registry.profiles[name]
         if profile.get("apiMode") == "codex" or profile["auth"]["kind"] == "openai_api_key_or_codex":
             return _result("not_tested", "external_auth_file")
+        if profile["kind"] not in ("anthropic", "openai"):
+            return _result("not_tested", "unsupported_provider_kind")
         auth = registry.resolve_auth(name)
         headers = {"Accept": "application/json", **{str(k): str(v) for k, v in (auth.get("customHeaders") or {}).items()}}
         if profile["kind"] == "anthropic":

@@ -125,6 +125,11 @@ def _create_provider(
                 return await send(await resolve_provider_config_secrets(config))
 
         return {"send": send_openai}
+    if config.get("provider") == "google":
+        raise ValueError("Provider kind google has no transport in this build.")
+    if config.get("provider") != "anthropic":
+        # A kind this function does not know must never be sent as Anthropic.
+        raise ValueError(f"Unsupported provider kind: {config.get('provider')!r}")
     if not config.get("apiKey") and not config.get("authToken") and not no_auth:
         return {"send": lambda request: _missing_anthropic_credential_response(config, request)}
     async def send_anthropic(request: dict[str, Any]) -> dict[str, Any]:

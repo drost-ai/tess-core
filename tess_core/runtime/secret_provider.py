@@ -113,6 +113,13 @@ async def normalize_compaction_provider_secrets(
             idempotencyScope=f"{idempotencyScope}:openai",
         )
         return result
+    if profile.get("kind") == "google":
+        result["googleApiKey"] = await normalize_runtime_secret_value(
+            value=binding.get("googleApiKey"),
+            purpose="provider_api_key",
+            idempotencyScope=f"{idempotencyScope}:google-api-key",
+        )
+        return result
     result["apiKey"] = await normalize_runtime_secret_value(
         value=binding.get("apiKey"),
         purpose="provider_api_key",
@@ -143,6 +150,7 @@ async def resolve_compaction_provider_secrets(binding: Mapping[str, Any]) -> dic
         ("provider_api_key", "provider_oauth_token"),
     )
     result["apiKey"] = await _resolve_provider_value(binding.get("apiKey"), ("provider_api_key",))
+    result["googleApiKey"] = await _resolve_provider_value(binding.get("googleApiKey"), ("provider_api_key",))
     result["authToken"] = await _resolve_provider_value(
         binding.get("authToken"),
         ("provider_oauth_token", "provider_setup_token"),
@@ -157,6 +165,7 @@ async def resolve_compaction_provider_secrets(binding: Mapping[str, Any]) -> dic
 async def resolve_provider_config_secrets(config: Mapping[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(dict(config))
     result["apiKey"] = await _resolve_provider_value(config.get("apiKey"), ("provider_api_key",))
+    result["googleApiKey"] = await _resolve_provider_value(config.get("googleApiKey"), ("provider_api_key",))
     result["authToken"] = await _resolve_provider_value(
         config.get("authToken"),
         ("provider_oauth_token", "provider_setup_token"),
@@ -177,6 +186,7 @@ def assert_provider_config_secrets_resolved(config: Mapping[str, Any]) -> dict[s
         config.get("apiKey"),
         config.get("authToken"),
         config.get("openaiToken"),
+        config.get("googleApiKey"),
         *(config.get("customHeaders") or {}).values(),
     ]
     if any(value is not None and not isinstance(value, str) for value in values):

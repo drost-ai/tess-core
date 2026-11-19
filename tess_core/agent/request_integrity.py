@@ -8,14 +8,14 @@ from typing import Any
 
 from ..storage.message_origin import synthetic_user_message as _synthetic_user_message
 
-STRICT_TOOL_PROTOCOL_PROVIDERS = {"anthropic", "openai"}
+STRICT_TOOL_PROTOCOL_PROVIDERS = {"anthropic", "openai", "google"}
 _IMAGE_PLACEHOLDER_RE = re.compile(r"^<image:(?P<mime>[^:>]+)(?::(?P<path>.*?))?:current-turn-only>$")
 
 
 def normalize_provider_request_messages(provider: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
     """Return provider-safe request messages without mutating the canonical session.
 
-    Anthropic and OpenAI both require tool results to directly answer the
+    Anthropic, OpenAI and Google all require tool results to directly answer the
     immediately preceding assistant tool_use blocks. Context relief and reactive
     retries may choose a suffix of the canonical session; this normalizes only
     the outbound request so the provider never sees a split tool exchange.

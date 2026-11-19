@@ -73,6 +73,10 @@ def create_default_compaction_model_client(options: dict[str, Any] | None = None
                 ),
             )
             return {"text": _extract_text(response.get("content", [])), "usage": response.get("usage", {}), "model": model}
+        if model["provider"] == "google":
+            raise RuntimeError("Google-backed compaction has no transport in this build.")
+        if model["provider"] != "anthropic":
+            raise ValueError(f"Unsupported compaction provider kind: {model['provider']!r}")
         anthropic_config = _resolve_compaction_anthropic_config(config, model)
         if not anthropic_config.get("authToken") and not anthropic_config.get("apiKey"):
             raise RuntimeError("Anthropic credential is required for Anthropic-backed compaction.")

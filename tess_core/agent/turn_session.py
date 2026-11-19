@@ -119,11 +119,19 @@ def resolve_effective_provider_turn_binding(
             config.get("openaiBaseUrl") if current_profile_matches else None
         )
         effective_config["anthropicBaseUrl"] = None
+        effective_config["googleBaseUrl"] = None
+    elif effective_provider == "google":
+        effective_config["googleBaseUrl"] = profile.get("baseUrl") or (
+            config.get("googleBaseUrl") if current_profile_matches else None
+        )
+        effective_config["anthropicBaseUrl"] = None
+        effective_config["openaiBaseUrl"] = None
     else:
         effective_config["anthropicBaseUrl"] = profile.get("baseUrl") or (
             config.get("anthropicBaseUrl") if current_profile_matches else None
         )
         effective_config["openaiBaseUrl"] = None
+        effective_config["googleBaseUrl"] = None
     return {**args, "config": effective_config}
 
 

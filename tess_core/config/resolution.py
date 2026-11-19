@@ -48,6 +48,7 @@ from .credentials import (
     _get_stored_anthropic_auth_token,
     _resolve_anthropic_credentials,
     _resolve_openai_credential,
+    resolve_google_api_key,
 )
 from .providers import (
     normalize_model_name,
@@ -86,7 +87,7 @@ def _omit_provider_credential_environment(
         "ANTHROPIC_API_KEY",
         "ANTHROPIC_AUTH_TOKEN",
         "ANTHROPIC_CUSTOM_HEADERS",
-        "OPENAI_API_KEY",
+        "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY",
     }
     for profile in provider_profiles.values():
         env_var = (profile.get("auth") or {}).get("envVar")
@@ -130,12 +131,9 @@ def _resolve_requested_model(
     explicit_provider_kind = normalize_provider_name(requested_provider_name)
     provider_env_model = None
     if not provider_override_selects_profile:
-        provider_env_model = (
-            os.environ.get("OPENAI_MODEL")
-            if explicit_provider_kind == "openai"
-            else os.environ.get("ANTHROPIC_MODEL")
-            if explicit_provider_kind == "anthropic"
-            else os.environ.get("ANTHROPIC_MODEL") or os.environ.get("OPENAI_MODEL")
+        anthropic_model, openai_model = os.environ.get("ANTHROPIC_MODEL"), os.environ.get("OPENAI_MODEL")
+        provider_env_model = {"openai": openai_model, "anthropic": anthropic_model, "google": None}.get(
+            explicit_provider_kind, anthropic_model or openai_model
         )
     return requested_provider_name, direct_model_input or provider_env_model
 
@@ -362,8 +360,8 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
             "codexToken": openai_codex_token,
         }
     )
-    if registry:
-        strict_auth = registry.resolve_auth(selected_name, environment=options.get("providerAuthEnvironment"), codex_auth_path=options.get("providerAuthPath"))
+    strict_auth = registry.resolve_auth(selected_name, environment=options.get("providerAuthEnvironment"), codex_auth_path=options.get("providerAuthPath")) if registry else None
+    if strict_auth is not None:
         anthropic_creds = {"apiKey": strict_auth.get("apiKey"), "authToken": strict_auth.get("authToken")}
         openai_token = strict_auth.get("openaiToken")
         if resolved_provider == "openai" and openai_token is None and strict_auth.get("apiKey") is not None:
@@ -454,6 +452,8 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
         "openaiApiMode": openai_api_mode,
         "openaiBaseUrl": selected_profile.get("baseUrl") if resolved_provider == "openai" else None,
         "openaiCodexAuthPath": openai_codex_auth_path,
+        "googleApiKey": await resolve_google_api_key(selected_profile, settings_env, strict_auth, selected_name),
+        "googleBaseUrl": selected_profile.get("baseUrl") if resolved_provider == "google" else None,
         "model": resolved_model,
         "compactionModel": compaction["model"],
         "compactionVerificationProvider": verification["provider"],

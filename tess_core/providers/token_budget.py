@@ -274,6 +274,9 @@ _MODEL_LIMIT_RULES = [
     _rule(400_000, 128_000, lambda item: item["profileName"] == "codex" or item["apiMode"] == "codex" or (re.match(r"^gpt-5\.", item["model"]) and "codex" in item["model"])),
     _rule(1_000_000, 128_000, lambda item: item["kind"] == "openai" and item["apiMode"] != "codex" and re.match(r"^gpt-5(?:\.|-|$)", item["model"])),
     _rule(1_000_000, 128_000, lambda item: item["kind"] == "anthropic" and re.match(r"^claude-(?:opus|sonnet|haiku)-4(?:-|$)", item["model"])),
+    # Gemini: a 1,048,576-token window (shared by input, thinking and output on Gemini 4)
+    # and 65,536 output tokens in a synchronous response.
+    _rule(1_048_576, 65_536, lambda item: item["kind"] == "google" and item["model"].startswith("gemini-")),
     _rule(1_000_000, 131_072, lambda item: "zai-glm-5-2" in item["profileName"] or re.search(r"\bglm-5\.?2\b", item["model"])),
     _rule(202_752, 131_072, lambda item: "glm-5-1" in item["profileName"] or re.search(r"(?:glm-5\.1|glm-5p1)", item["model"])),
     _rule(1_048_576, 131_072, lambda item: "mimo-2-5-pro" in item["profileName"] or re.search(r"mimo-v?2\.5-pro", item["model"])),
