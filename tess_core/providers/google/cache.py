@@ -29,17 +29,22 @@ def minimum_cacheable_tokens(model: str | None) -> int:
 
 
 def google_cache_snapshot(params: dict[str, Any], previous_step_count: Any = None) -> dict[str, Any]:
-    """Hashes of one request's cacheable parts. ``prefixHash`` covers its first
-    ``previous_step_count`` steps, to compare with the previous call's ``inputHash``."""
+    """Hashes of one request's cacheable parts.
+
+    ``inputHash`` covers every step and ``stableHash`` every step but the last, which
+    may carry context that is only true for one turn. ``prefixHash`` and
+    ``prefixStableHash`` cover the first ``previous_step_count`` steps of this request,
+    and one fewer, to compare with the previous call's two hashes.
+    """
     steps = params.get("input") if isinstance(params.get("input"), list) else []
     wanted = previous_step_count if isinstance(previous_step_count, int) and not isinstance(previous_step_count, bool) else -1
     rolling = hashlib.sha256()
-    prefix_hash = rolling.hexdigest() if wanted == 0 else None
-    for index, step in enumerate(steps, start=1):
+    digests = [rolling.hexdigest()]
+    for step in steps:
         rolling.update(_canonical(step))
         rolling.update(b"\x1e")
-        if index == wanted:
-            prefix_hash = rolling.hexdigest()
+        digests.append(rolling.hexdigest())
+    at = lambda count: digests[count] if 0 <= count < len(digests) else None
     generation = {key: value for key, value in (params.get("generation_config") or {}).items() if key != "max_output_tokens"}
     return {
         "version": GOOGLE_CACHE_SNAPSHOT_VERSION,
@@ -48,8 +53,11 @@ def google_cache_snapshot(params: dict[str, Any], previous_step_count: Any = Non
         "toolsHash": _digest(params.get("tools")),
         "configHash": _digest(generation),
         "inputCount": len(steps),
-        "inputHash": rolling.hexdigest(),
-        "prefixHash": prefix_hash,
+        "inputHash": digests[-1],
+        # With a single step there is nothing before the last one to compare.
+        "stableHash": at(len(steps) - 1) if len(steps) > 1 else None,
+        "prefixHash": at(wanted),
+        "prefixStableHash": at(wanted - 1) if wanted > 1 else None,
     }
 
 
@@ -65,7 +73,12 @@ def diagnose_google_cache(previous: Any, current: dict[str, Any], usage: dict[st
     ):
         if previous.get(field) != current.get(field):
             return reason
-    if current.get("prefixHash") != previous.get("inputHash"):
+    # The last step of a request may hold context for that turn alone, which the next
+    # request does not repeat. Everything before it must be the same.
+    continues = current.get("prefixHash") == previous.get("inputHash") or (
+        previous.get("stableHash") is not None and current.get("prefixStableHash") == previous.get("stableHash")
+    )
+    if not continues:
         shrank = int(current.get("inputCount") or 0) < int(previous.get("inputCount") or 0)
         rewritten = shrank or previous.get("compactions") != current.get("compactions")
         return "compaction_or_relief_rewrite" if rewritten else "message_prefix_changed"

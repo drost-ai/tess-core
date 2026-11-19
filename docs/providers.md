@@ -303,6 +303,9 @@ providerProfiles:
       envVar: GEMINI_API_KEY
 ```
 
+**Errors.** A key Google does not recognise is refused with status 400 rather than 401;
+the runtime reports it as an authentication failure all the same.
+
 **Not supported.** Google's own server-side tools (Search, code execution, URL context,
 remote MCP), stored or chained interactions, background runs and responses longer than
 65,536 tokens, the Live API, and image, audio and video generation. Sign-in is by API

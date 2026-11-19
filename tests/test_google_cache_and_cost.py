@@ -40,6 +40,7 @@ MISS = {"input_tokens": 6500, "cache_read_input_tokens": 0}
 def _previous(messages=FIRST, at=NOW - timedelta(seconds=20), **overrides):
     snapshot = {**google_cache_snapshot(_params(messages, **overrides)), "compactions": 0, "at": at.isoformat()}
     snapshot.pop("prefixHash")
+    snapshot.pop("prefixStableHash")
     return snapshot
 
 
@@ -51,7 +52,7 @@ class GoogleCacheDiagnosisTests(unittest.TestCase):
     def test_a_snapshot_holds_hashes_and_counts_and_no_content(self):
         params = _params(SECOND)
         snapshot = google_cache_snapshot(params, 1)
-        self.assertEqual(set(snapshot), {"version", "modelHash", "systemHash", "toolsHash", "configHash", "inputCount", "inputHash", "prefixHash"})
+        self.assertEqual(set(snapshot), {"version", "modelHash", "systemHash", "toolsHash", "configHash", "inputCount", "inputHash", "stableHash", "prefixHash", "prefixStableHash"})
         self.assertEqual(snapshot["inputCount"], 3)
         self.assertNotIn("hello", json.dumps(snapshot))
         self.assertEqual(snapshot["prefixHash"], google_cache_snapshot(_params(FIRST))["inputHash"])
@@ -85,6 +86,19 @@ class GoogleCacheDiagnosisTests(unittest.TestCase):
         for expected, case in cases:
             with self.subTest(expected=expected):
                 self.assertEqual(self._reason(case.pop("previous"), case.pop("messages"), case.pop("usage"), **case), expected)
+
+    def test_context_for_one_turn_in_the_last_step_is_not_a_changed_prefix(self):
+        # After a compaction the runtime puts its continuation context in the newest user
+        # message. The next request carries that message without it: only the last step of
+        # the earlier request differs, and Gemini still serves everything before it from cache.
+        earlier = [*SECOND[:2], {"role": "user", "content": "[Dynamic continuation context] a checkpoint\n\nAnd again?"}]
+        later = [*SECOND, {"role": "assistant", "content": [{"type": "text", "text": "Yes."}]}, {"role": "user", "content": "And once more?"}]
+        self.assertEqual(self._reason(_previous(earlier), later, HIT), "cache_read_observed")
+        self.assertEqual(self._reason(_previous(earlier), later, MISS), "unchanged_short_gap_likely_server_side")
+        changed_earlier = [{"role": "user", "content": "HELLO"}, *later[1:]]
+        self.assertEqual(self._reason(_previous(earlier), changed_earlier, MISS), "message_prefix_changed")
+        # A request of one step has no stable part: a different step is a different prefix.
+        self.assertEqual(self._reason(_previous(FIRST), [{"role": "user", "content": "something else entirely"}], MISS), "message_prefix_changed")
 
     def test_the_smallest_cacheable_prompt_depends_on_the_model(self):
         self.assertEqual(minimum_cacheable_tokens("gemini-4-neon"), 4096)
@@ -130,6 +144,7 @@ class GoogleCacheObservationTests(TessCoreTestCase):
         kept = session["metadata"]["googleCache"]
         self.assertEqual((kept["inputCount"], kept["compactions"], kept["inputTokens"]), (3, 0, 6200))
         self.assertNotIn("prefixHash", kept)
+        self.assertNotIn("prefixStableHash", kept)
         self.assertNotIn("hello", json.dumps(kept))
         self.assertEqual(second["usage"], {"input_tokens": 200, "output_tokens": 5, "cache_read_input_tokens": 5900, "cache_hit_input_tokens": 5900})
 

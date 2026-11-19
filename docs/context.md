@@ -64,8 +64,19 @@ For Anthropic and Gemini sessions, each model call also emits a `provider.prompt
 event with what the cache did and one reason: `cache_read_observed`, or why not. The
 common misses are a first call (`warmup_no_previous_state`), a changed system prompt,
 tool list or thinking level, a rewritten conversation (`compaction_or_relief_rewrite`),
-a request too small to cache (`below_cache_minimum`: Gemini caches nothing under 4,096
-tokens) and a long pause (`idle_gap_may_have_expired`).
+a request too small to cache (`below_cache_minimum`: Gemini caches little or nothing
+under about 4,000 tokens), a long pause (`idle_gap_may_have_expired`), and a hit on an
+older entry than the previous request (`partial_cache_read`), which happens now and then
+on the provider's side and corrects itself on the next call.
+
+**What to expect from Gemini.** Measured in November 2026 on `gemini-4-hydrogen`, over a
+30-call tool loop whose tool results were about 2,200 tokens each: from the fourth call
+on, the whole previous request was served from cache every time and only the new tokens
+were billed at the full rate. 91% of the loop's input was cached and it cost 86% less
+than it would have uncached. `gemini-3.8-flash` behaved the same way. When a call adds
+fewer than about 2,050 tokens, Gemini reads the last 2,050 tokens of the previous
+request again at the full rate, so a loop of small tool results caches less: 62% in the
+same test with 300-token results. The saving grows with the conversation either way.
 
 Three things keep the cache warm: leave the system prompt and tool list alone during a
 session, put per-turn context such as the time in the turn rather than the system prompt,

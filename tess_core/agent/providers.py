@@ -258,7 +258,8 @@ def _observe_google_cache(session: dict[str, Any] | None, runtime: dict[str, Any
     sent = sum(int(usage.get(key) or 0) for key in ("input_tokens", "cache_read_input_tokens"))
     snapshot = {**snapshot, "compactions": int(metadata.get("compactions") or 0), "at": now_iso(), "inputTokens": sent}
     reason = diagnose_google_cache(previous, snapshot, usage, model=response.get("model"))
-    snapshot.pop("prefixHash", None)
+    for key in ("prefixHash", "prefixStableHash"):
+        snapshot.pop(key, None)
     metadata["googleCache"] = snapshot
     _safe_emit(runtime, "provider.prompt_cache", google_cache_event(session.get("id"), usage, reason))
 
