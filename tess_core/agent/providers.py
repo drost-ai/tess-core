@@ -3,7 +3,9 @@ from __future__ import annotations
 import copy
 from ..providers.anthropic import send_anthropic_messages_request
 from ..providers.errors import ProviderRequestError, is_provider_request_error
+from .._utils import now_iso
 from ..providers.google import send_google_interactions_request
+from ..providers.google.cache import diagnose_google_cache, google_cache_event
 from ..providers.openai import send_openai_request
 from ..session.persistence import persist_provider_failure, persist_session
 from ..runtime.events.emit import safe_emit as _safe_emit
@@ -132,13 +134,17 @@ def _create_provider(
 
         async def send_google(request: dict[str, Any]) -> dict[str, Any]:
             resolved = await resolve_provider_config_secrets(config)
-            return await send_google_interactions_request(
+            previous = metadata.get("googleCache") if isinstance(metadata.get("googleCache"), dict) else None
+            response = await send_google_interactions_request(
                 config=resolved,
                 request=request,
                 runtime=runtime,
                 turnSession=provider_turn_session,
+                cachePrefixStepCount=(previous or {}).get("inputCount"),
                 **timeout_policy,
             )
+            _observe_google_cache(session, runtime, previous, response)
+            return response
 
         return {"send": send_google}
     if config.get("provider") != "anthropic":
@@ -240,6 +246,20 @@ def _missing_anthropic_credential_response(config: dict[str, Any], request: dict
         "model": request["model"],
         "stopReason": "end_turn",
     }
+
+
+def _observe_google_cache(session: dict[str, Any] | None, runtime: dict[str, Any], previous: dict[str, Any] | None, response: dict[str, Any]) -> None:
+    """Say what Gemini's cache did on this call and keep the snapshot the next call is compared with."""
+    snapshot = response.pop("googleCache", None)
+    if not isinstance(snapshot, dict) or not isinstance(session, dict):
+        return
+    metadata = session.setdefault("metadata", {})
+    snapshot = {**snapshot, "compactions": int(metadata.get("compactions") or 0), "at": now_iso()}
+    usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    reason = diagnose_google_cache(previous, snapshot, usage, model=response.get("model"))
+    snapshot.pop("prefixHash", None)
+    metadata["googleCache"] = snapshot
+    _safe_emit(runtime, "provider.prompt_cache", google_cache_event(session.get("id"), usage, reason))
 
 
 def _missing_google_credential_response(config: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:

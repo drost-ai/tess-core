@@ -60,7 +60,7 @@ class GoogleInteractionsResponseTests(unittest.TestCase):
         response = _send(client, events=events, runtime={"includePartialMessages": True})
         self.assertEqual(response, {
             "content": [{"type": "text", "text": "Hello."}],
-            "usage": {"input_tokens": 100, "output_tokens": 335, "cache_read_input_tokens": 60, "cache_hit_input_tokens": 60},
+            "usage": {"input_tokens": 40, "output_tokens": 335, "cache_read_input_tokens": 60, "cache_hit_input_tokens": 60},
             "model": "gemini-4-hydrogen",
             "stopReason": "end_turn",
         })

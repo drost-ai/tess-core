@@ -146,6 +146,10 @@ def resolve_model_pricing(model: str) -> dict[str, float] | None:
         return MODEL_PRICING["gpt-5.4"]
     if key.startswith("gpt-5-mini"):
         return MODEL_PRICING["gpt-5-mini-2025-08-07"]
+    if key.startswith(("gemini-", "models/gemini-")):
+        from .google.pricing import resolve_google_model_pricing
+
+        return resolve_google_model_pricing(key)
     return None
 
 

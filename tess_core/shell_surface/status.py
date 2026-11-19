@@ -50,8 +50,8 @@ def build_status_report(session: dict[str, Any], config: dict[str, Any]) -> str:
             f"profile      {session.get('providerProfileName') or config.get('providerProfileName') or 'n/a'}",
             f"provider     {provider or 'n/a'}",
             f"model        {session.get('model') or config.get('model') or 'n/a'}",
-            f"mode         {config.get('openaiApiMode') if provider == 'openai' else 'messages'}",
-            f"base url     {(config.get('openaiBaseUrl') or 'default') if provider == 'openai' else 'default'}",
+            f"mode         {_provider_mode(provider, config)}",
+            f"base url     {_provider_base_url(provider, config)}",
             f"effort       {session.get('effort') or config.get('effort') or 'n/a'}",
             f"permissions  {session.get('permissionMode') or config.get('permissionMode') or 'n/a'}",
             f"messages     {len(session.get('messages') or [])}",
@@ -81,6 +81,9 @@ def build_provider_profiles_report(session: dict[str, Any], config: dict[str, An
         lines = [f"{name}{'  (active)' if name == active else ''}", f"  kind       {kind}"]
         if kind == "openai":
             lines.append(f"  mode       {profile.get('apiMode') or 'responses'}")
+            lines.append(f"  base url   {profile.get('baseUrl') or 'default'}")
+        elif kind == "google":
+            lines.append("  mode       interactions")
             lines.append(f"  base url   {profile.get('baseUrl') or 'default'}")
         lines.append(f"  model      {profile.get('defaultModel') or get_default_model_for_provider(kind)}")
         auth = profile.get("auth") or {}
@@ -155,8 +158,8 @@ async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[
                 [
                     f"profile   {session.get('providerProfileName') or config.get('providerProfileName')}",
                     f"kind      {provider}",
-                    f"mode      {config.get('openaiApiMode') if provider == 'openai' else 'messages'}",
-                    f"base url  {(config.get('openaiBaseUrl') or 'default') if provider == 'openai' else 'default'}",
+                    f"mode      {_provider_mode(provider, config)}",
+                    f"base url  {_provider_base_url(provider, config)}",
                 ]
             ),
         )
@@ -169,13 +172,7 @@ async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[
     config["providerProfileName"] = requested
     config["providerProfile"] = profile
     session["provider"] = config["provider"] = config["providerKind"] = profile.get("kind")
-    if profile.get("kind") == "openai":
-        config["openaiApiMode"] = profile.get("apiMode") or config.get("openaiApiMode")
-        config["openaiBaseUrl"] = profile.get("baseUrl")
-        config.pop("anthropicBaseUrl", None)
-    else:
-        config["anthropicBaseUrl"] = profile.get("baseUrl")
-        config.pop("openaiBaseUrl", None)
+    _bind_profile_endpoint(config, profile)
     if profile.get("defaultModel"):
         session["model"] = config["model"] = normalize_model_name(profile["defaultModel"], profile.get("kind"))
         session["effort"] = config["effort"] = normalize_effort_for_model(profile.get("kind"), session.get("model"), session.get("effort") or config.get("effort")) or get_default_effort_for_provider(profile.get("kind"))
@@ -220,13 +217,8 @@ async def _handle_model(arg_text: str, session: dict[str, Any], config: dict[str
     session["providerProfileName"] = config["providerProfileName"] = profile_name
     profile = (config.get("providerProfiles") or {}).get(profile_name) or config.get("providerProfile") or {}
     config["providerProfile"] = profile
-    if profile.get("kind") == "openai":
-        config["openaiApiMode"] = profile.get("apiMode") or config.get("openaiApiMode")
-        config["openaiBaseUrl"] = profile.get("baseUrl")
-        config.pop("anthropicBaseUrl", None)
-    elif profile:
-        config["anthropicBaseUrl"] = profile.get("baseUrl")
-        config.pop("openaiBaseUrl", None)
+    if profile:
+        _bind_profile_endpoint(config, profile)
     next_effort = get_default_effort_for_provider(selection_provider) if switched_provider else session.get("effort") or config.get("effort")
     session["effort"] = config["effort"] = normalize_effort_for_model(selection_provider, session["model"], next_effort) or get_default_effort_for_provider(selection_provider)
     await _persist_shell_settings(
@@ -432,3 +424,32 @@ def _find_runtime_command(name: str, commands: list[Any]) -> Any:
         if isinstance(command, dict) and command.get("name", "").lower() == name.lower():
             return command
     return None
+
+
+def _provider_mode(provider: Any, config: dict[str, Any]) -> str:
+    """The API a provider kind is spoken to through."""
+    if provider == "openai":
+        return str(config.get("openaiApiMode"))
+    return "interactions" if provider == "google" else "messages"
+
+
+def _provider_base_url(provider: Any, config: dict[str, Any]) -> str:
+    key = {"openai": "openaiBaseUrl", "google": "googleBaseUrl"}.get(provider)
+    return str((config.get(key) if key else None) or "default")
+
+
+def _bind_profile_endpoint(config: dict[str, Any], profile: dict[str, Any]) -> None:
+    """Point the config at the selected profile's endpoint, and at no other kind's."""
+    kind = profile.get("kind")
+    for key in ("openaiBaseUrl", "anthropicBaseUrl", "googleBaseUrl"):
+        config.pop(key, None)
+    if kind == "openai":
+        config["openaiApiMode"] = profile.get("apiMode") or config.get("openaiApiMode")
+        config["openaiBaseUrl"] = profile.get("baseUrl")
+    elif kind == "google":
+        config["googleBaseUrl"] = profile.get("baseUrl")
+        if not config.get("googleApiKey"):
+            # The session was opened on another kind: read the key this profile names.
+            config["googleApiKey"] = os.environ.get(str((profile.get("auth") or {}).get("envVar") or "")) or None
+    else:
+        config["anthropicBaseUrl"] = profile.get("baseUrl")

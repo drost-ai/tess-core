@@ -42,6 +42,9 @@ async def _secret(value: Any) -> str | None:
 def _target(profile: dict[str, Any]) -> str:
     if profile["kind"] == "anthropic":
         return (profile.get("baseUrl") or "https://api.anthropic.com").rstrip("/") + "/v1/models"
+    if profile["kind"] == "google":
+        # The key goes in a header, never in the query, where logs would keep it.
+        return (profile.get("baseUrl") or "https://generativelanguage.googleapis.com/v1beta").rstrip("/") + "/models?pageSize=1000"
     return (profile.get("baseUrl") or "https://api.openai.com/v1").rstrip("/") + "/models"
 
 
@@ -53,11 +56,15 @@ async def check_provider_connection(registry: ProviderRegistry, name: str, *, ti
         profile = registry.profiles[name]
         if profile.get("apiMode") == "codex" or profile["auth"]["kind"] == "openai_api_key_or_codex":
             return _result("not_tested", "external_auth_file")
-        if profile["kind"] not in ("anthropic", "openai"):
+        if profile["kind"] not in ("anthropic", "openai", "google"):
             return _result("not_tested", "unsupported_provider_kind")
         auth = registry.resolve_auth(name)
         headers = {"Accept": "application/json", **{str(k): str(v) for k, v in (auth.get("customHeaders") or {}).items()}}
-        if profile["kind"] == "anthropic":
+        if profile["kind"] == "google":
+            key = await _secret(auth.get("googleApiKey"))
+            if key:
+                headers["x-goog-api-key"] = key
+        elif profile["kind"] == "anthropic":
             headers["anthropic-version"] = ANTHROPIC_VERSION
             if auth.get("apiKey") is not None:
                 headers["x-api-key"] = await _secret(auth["apiKey"])
@@ -108,7 +115,9 @@ async def check_provider_connection(registry: ProviderRegistry, name: str, *, ti
         return _result("failed", "invalid_provider_response")
     try:
         listed = json.loads(body)
-        if isinstance(listed.get("models"), list):
+        if profile["kind"] == "google":
+            models = _gemini_chat_models(listed.get("models"))
+        elif isinstance(listed.get("models"), list):
             # A ChatGPT account's catalog: slugs the account may pick, in the server's order.
             models = [str(item["slug"]) for item in listed["models"] if isinstance(item, dict)
                       and isinstance(item.get("slug"), str) and item.get("visibility") == "list"][:MAX_MODELS]
@@ -119,3 +128,15 @@ async def check_provider_connection(registry: ProviderRegistry, name: str, *, ti
         return _result("failed", "invalid_provider_response")
     return _result("available", "models_listed", models)
 
+
+
+# Gemini's catalogue lists every model the key can reach. A session needs one that
+# answers in text: the speech, image, video, embedding and real-time models are left out.
+_NOT_CHAT_MODELS = ("embedding", "-tts", "-image", "-live", "transcribe", "robotics", "omni", "native-audio", "computer-use", "decision")
+
+
+def _gemini_chat_models(items: Any) -> list[str]:
+    if not isinstance(items, list):
+        raise TypeError("models is not a list")
+    names = [str(item["name"]).removeprefix("models/") for item in items if isinstance(item, dict) and isinstance(item.get("name"), str)]
+    return [name for name in names if name.startswith("gemini-") and not any(marker in name for marker in _NOT_CHAT_MODELS)][:MAX_MODELS]

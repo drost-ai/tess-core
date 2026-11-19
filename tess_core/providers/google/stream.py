@@ -210,7 +210,9 @@ class InteractionAccumulator:
         self.raw_usage = copy.deepcopy(usage)
         counts = {key: _count(usage.get(key)) for key in ("total_input_tokens", "total_output_tokens", "total_thought_tokens", "total_cached_tokens")}
         if counts["total_input_tokens"] is not None:
-            self.usage["input_tokens"] = counts["total_input_tokens"]
+            # Gemini's input count includes the cached part; here cached input is counted
+            # on its own, as it is priced on its own.
+            self.usage["input_tokens"] = max(0, counts["total_input_tokens"] - (counts["total_cached_tokens"] or 0))
         if counts["total_output_tokens"] is not None or counts["total_thought_tokens"] is not None:
             # Thinking is billed as output, and counts against max_output_tokens.
             self.usage["output_tokens"] = (counts["total_output_tokens"] or 0) + (counts["total_thought_tokens"] or 0)

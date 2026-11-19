@@ -19,6 +19,7 @@ from ..errors import (
     create_provider_request_error,
     normalize_unknown_provider_failure,
 )
+from .cache import google_cache_snapshot
 from .params import GOOGLE_PROVIDER_LABEL, build_interactions_create_params, resolve_google_base_url
 from .stream import (
     BLOCKED_CODES,
@@ -131,7 +132,11 @@ async def send_google_interactions_request(args: dict[str, Any] | None = None, *
             active_stream = None
             if attempt > 1:
                 _emit(runtime, "provider.recovered", {"provider": "google", "provider_label": GOOGLE_PROVIDER_LABEL, "model": request["model"], "attempts": attempt, "category": last_failure.record.get("category") if last_failure else None})
-            return {"content": state.blocks, "usage": state.usage, "model": request["model"], "stopReason": stop_reason}
+            response = {"content": state.blocks, "usage": state.usage, "model": request["model"], "stopReason": stop_reason}
+            if "cachePrefixStepCount" in args:
+                # For the caller's cache diagnosis: hashes and counts of what was sent, never content.
+                response["googleCache"] = google_cache_snapshot(params, args["cachePrefixStepCount"])
+            return response
         except ExecutionBudgetExceeded:
             await _release(turn_session, active_stream)
             raise

@@ -135,7 +135,7 @@ class GoogleAgentLoopTests(TessCoreTestCase):
         assistant = [message for message in stored["messages"] if message["role"] == "assistant"]
         self.assertEqual(assistant[0]["content"][0]["provider_metadata"]["google_thoughts"][0]["signature"], "sig-plan")
         usage = stored["metadata"]["usage"]
-        self.assertEqual((usage["inputTokens"], usage["outputTokens"], usage["cacheReadInputTokens"]), (15000, 150, 12600))
+        self.assertEqual((usage["inputTokens"], usage["outputTokens"], usage["cacheReadInputTokens"]), (2400, 150, 12600))
         self.assertNotIn("loop-google-key", json.dumps(stored))
 
     def test_parallel_calls_and_an_image_a_tool_returned(self):
@@ -347,4 +347,4 @@ class GoogleCompactionAndNarrationTests(TessCoreTestCase):
         self.assertEqual((monitor, collaboration), ("A checkpoint.", "A checkpoint."))
         self.assertEqual(len(self.requests), 2)
         self.assertTrue(all(record["headers"]["x-goog-api-key"] == "loop-google-key" for record in self.requests))
-        self.assertEqual(session["metadata"]["usage"]["inputTokens"], 5000)
+        self.assertEqual((session["metadata"]["usage"]["inputTokens"], session["metadata"]["usage"]["cacheReadInputTokens"]), (800, 4200))
