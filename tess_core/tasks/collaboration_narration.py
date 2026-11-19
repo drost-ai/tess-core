@@ -5,6 +5,7 @@ from typing import Any
 
 from ..config import ensure_provider_for_model_selection, normalize_effort_for_model
 from ..providers.anthropic import send_anthropic_messages_request
+from ..providers.google import send_google_interactions_request
 from ..providers.openai import send_openai_request
 from ..runtime.secret_provider import resolve_provider_config_secrets
 from ..providers.usage_costs import merge_usage_into_session as _merge_usage_into_session
@@ -70,6 +71,8 @@ async def author_collaboration_update_with_provider(args: dict[str, Any]) -> str
                 "maxAttempts": 1,
             }
         )
+    elif provider == "google":
+        response = await send_google_interactions_request({"request": request, "config": resolved_config, "runtime": {}, "maxAttempts": 1})
     elif provider != "anthropic":
         raise RuntimeError("Collaboration update provider unsupported; use deterministic update")
     else:

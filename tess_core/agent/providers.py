@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from ..providers.anthropic import send_anthropic_messages_request
 from ..providers.errors import ProviderRequestError, is_provider_request_error
+from ..providers.google import send_google_interactions_request
 from ..providers.openai import send_openai_request
 from ..session.persistence import persist_provider_failure, persist_session
 from ..runtime.events.emit import safe_emit as _safe_emit
@@ -126,7 +127,20 @@ def _create_provider(
 
         return {"send": send_openai}
     if config.get("provider") == "google":
-        raise ValueError("Provider kind google has no transport in this build.")
+        if not config.get("googleApiKey") and not no_auth:
+            return {"send": lambda request: _missing_google_credential_response(config, request)}
+
+        async def send_google(request: dict[str, Any]) -> dict[str, Any]:
+            resolved = await resolve_provider_config_secrets(config)
+            return await send_google_interactions_request(
+                config=resolved,
+                request=request,
+                runtime=runtime,
+                turnSession=provider_turn_session,
+                **timeout_policy,
+            )
+
+        return {"send": send_google}
     if config.get("provider") != "anthropic":
         # A kind this function does not know must never be sent as Anthropic.
         raise ValueError(f"Unsupported provider kind: {config.get('provider')!r}")
@@ -215,6 +229,21 @@ def _missing_openai_credential_response(config: dict[str, Any], request: dict[st
 
 def _missing_anthropic_credential_response(config: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
     env_var = (((config.get("providerProfile") or {}).get("auth") or {}).get("envVar")) or "the required Anthropic credential env var"
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": f"{MISSING_CREDENTIAL_PREFIX} '{config.get('providerProfileName')}'. Set {env_var} to enable model-backed responses.",
+            }
+        ],
+        "usage": {"input_tokens": 0, "output_tokens": 0},
+        "model": request["model"],
+        "stopReason": "end_turn",
+    }
+
+
+def _missing_google_credential_response(config: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
+    env_var = (((config.get("providerProfile") or {}).get("auth") or {}).get("envVar")) or "the Gemini API key env var the profile names"
     return {
         "content": [
             {

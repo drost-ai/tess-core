@@ -5,6 +5,7 @@ from typing import Any
 
 from ..config import ensure_provider_for_model_selection, normalize_effort_for_model
 from ..providers.anthropic import send_anthropic_messages_request
+from ..providers.google import send_google_interactions_request
 from ..providers.openai import send_openai_request
 from ..providers.usage_costs import merge_usage_into_session as _merge_usage_into_session
 from ..runtime.secret_provider import resolve_provider_config_secrets
@@ -72,6 +73,8 @@ async def _author_monitor_update_with_provider(config: dict[str, Any], session: 
         response = await send_openai_request({"token": token, "baseUrl": resolved_config.get("openaiBaseUrl"), "headers": resolved_config.get("customHeaders"), "mode": resolved_config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
     elif provider == "anthropic":
         response = await send_anthropic_messages_request({"request": request, "config": resolved_config, "runtime": {}, "maxAttempts": 1})
+    elif provider == "google":
+        response = await send_google_interactions_request({"request": request, "config": resolved_config, "runtime": {}, "maxAttempts": 1})
     else:
         raise RuntimeError("Monitor notification provider unsupported; use deterministic notification")
     text = "".join(str(block.get("text") or "") for block in response.get("content", []) if block.get("type") == "text").strip()

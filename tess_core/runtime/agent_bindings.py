@@ -62,6 +62,7 @@ _CONTRACT_FIELDS = frozenset({
 # only meaningful if unknown keys fail loudly instead of passing through.
 _EXTENSION_FIELDS = frozenset({
     "executionBudget",
+    "googleClientFactory",
     "monitorContinuationSupported",
     "openaiClientFactory",
     "partial_output_recovery_policy",

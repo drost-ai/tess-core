@@ -266,7 +266,7 @@ def apply_context_relief_mode(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def supports_api_microcompact(config: dict[str, Any]) -> bool:
-    return config.get("provider") in {"openai", "anthropic"}
+    return config.get("provider") in {"openai", "anthropic", "google"}
 
 
 def classify_context_relief_pressure(pressure: dict[str, Any], reactiveAttempt: int, tokenLimit: int | None = None) -> str:

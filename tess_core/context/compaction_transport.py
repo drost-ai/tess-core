@@ -9,6 +9,7 @@ from ..providers.errors import create_provider_failure_record, create_provider_r
 from ..providers.timeouts import resolveProviderTimeoutPolicy
 from ..providers.token_budget import resolveCompactionPolicy
 from ..providers.anthropic import send_anthropic_messages_request
+from ..providers.google import GOOGLE_PROVIDER_LABEL, send_google_interactions_request
 from ..providers.openai import DEFAULT_CODEX_BASE_URL, get_openai_provider_label, send_openai_request
 from ..runtime.secret_provider import resolve_compaction_provider_secrets, resolve_provider_config_secrets
 from ..storage import load_codex_auth_token
@@ -74,7 +75,15 @@ def create_default_compaction_model_client(options: dict[str, Any] | None = None
             )
             return {"text": _extract_text(response.get("content", [])), "usage": response.get("usage", {}), "model": model}
         if model["provider"] == "google":
-            raise RuntimeError("Google-backed compaction has no transport in this build.")
+            google_config = await _resolve_compaction_google_config(config, model)
+            response = await _run_compaction_request_with_timeout(
+                provider="google",
+                providerLabel=GOOGLE_PROVIDER_LABEL,
+                attempt=1,
+                timeoutMs=_resolve_compaction_timeout_ms(model.get("purpose")),
+                run=lambda: send_google_interactions_request(config=google_config, request={"model": model["model"], "effort": model.get("effort"), "maxOutputTokens": max_output_tokens, "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []}, runtime=runtime, **timeout_policy),
+            )
+            return {"text": _extract_text(response.get("content", [])), "usage": response.get("usage", {}), "model": model}
         if model["provider"] != "anthropic":
             raise ValueError(f"Unsupported compaction provider kind: {model['provider']!r}")
         anthropic_config = _resolve_compaction_anthropic_config(config, model)
@@ -297,6 +306,23 @@ def _resolve_compaction_anthropic_config(config: dict[str, Any], model: dict[str
         "anthropicBaseUrl": profile.get("baseUrl"),
         "customHeaders": binding.get("customHeaders") or {},
     }
+
+
+async def _resolve_compaction_google_config(config: dict[str, Any], model: dict[str, Any]) -> dict[str, Any]:
+    """The config a Google-backed compaction call runs with: its own bound profile, or the session's."""
+    unresolved = _resolve_compaction_provider_binding(config, model)
+    if unresolved and (unresolved.get("profile") or {}).get("kind") == "google":
+        binding = await resolve_compaction_provider_secrets(unresolved)
+        profile = binding.get("profile") or {}
+        resolved = {**config, "provider": "google", "providerProfile": profile, "googleApiKey": binding.get("googleApiKey"), "googleBaseUrl": profile.get("baseUrl"), "customHeaders": binding.get("customHeaders") or {}}
+    elif config.get("provider") == "google":
+        resolved = await resolve_provider_config_secrets(config)
+    else:
+        raise RuntimeError("Google-backed compaction requires a Google provider profile.")
+    no_auth = ((resolved.get("providerProfile") or {}).get("auth") or {}).get("kind") == "none"
+    if not resolved.get("googleApiKey") and not no_auth:
+        raise RuntimeError("Google credential is required for Google-backed compaction.")
+    return resolved
 
 
 def _resolve_compaction_provider_binding(config: dict[str, Any], model: dict[str, Any]) -> dict[str, Any] | None:
