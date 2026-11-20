@@ -224,13 +224,21 @@ class SessionManager:
         if session_id and session_id in self._live:
             return self._handles[session_id]
         if session_id and session_id in self._opening:
-            await self._opening[session_id]
+            # Shielded: a caller that stops waiting must not cancel the open
+            # another caller is still doing.
+            await asyncio.shield(self._opening[session_id])
             return self._handles[session_id]
         target = session_id or uuid.uuid4().hex
         waiter = asyncio.get_running_loop().create_future()
         self._opening[target] = waiter
         try:
             live = await self._build(target, existing=session_id is not None, reason=reason)
+            if self.stopping:
+                # runtime.stop() began while this session was being built: its
+                # sweep has passed or will not see it. Nothing is published,
+                # and what was built is released here.
+                await live.close()
+                raise RuntimeStopped("The runtime is stopped; it opens no session.")
             self._live[target] = live
             handle = self._handles.get(target) or Session(self, target)
             self._handles[target] = handle
@@ -261,6 +269,8 @@ class SessionManager:
                 self._ended.add(session_id)
                 raise SessionEnded(session_id, marker.get("reason"), marker.get("at"))
         options = await self._options_for(session_id, reason)
+        if self.stopping:
+            raise RuntimeStopped("The runtime is stopped; it opens no session.")  # stopped while the host was asked
         if existing and record is None:
             raise UnknownSessionError(session_id)
         runtime = self.runtime

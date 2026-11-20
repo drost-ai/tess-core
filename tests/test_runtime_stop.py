@@ -60,6 +60,116 @@ class RuntimeStopTests(TessCoreTestCase):
             os.environ.pop(name, None)
         reset_configured_knobs()
 
+    def test_an_open_still_in_flight_when_the_runtime_stops_opens_nothing(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            async def scenario():
+                asked, release = asyncio.Event(), asyncio.Event()
+
+                async def options(_sid, _reason):
+                    asked.set()
+                    await release.wait()
+                    return SessionOptions(provider_override=_reply())
+
+                listener = Listener()
+                runtime = await start_runtime(str(home), cwd=str(workspace), listener=listener, daemon_enabled=False,
+                                              session_options=options, startup_timeout_seconds=20)
+                try:
+                    opening = asyncio.ensure_future(runtime.sessions.open())
+                    await asked.wait()
+                    await runtime.stop()          # its sweep finds nothing: the session is not built yet
+                    release.set()
+                    with self.assertRaises(RuntimeStopped):
+                        await opening
+                    self.assertEqual(runtime.sessions.open_ids(), [])
+                    self.assertEqual(listener.opened, [])
+                finally:
+                    release.set()
+                    await runtime.stop()
+
+            run(scenario())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_a_session_built_while_the_runtime_stops_is_released_not_published(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            async def scenario():
+                runtime = await start_runtime(str(home), cwd=str(workspace), daemon_enabled=False,
+                                              session_options=lambda sid, reason: SessionOptions(provider_override=_reply()),
+                                              startup_timeout_seconds=20)
+                manager = runtime.sessions
+                built, release, closed = asyncio.Event(), asyncio.Event(), []
+                build = manager._build
+
+                async def slow_build(*args, **kwargs):
+                    live = await build(*args, **kwargs)
+                    close = live.close
+
+                    async def close_and_note(*a, **k):
+                        closed.append(live.id)
+                        await close(*a, **k)
+                    live.close = close_and_note
+                    built.set()
+                    await release.wait()
+                    return live
+
+                manager._build = slow_build
+                try:
+                    opening = asyncio.ensure_future(manager.open())
+                    await built.wait()
+                    await runtime.stop()
+                    release.set()
+                    with self.assertRaises(RuntimeStopped):
+                        await opening
+                    self.assertEqual(manager.open_ids(), [])
+                    self.assertEqual(len(closed), 1)   # what was built did not outlive the stop
+                finally:
+                    release.set()
+                    await runtime.stop()
+
+            run(scenario())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_a_caller_that_stops_waiting_for_a_reopen_does_not_cancel_it_for_the_other(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            async def scenario():
+                gate = asyncio.Event()
+                gate.set()
+                asked = asyncio.Event()
+
+                async def options(_sid, _reason):
+                    asked.set()
+                    await gate.wait()
+                    return SessionOptions(provider_override=_reply())
+
+                runtime = await start_runtime(str(home), cwd=str(workspace), daemon_enabled=False,
+                                              session_options=options, startup_timeout_seconds=20)
+                try:
+                    handle = await runtime.sessions.open()
+                    await runtime.sessions.close(handle.id)
+                    gate.clear()
+                    asked.clear()
+                    first = asyncio.ensure_future(runtime.sessions.open(handle.id))
+                    await asked.wait()
+                    second = asyncio.ensure_future(runtime.sessions.open(handle.id))
+                    await asyncio.sleep(0)       # the second caller now waits on the first one's open
+                    second.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await second
+                    gate.set()
+                    self.assertEqual((await first).id, handle.id)
+                    self.assertEqual(runtime.sessions.open_ids(), [handle.id])
+                finally:
+                    gate.set()
+                    await runtime.stop()
+
+            run(scenario())
+        finally:
+            self.restore_home(root, previous)
+
     def test_stop_refuses_new_work_and_reports_what_it_did(self):
         root, home, workspace, previous = self.temp_context()
         try:
