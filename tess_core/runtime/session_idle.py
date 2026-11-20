@@ -56,7 +56,7 @@ class IdleSweeper:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
-        inflight = self._inflight
+        inflight, self._inflight = self._inflight, None
         if inflight is not None:
             with contextlib.suppress(Exception):
                 await inflight
@@ -83,7 +83,9 @@ class IdleSweeper:
                 self._report("session.close_error", {"session_id": session_id, "reason": "idle", "error": str(error)[:512]})
                 continue
             finally:
-                self._inflight = None
+                # A cancelled sweep leaves its unfinished release for stop() to wait for.
+                if self._inflight is not None and self._inflight.done():
+                    self._inflight = None
             closed.append(session_id)
         return closed
 

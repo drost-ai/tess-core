@@ -391,3 +391,32 @@ class SessionIdleTests(TessCoreTestCase):
             run(scenario())
         finally:
             self.restore_home(root, previous)
+
+    def test_stopping_the_sweeper_waits_for_a_release_it_was_in_the_middle_of(self):
+        from tess_core.runtime.session_idle import IdleSweeper
+
+        async def scenario():
+            releasing, finish, released = asyncio.Event(), asyncio.Event(), []
+
+            class Manager:
+                _live = {"s1": object()}
+
+                def detach_if_idle(self, session_id, limit):
+                    return self._live.pop(session_id, None)
+
+                async def release(self, session_id, live, reason):
+                    releasing.set()
+                    await finish.wait()
+                    released.append(session_id)
+
+            sweeper = IdleSweeper(Manager())
+            sweeper._task = asyncio.ensure_future(sweeper.sweep_once())
+            await releasing.wait()
+            stopping = asyncio.ensure_future(sweeper.stop())
+            await asyncio.sleep(0.05)
+            self.assertFalse(stopping.done())    # the half-closed session is still being released
+            finish.set()
+            await stopping
+            self.assertEqual(released, ["s1"])
+
+        run(scenario())
