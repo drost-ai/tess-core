@@ -23,10 +23,7 @@ def _comms_inline_budget(tool_name: str, requested: Any) -> dict[str, Any]:
     # Call-time import: the config package imports payloads at module load.
     from ..config._knobs import knob_value
 
-    # skipStructuredShaping: inter-agent replies are JSON envelopes around
-    # conversational text — the item summarizer must not re-truncate them
-    # under the byte allowance.
-    return {"maxBytes": int(knob_value("comms.inline_result_bytes")), "allowRaise": True, "skipStructuredShaping": True}
+    return {"maxBytes": int(knob_value("comms.inline_result_bytes")), "allowRaise": True}
 
 
 async def finalize_tool_dispatch_result(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -40,11 +37,11 @@ async def finalize_tool_dispatch_result(args: dict[str, Any] | None = None, **kw
         outcome=values["outcome"],
         sideEffectsMayHaveOccurred=values.get("sideEffectsMayHaveOccurred"),
         **_comms_inline_budget(tool_name, values.get("maxBytes")),
+        **({"maxChars": values["maxChars"]} if values.get("maxChars") is not None and tool_name not in COMMS_INLINE_TOOLS else {}),
         requireArtifact=bool(values.get("requireArtifact")),
-        neverArtifact=bool(values.get("neverArtifact")),
         **({"artifactWriter": values["artifactWriter"]} if values.get("artifactWriter") else {}),
     )
-    cardinality_fields = _cardinality_fields(guarded.get("cardinality"))
+    cardinality_fields: dict[str, Any] = {}
     record = values.get("record")
     if callable(record):
         entry = {
@@ -143,16 +140,3 @@ async def finalize_tool_dispatch_result(args: dict[str, Any] | None = None, **kw
                 },
             )
     return {**guarded, "blocks": blocks}
-
-
-def _cardinality_fields(cardinality: dict[str, Any] | None) -> dict[str, Any]:
-    if not cardinality:
-        return {}
-    return {
-        "original_item_count": cardinality["originalItemCount"],
-        "returned_item_count": cardinality["returnedItemCount"],
-        "omitted_item_count": cardinality["omittedItemCount"],
-        "items_truncated": cardinality["itemsTruncated"],
-    }
-
-

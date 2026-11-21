@@ -152,8 +152,7 @@ class CommsInlineBudgetTests(TessCoreTestCase):
                 outcome={"kind": "returned", "result": {"content": big_reply}},
             ))
             content = completed["result"]["content"]
-            self.assertNotIn("tool_result_truncated", content)
-            self.assertIn("x" * 1000, content)
+            self.assertEqual(content, big_reply)
 
             huge_reply = json.dumps({"status": "reply_received", "reply": "y" * 100_000})
             spilled = run(finalize_tool_dispatch_result(
@@ -162,15 +161,22 @@ class CommsInlineBudgetTests(TessCoreTestCase):
                 toolUse={"id": "tool-2", "name": "SendMessage", "input": {}},
                 outcome={"kind": "returned", "result": {"content": huge_reply}},
             ))
-            self.assertIn("tool_result_truncated", spilled["result"]["content"])
+            self.assertTrue(spilled["result"]["content"].startswith("<persisted-output>"))
 
             plain_big = run(finalize_tool_dispatch_result(
                 config={"providerProfile": {}},
                 sessionId="comms-budget-session",
                 toolUse={"id": "tool-3", "name": "Bash", "input": {}},
+                outcome={"kind": "returned", "result": {"content": "z" * 30_001}},
+            ))
+            self.assertTrue(plain_big["result"]["content"].startswith("<persisted-output>"))  # other tools keep the 30,000-character allowance
+            plain_fits = run(finalize_tool_dispatch_result(
+                config={"providerProfile": {}},
+                sessionId="comms-budget-session",
+                toolUse={"id": "tool-4", "name": "Bash", "input": {}},
                 outcome={"kind": "returned", "result": {"content": "z" * 30_000}},
             ))
-            self.assertIn("truncated", plain_big["result"]["content"])  # non-comms keeps the class budget (24KB large cap)
+            self.assertEqual(plain_fits["result"]["content"], "z" * 30_000)
         finally:
             self.restore_home(root, previous)
 
@@ -190,10 +196,9 @@ class CommsInlineBudgetTests(TessCoreTestCase):
             }, session))
             self.assertLess(len(envelope.encode("utf-8")), 5_000)
             self.assertIn("message truncated: 10,000 bytes total", envelope)
-            match = re.search(r"ReadToolArtifact artifact_id=([0-9a-f-]+) offset_bytes=(\d+)", envelope)
+            match = re.search(r"full message saved to: (\S+) \(read it with Read\)", envelope)
             self.assertIsNotNone(match, envelope)
-            artifact_path = core.tool_artifact_data_path("clamp-session", match.group(1), ".txt")
-            self.assertEqual(Path(artifact_path).read_text(encoding="utf-8"), "a" * 10_000)
+            self.assertEqual(Path(match.group(1)).read_text(encoding="utf-8"), "a" * 10_000)
 
             small = run(_render_injected_message({
                 "sender": "child", "kind": "result", "messageId": "m-2",

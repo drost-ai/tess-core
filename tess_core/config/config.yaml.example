@@ -6,8 +6,6 @@
 
 knobs:
   agent:
-    # Artifact-read failures tolerated before the progress guard intervenes. [1..100]
-    artifact_acquisition_failure_limit: 3
     # Default milliseconds a hook command may run; per-hook timeouts win. [500..3600000]
     hook_timeout_ms: 60000
     # Maximum [REPLY REQUIRED] nudges before an unanswered child question is backstopped. [0..20]
@@ -169,44 +167,20 @@ knobs:
     file_change_diff_target_bytes: 8000
     # Byte cap for a file-change tool result payload before its diff is trimmed. [1000..10000000]
     file_change_result_max_bytes: 12000
-    # Inline byte budget for Glob results in the large payload class. [1000..1000000]
-    glob_inline_bytes_large: 10000
-    # Inline byte budget for Glob results in the medium payload class. [1000..1000000]
-    glob_inline_bytes_medium: 8000
-    # Inline byte budget for Glob results in the small payload class. [1000..1000000]
-    glob_inline_bytes_small: 6000
-    # Inline byte budget for Grep results in the large payload class. [1000..1000000]
-    grep_inline_bytes_large: 18000
-    # Inline byte budget for Grep results in the medium payload class. [1000..1000000]
-    grep_inline_bytes_medium: 12000
-    # Inline byte budget for Grep results in the small payload class. [1000..1000000]
-    grep_inline_bytes_small: 8000
-    # Byte ceiling for tool results of families that never spill to artifacts. [4096..512000]
-    non_artifact_tool_result_max_bytes: 32000
+    # Characters of a tool result returned inline. A larger result is saved to a file and the model gets its path and a preview. [1000..512000]
+    inline_output_chars: 30000
     # Byte cap per notebook cell source in a NotebookRead page. [100..10000000]
     notebook_cell_source_bytes: 2000
     # Notebook cells per NotebookRead page. [1..1000]
     notebook_cells_per_page: 20
     # Byte cap per sampled notebook cell output. [50..10000000]
     notebook_output_sample_bytes: 600
-    # Inline byte budget for Read results in the large payload class. [1000..1000000]
-    read_inline_bytes_large: 18000
-    # Inline byte budget for Read results in the medium payload class. [1000..1000000]
-    read_inline_bytes_medium: 12000
-    # Inline byte budget for Read results in the small payload class. [1000..1000000]
-    read_inline_bytes_small: 8000
-    # Final serialized byte cap for any tool result in the large payload class. [2000..512000]
-    result_final_bytes_large: 24000
-    # Final serialized byte cap for any tool result in the medium payload class. [2000..512000]
-    result_final_bytes_medium: 18000
-    # Final serialized byte cap for any tool result in the small payload class. [2000..512000]
-    result_final_bytes_small: 12000
-    # Inline byte budget for text tool results in the large payload class; line caps derive from it (~20 bytes/line). [1000..1000000]
-    text_inline_bytes_large: 18000
-    # Inline byte budget for text tool results in the medium payload class; line caps derive from it (~20 bytes/line). [1000..1000000]
-    text_inline_bytes_medium: 12000
-    # Inline byte budget for text tool results in the small payload class; line caps derive from it (~20 bytes/line). [1000..1000000]
-    text_inline_bytes_small: 8000
+    # Bytes from the start of a saved tool result shown to the model as its preview. [200..30000]
+    preview_bytes: 2000
+    # Lines Read returns when the call gives no limit. [1..100000]
+    read_default_lines: 2000
+    # Estimated tokens one Read may return. A larger read is refused and the model is told to page with offset and limit. [1000..250000]
+    read_max_tokens: 25000
   process:
     # Milliseconds an owned worker process waits for its activation payload on stdin before exiting. [1000..600000]
     activation_timeout_ms: 30000
@@ -229,8 +203,6 @@ knobs:
     anthropic_retry_delays_ms:
       - 350
       - 700
-    # Byte budget per inline tool-result batch on codex-style responses transports. [1024..10000000]
-    codex_inline_tool_result_batch_bytes: 24000
     # Fraction of the compaction threshold reserved as output headroom for the compaction model. [0.01..0.9]
     compaction_headroom_ratio: 0.25
     # Fraction of the source transcript compaction aims to preserve verbatim. [0.01..0.9]
@@ -339,8 +311,6 @@ knobs:
     # Milliseconds between monitor runtime ticks; per-call tickIntervalMs wins. [100..60000]
     monitor_tick_ms: 1500
   tools:
-    # Default bytes per ReadToolArtifact page when the call does not specify max_bytes. [256..24000]
-    artifact_page_bytes: 16384
     # Unchanged context lines around each hunk in file-change diffs. [0..100]
     diff_context_lines: 3
     # Default milliseconds a streaming code search may run; per-call timeouts win. [1000..3600000]

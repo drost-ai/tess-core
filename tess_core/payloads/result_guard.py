@@ -5,9 +5,8 @@ import json
 import re
 from typing import Any, Callable
 
-from .structured_policy import analyze_structured_result, build_structured_result_summary
 from .tools import _persist_artifact as _persist_tool_output_artifact
-from .tools import derive_tool_payload_class
+from .tools import build_persisted_output, inline_output_chars
 from .utf8_bounds import (
     assert_utf8_byte_limit,
     build_utf8_head_tail_sample,
@@ -17,180 +16,91 @@ from .utf8_bounds import (
 )
 
 
-TOOL_RESULT_FINAL_BYTES = {"small": 12_000, "medium": 18_000, "large": 24_000}
 MAX_TOOL_IDENTITY_BYTES = 256
-MAX_ARTIFACT_PATH_BYTES = 1_024
 MAX_ERROR_MESSAGE_BYTES = 2_000
+ERROR_ENVELOPE_BYTES = 4_000
 MIN_EFFECTIVE_TOOL_RESULT_BYTES = 512
 ABSOLUTE_TOOL_RESULT_CEILING_BYTES = 512_000
 
 
-def non_artifact_tool_result_max_bytes() -> int:
-    from ..config._knobs import knob_value
+def _limit_chars(values: dict[str, Any]) -> int | None:
+    """The most characters this result may carry inline, or None for a tool that bounds its own results.
 
-    return int(knob_value("payloads.non_artifact_tool_result_max_bytes"))
+    Every tool gets the same allowance unless it declares its own (ToolDefinition.maxResultChars):
+    a tool that pages its own output, as Read does, declares 0 and is held only to the absolute ceiling.
+    """
+    default = inline_output_chars()
+    declared = values.get("maxChars")
+    if declared is not None:
+        try:
+            parsed = int(declared)
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("maxChars must be a non-negative integer") from None
+        if parsed < 0:
+            raise ValueError("maxChars must be a non-negative integer")
+        return parsed or None
+    requested = values.get("maxBytes")
+    if requested is None:
+        return default
+    try:
+        parsed = int(requested)
+        if parsed <= 0:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("maxBytes must be a positive integer") from None
+    if values.get("allowRaise"):
+        # Inter-agent payloads may exceed the default; the absolute ceiling still bounds a runaway result.
+        return max(default, min(ABSOLUTE_TOOL_RESULT_CEILING_BYTES, parsed))
+    return min(default, max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed))
 
 
 async def guard_tool_call_result(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """The last check on a tool result before the model gets it.
+
+    A result within its allowance is passed through untouched. A larger one is saved whole to a
+    file, and the model gets a notice with the file's path and the start of the output; it reads
+    the rest with Read.
+    """
     values = {**(args or {}), **kwargs}
-    configured_limit_bytes = get_tool_result_max_bytes(values["config"])
-    requested_limit_bytes = values.get("maxBytes")
-    never_artifact = bool(values.get("neverArtifact"))
-    limit_bytes = configured_limit_bytes
-    if requested_limit_bytes is not None:
-        try:
-            parsed_limit_bytes = int(requested_limit_bytes)
-            if parsed_limit_bytes <= 0:
-                raise ValueError
-            if never_artifact:
-                limit_bytes = min(
-                    non_artifact_tool_result_max_bytes(),
-                    max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
-                )
-            elif values.get("allowRaise"):
-                # Inter-agent payloads may exceed the per-class default; the
-                # absolute ceiling still bounds a runaway result.
-                limit_bytes = min(
-                    ABSOLUTE_TOOL_RESULT_CEILING_BYTES,
-                    max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
-                )
-            else:
-                limit_bytes = min(
-                    configured_limit_bytes,
-                    max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
-                )
-        except (TypeError, ValueError, OverflowError):
-            raise ValueError("maxBytes must be a positive integer") from None
-    normalized = _normalize_outcome(values["outcome"], limit_bytes)
-    original_bytes = serialized_content_bytes(normalized["content"])
+    limit_chars = _limit_chars(values)
+    normalized = _normalize_outcome(values["outcome"], ERROR_ENVELOPE_BYTES)
+    content = normalized["content"]
+    original_bytes = utf8_byte_length(content)
     diagnostics = list(normalized["diagnostics"])
-    structured = (
-        analyze_structured_result(normalized["content"])
-        if original_bytes <= limit_bytes and not never_artifact and not values.get("skipStructuredShaping")
-        else None
-    )
-    if original_bytes <= limit_bytes:
-        if structured and structured["requiresShaping"]:
-            artifact, artifact_unavailable = await _try_artifact(values, normalized["content"], "json")
-            if artifact_unavailable and values.get("requireArtifact"):
-                return _required_artifact_failure(
-                    values,
-                    normalized,
-                    original_bytes,
-                    limit_bytes,
-                    diagnostics,
-                )
-            shaped = build_structured_result_summary(
-                analysis=structured,
-                maxBytes=limit_bytes,
-                artifact=artifact,
-                artifactUnavailable=artifact_unavailable,
-            )
-            final_bytes = serialized_content_bytes(shaped["content"])
-            assert_tool_result_content_limit(shaped["content"], limit_bytes)
-            diagnostics.append(_diagnostic(
-                "structured_cardinality_truncated", original_bytes, final_bytes,
-                limit_bytes, artifact,
-            ))
-            if artifact_unavailable:
-                diagnostics.append(_diagnostic(
-                    "artifact_unavailable", original_bytes, final_bytes, limit_bytes, None
-                ))
-            return {
-                "result": {**normalized["result"], "content": shaped["content"]},
-                "originalBytes": original_bytes,
-                "finalBytes": final_bytes,
-                "limitBytes": limit_bytes,
-                "truncated": True,
-                **({"artifact": artifact} if artifact else {}),
-                "artifactUnavailable": artifact_unavailable,
-                "cardinality": shaped["cardinality"],
-                "diagnostics": diagnostics,
-            }
-        assert_tool_result_content_limit(normalized["content"], limit_bytes)
-        result = {
+    limit = limit_chars if limit_chars is not None else ABSOLUTE_TOOL_RESULT_CEILING_BYTES
+    over = len(content) > limit_chars if limit_chars is not None else original_bytes > limit
+    if not over:
+        return {
             "result": normalized["result"],
             "originalBytes": original_bytes,
             "finalBytes": original_bytes,
-            "limitBytes": limit_bytes,
+            "limitBytes": limit,
             "truncated": False,
             "artifactUnavailable": False,
             "diagnostics": diagnostics,
         }
-        if structured:
-            result["cardinality"] = structured["cardinality"]
-        return result
-
-    if never_artifact:
-        return _non_artifact_overflow(
-            normalized,
-            original_bytes,
-            limit_bytes,
-            diagnostics,
-        )
-
-    content_type = "json" if _looks_like_json(normalized["content"]) else "text"
-    artifact, artifact_unavailable = await _try_artifact(values, normalized["content"], content_type)
+    content_type = "json" if _looks_like_json(content) else "text"
+    artifact, artifact_unavailable = await _try_artifact(values, content, content_type)
     if artifact_unavailable and values.get("requireArtifact"):
-        return _required_artifact_failure(
-            values,
-            normalized,
-            original_bytes,
-            limit_bytes,
-            diagnostics,
-        )
-    envelope: dict[str, Any] = {
-        "type": "tool_error" if normalized["result"].get("isError") else "tool_result_truncated",
-        "tool": bounded_tool_identity(values["toolName"]),
-        "status": "error" if normalized["result"].get("isError") else "completed",
-        "originalBytes": original_bytes,
-        "outputTruncated": True,
-        "outputAvailable": "artifact" if artifact else "partial",
-    }
-    if values.get("sideEffectsMayHaveOccurred"):
-        envelope["sideEffectsMayHaveOccurred"] = True
-    if artifact:
-        envelope["artifact"] = {
-            "artifactId": artifact["artifactId"],
-            "filePath": slice_utf8_prefix(artifact["filePath"], MAX_ARTIFACT_PATH_BYTES),
-            "bytes": artifact["bytes"],
-            "contentType": artifact["contentType"],
-            "readWith": "ReadToolArtifact",
-            "nextOffsetBytes": 0,
-        }
-    if artifact_unavailable:
-        envelope["artifactUnavailable"] = True
-        envelope["note"] = (
-            "Tool completed; the full output view could not be persisted. The inline view is bounded."
-        )
-    content = _fit_envelope_with_excerpt(envelope, normalized["content"], limit_bytes)
-    final_bytes = serialized_content_bytes(content)
-    assert_tool_result_content_limit(content, limit_bytes)
+        return _required_artifact_failure(values, normalized, original_bytes, limit, diagnostics)
+    shown = build_persisted_output(content, original_bytes, artifact.get("filePath") if artifact else None)
+    final_bytes = utf8_byte_length(shown)
     diagnostics.append(_diagnostic(
-        "artifact_unavailable" if artifact_unavailable else "content_truncated",
-        original_bytes,
-        final_bytes,
-        limit_bytes,
-        artifact,
+        "artifact_unavailable" if artifact is None else "content_truncated",
+        original_bytes, final_bytes, limit, artifact,
     ))
     result = {
-        "result": {**normalized["result"], "content": content},
+        "result": {**normalized["result"], "content": shown},
         "originalBytes": original_bytes,
         "finalBytes": final_bytes,
-        "limitBytes": limit_bytes,
+        "limitBytes": limit,
         "truncated": True,
-        "artifactUnavailable": artifact_unavailable,
+        "artifactUnavailable": artifact is None,
         "diagnostics": diagnostics,
     }
     if artifact:
         result["artifact"] = artifact
     return result
-
-
-def get_tool_result_max_bytes(config: dict[str, Any]) -> int:
-    from ..config._knobs import knob_value
-
-    return int(knob_value(f"payloads.result_final_bytes_{derive_tool_payload_class(config)}"))
 
 
 def serialized_content_bytes(content: str) -> int:
@@ -219,7 +129,6 @@ def _required_artifact_failure(
             "tool": bounded_tool_identity(values["toolName"]),
             "status": "completed_but_output_unavailable",
             "originalBytes": original_bytes,
-            "outputTruncated": True,
             "outputAvailable": "unavailable",
             **(
                 {"sideEffectsMayHaveOccurred": True}
@@ -247,45 +156,6 @@ def _required_artifact_failure(
             *diagnostics,
             _diagnostic(
                 "artifact_required_unavailable",
-                original_bytes,
-                final_bytes,
-                limit_bytes,
-                None,
-            ),
-        ],
-    }
-
-
-def _non_artifact_overflow(
-    normalized: dict[str, Any],
-    original_bytes: int,
-    limit_bytes: int,
-    diagnostics: list[dict[str, Any]],
-) -> dict[str, Any]:
-    content = json.dumps(
-        {
-            "type": "tool_artifact_page_error",
-            "code": "artifact_page_result_too_large",
-            "message": (
-                "The artifact page exceeded its reserved inline result "
-                "allowance and was not recursively artifactized."
-            ),
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    final_bytes = serialized_content_bytes(content)
-    return {
-        "result": {"content": content, "isError": True},
-        "originalBytes": original_bytes,
-        "finalBytes": final_bytes,
-        "limitBytes": limit_bytes,
-        "truncated": True,
-        "artifactUnavailable": False,
-        "diagnostics": [
-            *diagnostics,
-            _diagnostic(
-                "artifact_page_result_too_large",
                 original_bytes,
                 final_bytes,
                 limit_bytes,

@@ -18,7 +18,7 @@ from ..payloads.attachments import (
     image_attachment_eligibility,
     resolve_runtime_provider_capabilities,
 )
-from ..payloads.tools import get_tool_payload_policy, split_tool_text_lines
+from ..payloads.tools import READ_BYTES_PER_TOKEN, get_tool_payload_policy, split_tool_text_lines
 from .definitions import ToolDefinition
 from .file_change_payloads import (
     build_edit_file_change_payload,
@@ -224,11 +224,34 @@ def _read_tool() -> ToolDefinition:
             sourceByteOffset=cursor.get("sourceByteOffset"),
             recordBytes=cursor.get("recordBytes"),
             requestedLimit=requested_limit or policy["readDefaultLines"],
-            maxLines=policy["readInlineLines"],
+            maxLines=max(policy["readInlineLines"], int(requested_limit or 0)),
             maxBytes=policy["readInlineBytes"],
             expectedSnapshot=snapshot,
             signal=context.get("abortSignal"),
         )
+        if (
+            window["truncated"]
+            and 1 < window["returnedLines"] < int(window["requestedLimit"])
+            and cursor.get("byteOffset") is None
+        ):
+            # The lines asked for are more than one read may carry. Like a file that is too
+            # long, this is refused, not cut: a cut read is easily taken for the whole file.
+            # (One line longer than a whole read is different: it is paged with its cursor.)
+            whole_file = cursor["recordOffset"] == 0 and requested_limit is None
+            size = (
+                f"File content ({stat.st_size // READ_BYTES_PER_TOKEN} tokens)"
+                if whole_file
+                else "The requested lines"
+            )
+            fit = window["returnedLines"] - (1 if "oversizedLine" in window else 0)
+            return {
+                "content": (
+                    f"{size} exceeds maximum allowed tokens ({policy['readMaxTokens']}). Use offset and limit "
+                    "parameters to read specific portions of the file, or search for specific content instead "
+                    f"of reading the whole file. From line {window['startLine']}, {fit} lines fit in one read."
+                ),
+                "isError": True,
+            }
         next_position = window.get("nextPosition")
         next_cursor = (
             encode_payload_cursor(

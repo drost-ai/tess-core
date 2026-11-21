@@ -5,7 +5,9 @@ import copy
 from tests.support.tess_core_case import *
 
 from tess_core.shell_surface.status import build_todos_report
-from tess_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serialized_content_bytes
+from tess_core.payloads.result_guard import serialized_content_bytes
+
+TOOL_RESULT_FINAL_BYTES = {"small": 30_000, "medium": 30_000, "large": 30_000}  # one allowance now
 
 
 class Package31TodoCardinalityScenarioTests(TessCoreTestCase):

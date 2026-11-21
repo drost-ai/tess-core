@@ -52,25 +52,23 @@ def _codex_config(home: Path, workspace: Path) -> dict[str, Any]:
 
 
 class Package38InteractiveContextReliefTests(TessCoreTestCase):
-    def test_hundreds_of_batches_keep_the_full_later_allowance(self):
+    def test_calling_several_tools_at_once_does_not_shrink_any_result(self):
         budget = ToolResultBatchBudget(
             {"profileName": "codex", "kind": "openai", "apiMode": "codex"}
         )
-        self.assertEqual(
-            [budget.perResultLimit(1) for _ in range(500)],
-            [24_000] * 500,
-        )
+        self.assertEqual({budget.perResultLimit(count) for count in (1, 2, 8, 64)}, {None})
+        self.assertIsNone(budget.record([], []))
 
-    def test_removed_settings_are_inert_and_batch_default_remains(self):
+    def test_removed_settings_are_inert_and_nothing_is_shared_out_of_a_batch(self):
         policy = resolve_interactive_context_policy(
             {"profileName": "codex", "kind": "openai", "apiMode": "codex"}
         )
         self.assertIsNone(policy["contextReliefThresholdTokens"])
         self.assertIsNone(policy["contextReliefTargetTokens"])
-        self.assertEqual(policy["inlineToolResultBatchBytes"], 24_000)
+        self.assertIsNone(policy["inlineToolResultBatchBytes"])
         self.assertIsNone(policy["inlineToolResultTurnBytes"])
         self.assertEqual(policy["reliefSource"], "disabled")
-        self.assertEqual(policy["toolBudgetSource"], "codex_inferred")
+        self.assertEqual(policy["toolBudgetSource"], "disabled")
 
         disabled = resolve_interactive_context_policy(
             {"profileName": "anthropic", "kind": "anthropic"}
@@ -92,7 +90,8 @@ class Package38InteractiveContextReliefTests(TessCoreTestCase):
         self.assertIsNone(historical["contextReliefThresholdTokens"])
         self.assertIsNone(historical["contextReliefTargetTokens"])
         self.assertIsNone(historical["inlineToolResultTurnBytes"])
-        self.assertEqual(historical["inlineToolResultBatchBytes"], 20_000)
+        self.assertIsNone(historical["inlineToolResultBatchBytes"])
+        self.assertEqual(historical["toolBudgetSource"], "deprecated_ignored")
         self.assertEqual(historical["reliefSource"], "deprecated_ignored")
         self.assertTrue(historical["deprecatedTurnBudgetIgnored"])
 
@@ -203,7 +202,7 @@ class Package38InteractiveContextReliefTests(TessCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_parallel_batch_budget_artifactizes_individually_valid_results(self):
+    def test_parallel_results_are_each_held_to_their_own_allowance(self):
         root, home, workspace, previous = self.temp_context()
         try:
             core.configure_runtime_home(str(home))
@@ -221,18 +220,21 @@ class Package38InteractiveContextReliefTests(TessCoreTestCase):
                 permissionMode="bypassPermissions",
             )
 
-            async def large_result(_input, _context):
-                return {"content": "result " * 2_600}
+            def returning(repeats):
+                async def handler(_input, _context):
+                    return {"content": "result " * repeats}
+                return handler
 
+            # 18,200 characters is within the allowance; 42,000 is over it.
             tools = [
                 core.ToolDefinition(
                     name,
                     name,
                     {"type": "object"},
-                    large_result,
+                    returning(repeats),
                     concurrency="parallel",
                 )
-                for name in ("first", "second")
+                for name, repeats in (("first", 2_600), ("second", 6_000))
             ]
             requests: list[dict[str, Any]] = []
             events: list[tuple[str, dict[str, Any]]] = []
@@ -286,134 +288,23 @@ class Package38InteractiveContextReliefTests(TessCoreTestCase):
                 if block.get("type") == "tool_result"
             ]
             self.assertEqual(len(blocks), 2)
-            self.assertTrue(
-                all(serialized_content_bytes(block["content"]) <= 12_000 for block in blocks)
-            )
-            self.assertTrue(all('"artifact"' in block["content"] for block in blocks))
-            reader = next(
-                tool
-                for tool in core.create_builtin_tools()
-                if tool.name == "ReadToolArtifact"
-            )
-            for block in blocks:
-                envelope = json.loads(block["content"])
-                artifact_path = Path(envelope["artifact"]["filePath"])
-                self.assertTrue(artifact_path.is_file())
-                self.assertGreater(len(artifact_path.read_text()), 18_000)
-                page = run(
-                    reader.handler(
-                        {"artifact_id": envelope["artifact"]["artifactId"]},
-                        {"session": session, "config": config, "cwd": str(workspace)},
-                    )
+            whole, saved = blocks
+            self.assertEqual(whole["content"], "result " * 2_600)
+            self.assertTrue(saved["content"].startswith("<persisted-output>\nOutput too large (41.0KB). Full output saved to: "))
+            self.assertIn("\n\nPreview (first 2.0KB):\nresult result", saved["content"])
+            self.assertTrue(saved["content"].endswith("\n...\n</persisted-output>"))
+            self.assertLess(len(saved["content"]), 2_600)
+            saved_path = Path(saved["content"].split("Full output saved to: ", 1)[1].split("\n", 1)[0])
+            self.assertEqual(saved_path.read_text(), "result " * 6_000)
+            reader = next(tool for tool in core.create_builtin_tools() if tool.name == "Read")
+            page = run(
+                reader.handler(
+                    {"file_path": str(saved_path)},
+                    {"session": session, "config": config, "cwd": str(workspace)},
                 )
-                self.assertIn("result result", json.loads(page["content"])["content"])
-            budget = next(data for event, data in events if event == "tool.result_budget")
-            self.assertLessEqual(budget["batch_used_bytes"], 24_000)
-            self.assertEqual(budget["effective_result_budget_bytes"], 12_000)
-        finally:
-            self.restore_home(root, previous)
-
-    def test_batch_budget_resets_every_iteration_and_next_turn(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            core.configure_runtime_home(str(home))
-            run(core.ensure_base_layout(str(workspace)))
-            config = _codex_config(home, workspace)
-            config["tools"] = ["large"]
-            config["allowedTools"] = ["large"]
-            session = core.create_empty_session(
-                cwd=str(workspace),
-                provider="openai",
-                providerProfileName="codex",
-                model="gpt-5.6-sol",
-                effort="xhigh",
-                systemPrompt="stable identity",
-                permissionMode="bypassPermissions",
             )
-
-            async def large_result(_input, _context):
-                return {"content": "durable output " * 3_000}
-
-            tool = core.ToolDefinition(
-                "large",
-                "Return a large result.",
-                {"type": "object"},
-                large_result,
-            )
-
-            def exercise(prompt: str, rounds: int):
-                events: list[tuple[str, dict[str, Any]]] = []
-                calls = 0
-
-                async def send(_request):
-                    nonlocal calls
-                    calls += 1
-                    if calls <= rounds:
-                        return {
-                            "model": "gpt-5.6-sol",
-                            "stopReason": "tool_use",
-                            "usage": {"input_tokens": 100, "output_tokens": 10},
-                            "content": [
-                                {
-                                    "type": "tool_use",
-                                    "id": f"{prompt}-{calls}",
-                                    "name": "large",
-                                    "input": {},
-                                }
-                            ],
-                        }
-                    return {
-                        "model": "gpt-5.6-sol",
-                        "stopReason": "end_turn",
-                        "usage": {"input_tokens": 100, "output_tokens": 10},
-                        "content": [{"type": "text", "text": "done"}],
-                    }
-
-                run(
-                    core.run_agent_prompt(
-                        session=session,
-                        config=config,
-                        runtime=bind_test_runtime(
-                            session,
-                            {
-                                "tools": [tool],
-                                "emitEvent": lambda event, data: events.append(
-                                    (event, data)
-                                ),
-                            },
-                        ),
-                        prompt=prompt,
-                        providerOverride={"send": send},
-                    )
-                )
-                return [
-                    data
-                    for event, data in events
-                    if event == "tool.result_budget"
-                ]
-
-            first = exercise("first", 3)
-            self.assertEqual(
-                [
-                    event["effective_result_budget_bytes"]
-                    for event in first
-                ],
-                [24_000, 24_000, 24_000],
-            )
-            self.assertTrue(
-                all("turn_remaining_bytes" not in event for event in first)
-            )
-            self.assertGreater(
-                sum(event["batch_used_bytes"] for event in first),
-                64_000,
-            )
-
-            second = exercise("second", 1)
-            self.assertEqual(
-                second[0]["effective_result_budget_bytes"],
-                24_000,
-            )
-            self.assertNotIn("turn_remaining_bytes", second[0])
+            self.assertIn("result result", json.loads(page["content"])["file"]["content"])
+            self.assertFalse([event for event, _ in events if event == "tool.result_budget"])
         finally:
             self.restore_home(root, previous)
 
@@ -440,29 +331,6 @@ class Package38InteractiveContextReliefTests(TessCoreTestCase):
         self.assertIn("artifact_persistence_failed", guarded["result"]["content"])
         self.assertNotIn("storage unavailable", guarded["result"]["content"])
 
-        structured = run(
-            guard_tool_call_result(
-                config={"providerKind": "openai", "model": "gpt-5.6-sol"},
-                sessionId="session",
-                toolName="List",
-                outcome={
-                    "kind": "returned",
-                    "result": {
-                        "content": json.dumps(
-                            {"items": [{"id": index} for index in range(500)]}
-                        )
-                    },
-                },
-                maxBytes=20_000,
-                requireArtifact=True,
-                artifactWriter=fail_writer,
-            )
-        )
-        self.assertTrue(structured["result"]["isError"])
-        self.assertIn(
-            "artifact_persistence_failed",
-            structured["result"]["content"],
-        )
         with self.assertRaisesRegex(ValueError, "positive integer"):
             run(
                 guard_tool_call_result(

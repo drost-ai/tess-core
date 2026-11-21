@@ -13,7 +13,6 @@ See [Configuration](../configuration.md) for how the files fit together.
 
 | Setting | Default | Range | Meaning |
 |---|---|---|---|
-| `agent.artifact_acquisition_failure_limit` | `3` | 1..100 | Artifact-read failures tolerated before the progress guard intervenes. |
 | `agent.hook_timeout_ms` | `60000` | 500..3600000 | Default milliseconds a hook command may run; per-hook timeouts win. |
 | `agent.max_question_nudges` | `3` | 0..20 | Maximum [REPLY REQUIRED] nudges before an unanswered child question is backstopped. |
 | `agent.no_progress_limit` | `12` | 2..1000 | Consecutive no-progress turns tolerated before the turn is stopped. |
@@ -135,25 +134,13 @@ See [Configuration](../configuration.md) for how the files fit together.
 | `payloads.file_change_diff_max_lines` | `120` | 10..100000 | Line cap for the inline diff in a file-change tool result. |
 | `payloads.file_change_diff_target_bytes` | `8000` | 500..10000000 | Byte target the file-change diff is trimmed toward when the payload is over budget. |
 | `payloads.file_change_result_max_bytes` | `12000` | 1000..10000000 | Byte cap for a file-change tool result payload before its diff is trimmed. |
-| `payloads.glob_inline_bytes_large` | `10000` | 1000..1000000 | Inline byte budget for Glob results in the large payload class. |
-| `payloads.glob_inline_bytes_medium` | `8000` | 1000..1000000 | Inline byte budget for Glob results in the medium payload class. |
-| `payloads.glob_inline_bytes_small` | `6000` | 1000..1000000 | Inline byte budget for Glob results in the small payload class. |
-| `payloads.grep_inline_bytes_large` | `18000` | 1000..1000000 | Inline byte budget for Grep results in the large payload class. |
-| `payloads.grep_inline_bytes_medium` | `12000` | 1000..1000000 | Inline byte budget for Grep results in the medium payload class. |
-| `payloads.grep_inline_bytes_small` | `8000` | 1000..1000000 | Inline byte budget for Grep results in the small payload class. |
-| `payloads.non_artifact_tool_result_max_bytes` | `32000` | 4096..512000 | Byte ceiling for tool results of families that never spill to artifacts. |
+| `payloads.inline_output_chars` | `30000` | 1000..512000 | Characters of a tool result returned inline. A larger result is saved to a file and the model gets its path and a preview. |
 | `payloads.notebook_cell_source_bytes` | `2000` | 100..10000000 | Byte cap per notebook cell source in a NotebookRead page. |
 | `payloads.notebook_cells_per_page` | `20` | 1..1000 | Notebook cells per NotebookRead page. |
 | `payloads.notebook_output_sample_bytes` | `600` | 50..10000000 | Byte cap per sampled notebook cell output. |
-| `payloads.read_inline_bytes_large` | `18000` | 1000..1000000 | Inline byte budget for Read results in the large payload class. |
-| `payloads.read_inline_bytes_medium` | `12000` | 1000..1000000 | Inline byte budget for Read results in the medium payload class. |
-| `payloads.read_inline_bytes_small` | `8000` | 1000..1000000 | Inline byte budget for Read results in the small payload class. |
-| `payloads.result_final_bytes_large` | `24000` | 2000..512000 | Final serialized byte cap for any tool result in the large payload class. |
-| `payloads.result_final_bytes_medium` | `18000` | 2000..512000 | Final serialized byte cap for any tool result in the medium payload class. |
-| `payloads.result_final_bytes_small` | `12000` | 2000..512000 | Final serialized byte cap for any tool result in the small payload class. |
-| `payloads.text_inline_bytes_large` | `18000` | 1000..1000000 | Inline byte budget for text tool results in the large payload class; line caps derive from it (~20 bytes/line). |
-| `payloads.text_inline_bytes_medium` | `12000` | 1000..1000000 | Inline byte budget for text tool results in the medium payload class; line caps derive from it (~20 bytes/line). |
-| `payloads.text_inline_bytes_small` | `8000` | 1000..1000000 | Inline byte budget for text tool results in the small payload class; line caps derive from it (~20 bytes/line). |
+| `payloads.preview_bytes` | `2000` | 200..30000 | Bytes from the start of a saved tool result shown to the model as its preview. |
+| `payloads.read_default_lines` | `2000` | 1..100000 | Lines Read returns when the call gives no limit. |
+| `payloads.read_max_tokens` | `25000` | 1000..250000 | Estimated tokens one Read may return. A larger read is refused and the model is told to page with offset and limit. |
 
 ## `process`
 
@@ -173,7 +160,6 @@ See [Configuration](../configuration.md) for how the files fit together.
 |---|---|---|---|
 | `provider.anthropic_max_attempts` | `2` | 1..20 | Default attempts per Anthropic request before the turn fails; per-call maxAttempts wins. |
 | `provider.anthropic_retry_delays_ms` | `[350, 700]` | 0..600000 | Quick-retry delay ladder in milliseconds for Anthropic messages requests; a small random jitter is added on top. |
-| `provider.codex_inline_tool_result_batch_bytes` | `24000` | 1024..10000000 | Byte budget per inline tool-result batch on codex-style responses transports. |
 | `provider.compaction_headroom_ratio` | `0.25` | 0.01..0.9 | Fraction of the compaction threshold reserved as output headroom for the compaction model. |
 | `provider.compaction_preservation_ratio` | `0.1` | 0.01..0.9 | Fraction of the source transcript compaction aims to preserve verbatim. |
 | `provider.compaction_threshold_tokens` | `200000` | 10000..100000000 | Default token level that triggers compaction when the profile does not declare compactionThresholdTokens. |
@@ -255,7 +241,6 @@ See [Configuration](../configuration.md) for how the files fit together.
 
 | Setting | Default | Range | Meaning |
 |---|---|---|---|
-| `tools.artifact_page_bytes` | `16384` | 256..24000 | Default bytes per ReadToolArtifact page when the call does not specify max_bytes. |
 | `tools.diff_context_lines` | `3` | 0..100 | Unchanged context lines around each hunk in file-change diffs. |
 | `tools.search_timeout_ms` | `120000` | 1000..3600000 | Default milliseconds a streaming code search may run; per-call timeouts win. |
 | `tools.task_output_poll_ms` | `250` | 50..60000 | Milliseconds between TaskOutput polls while blocking on a running task. |

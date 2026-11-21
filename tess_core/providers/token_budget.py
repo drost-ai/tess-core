@@ -95,7 +95,6 @@ def resolve_compaction_policy(input: dict[str, Any] | None = None) -> dict[str, 
 
 def resolve_interactive_context_policy(input: dict[str, Any] | None = None) -> dict[str, Any]:
     profile = input or {}
-    codex_profile = _is_codex_profile(profile)
     relief_configured = any(
         key in profile and profile.get(key) is not None
         for key in ("contextReliefThresholdTokens", "contextReliefTargetTokens")
@@ -105,27 +104,20 @@ def resolve_interactive_context_policy(input: dict[str, Any] | None = None) -> d
         and profile.get("inlineToolResultTurnBytes") is not None
     )
 
-    batch_bytes = _explicit_positive_integer(profile, "inlineToolResultBatchBytes")
-    if codex_profile:
-        batch_bytes = batch_bytes or int(provider_knob("provider.codex_inline_tool_result_batch_bytes"))
     return {
         # Admission-time interactive relief is retired; the policy resolver stays for config compatibility.
         # Historical keys remain accepted as inert compatibility input.
         "contextReliefThresholdTokens": None,
         "contextReliefTargetTokens": None,
-        "inlineToolResultBatchBytes": batch_bytes,
-        # The logical-turn balance is deliberately absent. Every tool batch
-        # receives a fresh aggregate allowance.
+        # Tool results are no longer shared out of a batch or turn allowance: each is held to its
+        # own tool's limit. Both keys stay accepted as inert compatibility input.
+        "inlineToolResultBatchBytes": None,
         "inlineToolResultTurnBytes": None,
         "reliefSource": "deprecated_ignored"
         if relief_configured
         else "disabled",
         "toolBudgetSource": (
-            "explicit"
-            if profile.get("inlineToolResultBatchBytes") is not None
-            else "codex_inferred"
-            if codex_profile
-            else "disabled"
+            "deprecated_ignored" if profile.get("inlineToolResultBatchBytes") is not None else "disabled"
         ),
         "deprecatedTurnBudgetIgnored": turn_budget_configured,
     }
@@ -213,11 +205,6 @@ def _infer_model_token_limits(input: dict[str, Any]) -> dict[str, int] | None:
             return {"maxContextLength": max_context, "maxOutputTokens": max_output}
     return None
 
-
-def _is_codex_profile(input: dict[str, Any]) -> bool:
-    profile_name = str(input.get("profileName") or input.get("name") or "").strip().lower()
-    api_mode = str(input.get("apiMode") or "").strip().lower()
-    return profile_name in {"codex", "openai-codex"} or api_mode == "codex"
 
 
 def _explicit_positive_integer(input: dict[str, Any], key: str) -> int | None:

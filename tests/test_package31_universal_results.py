@@ -6,11 +6,12 @@ from tess_core.process.bash_lifecycle import _process_group_live, run_inline_she
 from tess_core.payloads.bash_results import build_bash_result_payload
 from tess_core.process.output import create_subprocess_output_collector
 from tess_core.payloads.result_guard import (
-    TOOL_RESULT_FINAL_BYTES,
     guard_tool_call_result,
     serialized_content_bytes,
 )
 from tess_core.payloads.utf8_bounds import has_lone_utf16_surrogate, utf8_byte_length
+
+TOOL_RESULT_FINAL_BYTES = {"small": 30_000, "medium": 30_000, "large": 30_000}  # one allowance now
 
 
 _SMALL_CONFIG = {
@@ -329,10 +330,8 @@ class Package31UniversalResultTests(TessCoreTestCase):
 
         for payload_class, config in cases:
             guarded, artifact_input = run(exercise(payload_class, config))
-            self.assertLessEqual(
-                serialized_content_bytes(guarded["result"]["content"]),
-                TOOL_RESULT_FINAL_BYTES[payload_class],
-            )
+            self.assertLess(len(guarded["result"]["content"]), 2_400)  # a notice and a 2 KB preview
+            self.assertIn(f"Full output saved to: /tmp/artifact-{payload_class}.txt", guarded["result"]["content"])
             self.assertFalse(has_lone_utf16_surrogate(guarded["result"]["content"]))
             self.assertFalse(guarded["result"].get("isError"))
             self.assertTrue(guarded["truncated"])
@@ -352,9 +351,9 @@ class Package31UniversalResultTests(TessCoreTestCase):
             )
 
         guarded = run(artifact_failure())
-        payload = json.loads(guarded["result"]["content"])
+        content = guarded["result"]["content"]
         self.assertFalse(guarded["result"].get("isError"))
         self.assertTrue(guarded["artifactUnavailable"])
-        self.assertEqual(payload["status"], "completed")
-        self.assertTrue(payload["sideEffectsMayHaveOccurred"])
-        self.assertNotIn("secret/path", guarded["result"]["content"])
+        self.assertTrue(content.startswith("<persisted-output>\nOutput too large (97.7KB). The full output could not be saved"))
+        self.assertIn("Preview (first 2.0KB):\nxxxx", content)
+        self.assertNotIn("secret/path", content)

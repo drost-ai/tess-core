@@ -155,6 +155,7 @@ async def create_mcp_runtime(args: dict[str, Any] | None = None, **kwargs: Any) 
                             "name": tool["name"],
                             **({"annotations": tool["annotations"]} if tool.get("annotations") else {}),
                         },
+                        maxResultChars=0,  # shaped to the payload policy by mcp/payloads before it returns
                     )
                 )
         return definitions

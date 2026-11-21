@@ -389,23 +389,6 @@ BUILTIN_TOOL_SPECS: dict[str, dict[str, Any]] = {
         "concurrency": 'exclusive',
         "schema": {'type': 'object', 'additionalProperties': False},
     },
-    "ReadToolArtifact": {
-        "description": 'Read one bounded page from a complete tool-result artifact by artifact id. Use this operation, not Read or Bash, when a truncated tool result names an artifact.',
-        "concurrency": 'parallel',
-        "schema": {'type': 'object',
-         'properties': {'artifact_id': {'type': 'string',
-                                        'description': 'Artifact id from a truncated tool-result envelope.'},
-                        'offset_bytes': {'type': 'integer',
-                                         'minimum': 0,
-                                         'description': 'Byte offset returned by the previous page. Defaults to '
-                                                        'zero.'},
-                        'max_bytes': {'type': 'integer',
-                                      'minimum': 1,
-                                      'maximum': 24000,
-                                      'description': 'Requested page bytes. Defaults to 16384.'}},
-         'required': ['artifact_id'],
-         'additionalProperties': False},
-    },
 }
 
 
@@ -425,6 +408,9 @@ def builtin_tool(
         handler,
         concurrency=spec["concurrency"],
         mcp=mcp,
+        # A builtin shapes its own output to the payload policy before it
+        # returns, so the guard holds it only to the absolute ceiling.
+        maxResultChars=0,
     )
 
 

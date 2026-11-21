@@ -83,9 +83,9 @@ def _contracts() -> list[dict[str, Any]]:
             "isolated:run_agent_prompt/no-progress",
         ),
         _contract(
-            "result-budgets",
-            captured["result_budget"],
-            "isolated:run_agent_prompt/result-budget",
+            "result-guard",
+            captured["result_guard"],
+            "isolated:run_agent_prompt/result-guard",
         ),
         _contract(
             "turn-sessions",
@@ -125,7 +125,7 @@ async def _capture_isolated_events() -> dict[str, list[dict[str, Any]]]:
         "partial": await _capture_provider_partial(),
         "recovery": await _capture_provider_recovery(),
         "no_progress": await _capture_agent_loop_scenario("no_progress"),
-        "result_budget": await _capture_agent_loop_scenario("result_budget"),
+        "result_guard": await _capture_agent_loop_scenario("result_guard"),
         "turn_sessions": _capture_turn_sessions(),
     }
 
@@ -152,7 +152,6 @@ async def _capture_agent_loop_scenario(kind: str) -> list[dict[str, Any]]:
                 "apiMode": "responses",
                 "maxContextLength": 100_000,
                 "maxOutputTokens": 4_096,
-                "inlineToolResultBatchBytes": 12_000,
             }
             config = {
                 "cwd": str(workspace),
@@ -194,7 +193,7 @@ async def _capture_agent_loop_scenario(kind: str) -> list[dict[str, Any]]:
             async def send(_request: dict[str, Any]) -> dict[str, Any]:
                 nonlocal calls
                 calls += 1
-                if kind == "preflight" or (kind == "result_budget" and calls > 1):
+                if kind == "preflight" or (kind == "result_guard" and calls > 1):
                     return _provider_text_response("done")
                 return {
                     "model": "gpt-5.4",
@@ -227,7 +226,7 @@ async def _capture_agent_loop_scenario(kind: str) -> list[dict[str, Any]]:
             target = {
                 "preflight": {"provider.request_preflight"},
                 "no_progress": {"agent.no_progress"},
-                "result_budget": {"tool.result_budget"},
+                "result_guard": {"tool.result_guard"},
             }[kind]
             selected = [
                 _runtime_event(event, data, scenario=kind)

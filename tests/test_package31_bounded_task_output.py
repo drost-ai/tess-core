@@ -131,7 +131,7 @@ class Package31BoundedTaskOutputTests(TessCoreTestCase):
             payload = json.loads(result["content"])
             manifest = payload["output_manifest"]
             self.assertTrue(payload["output_truncated"])
-            self.assertTrue(manifest["truncated"])
+            self.assertFalse(manifest["truncated"])  # the tail that was read is returned whole
             self.assertTrue(manifest["sourceTruncated"])
             self.assertEqual(manifest["originalBytes"], len(raw))
             self.assertEqual(manifest["sourceFile"], output_path)
@@ -140,8 +140,8 @@ class Package31BoundedTaskOutputTests(TessCoreTestCase):
                 {"type": "task_output_file", "filePath": output_path, "taskId": task_id},
             )
             self.assertNotIn("artifact", manifest)
-            self.assertLessEqual(utf8_byte_length(payload["output"]), 8000)
-            self.assertTrue(payload["output"].endswith("最后🙂terminal"))
+            self.assertLessEqual(utf8_byte_length(payload["output"]), 30_000)
+            self.assertTrue(payload["output"].endswith("最后🙂terminal\n"))
             self.assertEqual(Path(manifest["recovery"]["filePath"]).stat().st_size, len(raw))
         finally:
             self.restore_home(root, previous)

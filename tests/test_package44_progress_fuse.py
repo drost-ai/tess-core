@@ -89,37 +89,6 @@ class Package44ProgressFuseTests(TessCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_failed_artifact_pages_use_specific_terminal_subcode(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            core.configure_runtime_home(str(home))
-            run(core.ensure_base_layout(str(workspace)))
-            config = _codex_config(home, workspace)
-            config["tools"] = config["allowedTools"] = ["ReadToolArtifact"]
-            reader = next(
-                tool
-                for tool in core.create_builtin_tools()
-                if tool.name == "ReadToolArtifact"
-            )
-            result, calls = self._run_repeating_tool(
-                session=self._session(workspace),
-                config=config,
-                tool=reader,
-                tool_input={
-                    "artifact_id": "missing-artifact",
-                    "offset_bytes": 0,
-                },
-            )
-            self.assertEqual(result["stopReason"], "no_progress")
-            self.assertEqual(
-                result["noProgress"]["reason"],
-                "artifact_output_unreachable",
-            )
-            self.assertEqual(result["noProgress"]["artifactId"], "missing-artifact")
-            self.assertEqual(calls, 3)
-        finally:
-            self.restore_home(root, previous)
-
     def test_incident_scale_productive_work_has_no_time_or_call_fuse(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -249,41 +218,22 @@ class Package44ProgressFuseTests(TessCoreTestCase):
         self.assertEqual(ledger.receipt["lastCycleLength"], 2)
         self.assertEqual(ledger.receipt["repeatedCycleCount"], 3)
 
-    def test_advancing_artifact_cursor_resets_repeated_page_counter(self):
+    def test_reading_on_through_a_saved_output_counts_as_progress(self):
         session: dict[str, Any] = {"metadata": {}}
-        ledger = LogicalTurnProgressLedger(session, "turn-artifact-pages")
+        ledger = LogicalTurnProgressLedger(session, "turn-saved-output-pages")
 
-        def page(offset: int, next_offset: int) -> tuple[dict[str, Any], dict[str, Any]]:
+        def page(offset: int) -> tuple[dict[str, Any], dict[str, Any]]:
             return (
-                {
-                    "name": "ReadToolArtifact",
-                    "input": {
-                        "artifact_id": "artifact-1",
-                        "offset_bytes": offset,
-                    },
-                },
-                {
-                    "content": (
-                        '{"type":"tool_artifact_page",'
-                        '"artifactId":"artifact-1",'
-                        f'"nextOffsetBytes":{next_offset},'
-                        '"complete":false}'
-                    )
-                },
+                {"name": "Read", "input": {"file_path": "/home/tool-artifacts/s/a.txt", "offset": offset}},
+                {"content": f'{{"type":"text","file":{{"startLine":{offset},"numLines":2000}}}}'},
             )
 
-        first_use, first_result = page(0, 100)
-        self.assertIsNone(
-            ledger.observe([first_use], [first_result], provider_call_index=1)
-        )
-        self.assertIsNone(
-            ledger.observe([first_use], [first_result], provider_call_index=2)
-        )
+        first_use, first_result = page(1)
+        self.assertIsNone(ledger.observe([first_use], [first_result], provider_call_index=1))
+        self.assertIsNone(ledger.observe([first_use], [first_result], provider_call_index=2))
         self.assertEqual(ledger.receipt["consecutiveNoProgress"], 1)
-        next_use, next_result = page(100, 200)
-        self.assertIsNone(
-            ledger.observe([next_use], [next_result], provider_call_index=3)
-        )
+        next_use, next_result = page(2001)
+        self.assertIsNone(ledger.observe([next_use], [next_result], provider_call_index=3))
         self.assertEqual(ledger.receipt["consecutiveNoProgress"], 0)
 
     def test_interleaved_image_blocks_do_not_shift_ledger_alignment(self):
@@ -291,18 +241,14 @@ class Package44ProgressFuseTests(TessCoreTestCase):
         ledger = LogicalTurnProgressLedger(session, "turn-image-alignment")
         tool_uses = [
             {"id": "shot-1", "name": "Screenshot", "input": {}},
-            {
-                "id": "art-1",
-                "name": "ReadToolArtifact",
-                "input": {"artifact_id": "artifact-1", "offset_bytes": 0},
-            },
+            {"id": "art-1", "name": "Read", "input": {"file_path": "notes.txt"}},
         ]
         screenshot_result = {"type": "tool_result", "tool_use_id": "shot-1", "content": "captured"}
         image_block = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}}
         artifact_result = {
             "type": "tool_result",
             "tool_use_id": "art-1",
-            "content": '{"type":"tool_artifact_page","artifactId":"artifact-1","nextOffsetBytes":100,"complete":false}',
+            "content": '{"type":"text","file":{"filePath":"notes.txt","content":"a note"}}',
         }
         outcome = append_tool_result_batch(
             session=session,
@@ -314,10 +260,7 @@ class Package44ProgressFuseTests(TessCoreTestCase):
             provider_call_index=1,
         )
         self.assertIsNone(outcome)
-        # The artifact page advanced the cursor; the interleaved image block
-        # must not be misread as that tool's (failed) result.
-        self.assertEqual(ledger.receipt["artifactOffsets"], {"artifact-1": 100})
-        self.assertEqual(ledger.receipt["artifactFailures"], {"artifact-1": 0})
+        self.assertEqual(ledger.receipt["consecutiveNoProgress"], 0)
         # The conversation still carries all three blocks, image included.
         self.assertEqual(
             [block.get("type") for block in session["messages"][-1]["content"]],

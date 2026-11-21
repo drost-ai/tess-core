@@ -79,7 +79,6 @@ Tools published by MCP servers appear alongside these as `mcp__<server>__<tool>`
 | `SetStatus` | Update a short live status line for the user. |
 | `AskUserQuestion` | Ask the user one or more multiple-choice questions. |
 | `Config` | Read the active configuration. |
-| `ReadToolArtifact` | Page through a tool result that was too large to keep inline. |
 
 ### Scheduling
 
@@ -105,10 +104,25 @@ change something (`Write`, `Edit`, `Bash`, `Agent`) run one at a time, in order.
 
 ## Large results
 
-A tool that returns megabytes would flood the conversation. Results over a size budget are
-stored as an **artifact** in the runtime home, and the model receives a bounded excerpt
-plus an artifact id it can page through with `ReadToolArtifact`. Budgets per result, per
-batch and per turn are [configurable](configuration.md).
+A tool that returns megabytes would flood the conversation. A result of up to 30,000
+characters is returned whole. A larger one is saved to a file in the runtime home, and the
+model receives a notice with the file's path and the first 2 KB:
+
+```
+<persisted-output>
+Output too large (67.3KB). Full output saved to: <path>
+
+Preview (first 2.0KB):
+...
+</persisted-output>
+```
+
+It reads the rest with `Read`, which returns 2,000 lines at a time and pages with `offset`
+and `limit`. The allowance is the same for every model, and is
+[configurable](configuration.md) (`payloads.inline_output_chars`).
+
+A tool of your own gets the same allowance. Set `maxResultChars` on its `ToolDefinition` to
+give it another, or to `0` if the tool bounds its own results, as `Read` does by paging.
 
 ## Writing your own
 

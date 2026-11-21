@@ -32,7 +32,7 @@ class Package44ProvenanceTests(TessCoreTestCase):
         self.assertIsNone(policy["contextReliefTargetTokens"])
         self.assertIsNone(policy["inlineToolResultTurnBytes"])
         self.assertEqual(policy["reliefSource"], "deprecated_ignored")
-        self.assertEqual(policy["inlineToolResultBatchBytes"], 24_000)
+        self.assertIsNone(policy["inlineToolResultBatchBytes"])
         report = core.build_provider_profiles_report(
             {"providerProfileName": "codex"},
             {

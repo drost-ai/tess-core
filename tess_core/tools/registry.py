@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from .agent import _agent_tool
-from .artifacts import _read_tool_artifact
 from .code_search import _glob_tool, _grep_tool
 from .definitions import ToolConcurrency, ToolDefinition
 from .files import _edit_tool, _read_tool, _write_tool
@@ -56,7 +55,6 @@ def create_builtin_tools(options: dict[str, Any] | None = None) -> list[ToolDefi
         _read_mcp_resource_tool(options.get("mcpRuntime")),
         _enter_worktree_tool(options.get("workspaceController")),
         _exit_worktree_tool(options.get("workspaceController")),
-        _read_tool_artifact(),
     ]
     if options.get("scheduler"):
         # Only where a scheduler timer runs for this runtime: elsewhere

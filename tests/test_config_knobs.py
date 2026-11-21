@@ -307,18 +307,18 @@ class PayloadKnobWiringTests(unittest.TestCase):
     def test_payload_web_and_image_defaults_read_knobs(self):
         from tess_core.acquisition.bounded_web_fetch import _knob as web_knob
         from tess_core.config.shared import default_max_image_input_bytes, default_max_image_input_count
-        from tess_core.payloads.result_guard import non_artifact_tool_result_max_bytes
+        from tess_core.payloads.tools import inline_output_chars
 
-        self.assertEqual(non_artifact_tool_result_max_bytes(), 32_000)
+        self.assertEqual(inline_output_chars(), 30_000)
         self.assertEqual(int(web_knob("web.fetch_total_timeout_ms")), 30_000)
         self.assertEqual(default_max_image_input_count(), 8)
         self.assertEqual(default_max_image_input_bytes(), 5 * 1024 * 1024)
         configure_knobs({
-            "payloads": {"non_artifact_tool_result_max_bytes": 20_000},
+            "payloads": {"inline_output_chars": 20_000},
             "web": {"fetch_total_timeout_ms": 12_000},
             "images": {"max_count": 2, "max_bytes": 1_000_000},
         })
-        self.assertEqual(non_artifact_tool_result_max_bytes(), 20_000)
+        self.assertEqual(inline_output_chars(), 20_000)
         self.assertEqual(int(web_knob("web.fetch_total_timeout_ms")), 12_000)
         self.assertEqual(default_max_image_input_count(), 2)
         self.assertEqual(default_max_image_input_bytes(), 1_000_000)
@@ -374,38 +374,36 @@ class ClosingWaveKnobWiringTests(unittest.TestCase):
         self.assertIn("TESS_CORE_SUBAGENTS_MAX_LIVE", output)
 
 
-class PayloadClassKnobTests(unittest.TestCase):
-    """E7: per-profile payloadClass + knob-backed payload budgets."""
+class PayloadPolicyKnobTests(unittest.TestCase):
+    """One payload policy for every model, read from the settings."""
 
     def tearDown(self):
         reset_configured_knobs()
 
-    def test_profile_payload_class_beats_the_name_heuristic(self):
-        from tess_core.payloads.tools import derive_tool_payload_class
-
-        sniffed = {"providerKind": "openai", "openaiBaseUrl": "https://api.example.test", "model": "deepseek-v4-flash"}
-        self.assertEqual(derive_tool_payload_class(sniffed), "small")  # heuristic fallback
-        declared = {**sniffed, "providerProfile": {"payloadClass": "large"}}
-        self.assertEqual(derive_tool_payload_class(declared), "large")
-        junk = {**sniffed, "providerProfile": {"payloadClass": "enormous"}}
-        self.assertEqual(derive_tool_payload_class(junk), "small")  # invalid values fall through
-
-    def test_payload_budget_knobs_drive_policy_and_derived_line_caps(self):
-        from tess_core.payloads.result_guard import get_tool_result_max_bytes
+    def test_every_model_gets_the_same_policy(self):
         from tess_core.payloads.tools import get_tool_payload_policy
 
-        small = {"providerKind": "openai", "openaiBaseUrl": "https://x.test", "model": "deepseek-v4-flash"}
-        policy = get_tool_payload_policy(small)
-        self.assertEqual(policy["textInlineBytes"], 8_000)
-        self.assertEqual(policy["textInlineLines"], 400)
-        self.assertEqual(get_tool_result_max_bytes(small), 12_000)
-        configure_knobs({"payloads": {"text_inline_bytes_small": 16_000, "result_final_bytes_small": 20_000}})
-        policy = get_tool_payload_policy(small)
+        small_looking = {"providerKind": "openai", "openaiBaseUrl": "https://api.example.test", "model": "deepseek-v4-flash"}
+        declared = {**small_looking, "providerProfile": {"payloadClass": "large"}}
+        anthropic = {"providerKind": "anthropic", "model": "claude-opus"}
+        self.assertEqual(get_tool_payload_policy(small_looking), get_tool_payload_policy(anthropic))
+        self.assertEqual(get_tool_payload_policy(small_looking), get_tool_payload_policy(declared))
+        self.assertEqual(get_tool_payload_policy(), get_tool_payload_policy(anthropic))
+
+    def test_the_settings_drive_the_policy(self):
+        from tess_core.payloads.tools import get_tool_payload_policy
+
+        policy = get_tool_payload_policy()
+        self.assertEqual(policy["textInlineBytes"], 30_000)
+        self.assertEqual(policy["readDefaultLines"], 2_000)
+        self.assertEqual(policy["readMaxTokens"], 25_000)
+        self.assertEqual(policy["readInlineBytes"], 100_000)
+        configure_knobs({"payloads": {"inline_output_chars": 16_000, "read_default_lines": 500, "read_max_tokens": 10_000}})
+        policy = get_tool_payload_policy()
         self.assertEqual(policy["textInlineBytes"], 16_000)
-        self.assertEqual(policy["textInlineLines"], 800)  # derived: bytes // 20
-        self.assertEqual(policy["textHeadLines"], 200)
-        self.assertEqual(policy["textTailLines"], 400)
-        self.assertEqual(get_tool_result_max_bytes(small), 20_000)
+        self.assertEqual(policy["grepInlineBytes"], 16_000)
+        self.assertEqual(policy["readDefaultLines"], 500)
+        self.assertEqual(policy["readInlineBytes"], 40_000)
 
 
 class KnobResolutionIntegrationTests(TessCoreTestCase):

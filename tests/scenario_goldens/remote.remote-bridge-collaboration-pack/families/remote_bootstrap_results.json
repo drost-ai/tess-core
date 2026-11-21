@@ -205,8 +205,7 @@
       "ListMcpResources",
       "ReadMcpResource",
       "EnterWorktree",
-      "ExitWorktree",
-      "ReadToolArtifact"
+      "ExitWorktree"
     ]
   }
 ]

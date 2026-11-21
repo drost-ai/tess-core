@@ -339,7 +339,7 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
                     parentTurnId=parent_turn_id,
                 )
 
-            finish_tool_result, effective_result_budget = tool_result_budget.createFinalizer(
+            finish_tool_result, _ = tool_result_budget.createFinalizer(
                 config=config,
                 sessionId=session["id"],
                 assistantMessageIndex=len(session.get("messages", [])) - 1,
@@ -421,6 +421,7 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
                         {"kind": "thrown", "error": exc},
                         tool_name=tool.name,
                         side_effects_may_have_occurred=side_effects_may_have_occurred,
+                        max_result_chars=tool.maxResultChars,
                     )
                     await _run_post_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
                     return completed
@@ -429,6 +430,7 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
                     {"kind": "returned", "result": result},
                     tool_name=tool.name,
                     side_effects_may_have_occurred=side_effects_may_have_occurred,
+                    max_result_chars=tool.maxResultChars,
                 )
                 _throw_if_turn_cancelled(runtime)
                 await _run_post_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
@@ -458,17 +460,6 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
                 paused_for_approval = batch["pausedForApproval"]
                 paused_message = batch["pausedMessage"]
                 _throw_if_turn_cancelled(runtime)
-                budget_event = tool_result_budget.record(tool_results, tool_uses)
-                if budget_event is not None:
-                    _safe_emit(
-                        runtime,
-                        "tool.result_budget",
-                        {
-                            "session_id": session["id"],
-                            "effective_result_budget_bytes": effective_result_budget,
-                            **budget_event,
-                        },
-                    )
             except Exception as error:
                 if _is_turn_abort_error(error, runtime.get("abortSignal")):
                     return await cancel_turn()

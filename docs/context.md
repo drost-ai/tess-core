@@ -31,15 +31,20 @@ set `compactionProviderProfile` in settings.
 
 ## Large tool results
 
-One `cat` of a log file can be bigger than the whole window. Tool results are budgeted:
+One `cat` of a log file can be bigger than the whole window, so a tool result has an
+allowance. It is the same for every model:
 
-- per result,
-- per batch of parallel calls,
-- per turn.
+- A result of up to 30,000 characters is returned whole.
+- A larger one is saved to a file in the runtime home. The model gets a short notice in its
+  place: the size, the file's path, and the first 2 KB of the output. Nothing from the middle
+  or the end is shown, so a preview is never mistaken for the whole result.
+- The model reads the rest with `Read`, on that path, when it needs it. The original is
+  never lost.
 
-A result over budget is saved as an **artifact** and replaced in the conversation by a
-bounded excerpt and an artifact id. The model reads more with `ReadToolArtifact` only if
-it needs to. The original is never lost.
+`Read` bounds itself instead. It returns 2,000 lines unless the call gives a `limit`, and a
+read that would be more than about 25,000 tokens is refused, not cut: the model is told to
+page with `offset` and `limit`. Calling several tools at once does not shrink what any one of
+them may return.
 
 ## Prompt caching
 
@@ -125,7 +130,7 @@ budget going in circles.
 | `provider.request_preflight` | The size estimate for a request |
 | `context.raw_pressure` | How full the window is |
 | `compaction.decision`, `compaction.headroom` | Whether and why compaction ran |
-| `tool.result_guard` | A tool result was budgeted |
+| `tool.result_guard` | A tool result was too large to return whole and was saved |
 
 ## Settings
 

@@ -92,7 +92,6 @@ class ProviderProfile(TypedDict, total=False):
     headers: dict[str, RuntimeSecretValue]
     effortLevel: str | None
     supportsVision: bool | None
-    payloadClass: str | None
     capabilities: dict[str, Any]
     maxContextLength: int
     maxOutputTokens: int

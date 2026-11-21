@@ -68,7 +68,6 @@ nothing to do).
 
 | Constant | Value | Class | Disposition | Wave |
 |---|---|---|---|---|
-| artifacts.DEFAULT_ARTIFACT_PAGE_BYTES | 16384 | knob | `tools.artifact_page_bytes` | E5 |
 | artifacts.MAX/MIN_ARTIFACT_PAGE_BYTES | 24000/256 | invariant | request bounds | — |
 | file_change_diff.LINE_DIFF_PRODUCT_LIMIT | 1e6 | invariant | complexity bound | — |
 | file_change_diff.DIFF_CONTEXT_LINES | 3 | knob | `tools.diff_context_lines` | E5 |
@@ -177,7 +176,6 @@ knob wins over the hardcoded fallback.
 | token_budget.DEFAULT_COMPACTION_HEADROOM_RATIO | 0.25 | knob | `provider.compaction_headroom_ratio` (float) | E4 |
 | token_budget.DEFAULT_OUTPUT_BUDGET_SAFETY_MARGIN_TOKENS | 4096 | knob | `provider.output_budget_safety_margin_tokens` | E4 |
 | token_budget.MIN_USEFUL_PROVIDER_OUTPUT_TOKENS | 256 | invariant | floor | — |
-| token_budget.DEFAULT_CODEX_INLINE_TOOL_RESULT_BATCH_BYTES | 24000 | knob | `provider.codex_inline_tool_result_batch_bytes` | E4 |
 | token_budget._MODEL_LIMIT_RULES (16 rules) | — | profile-field | model database → builtin profile defaults overridable in providers.yaml; hardcoded table stays last-resort fallback | E4 |
 | openai chat/responses._OPENAI_DEFAULT_MAX_ATTEMPTS | 6 | knob | `provider.openai_max_attempts` | E4 |
 | anthropic request maxAttempts default | 2 | knob | `provider.anthropic_max_attempts` | E4 |
@@ -198,11 +196,9 @@ knob wins over the hardcoded fallback.
 | notebook.MAX_OUTPUT_SAMPLE_BYTES | 600 | knob | `payloads.notebook_output_sample_bytes` | E5 |
 | notebook.MAX_OUTPUTS_PER_CELL | 12 | invariant | structure cap | — |
 | result_guard.MAX_TOOL_IDENTITY/ARTIFACT_PATH/ERROR_MESSAGE_BYTES, MIN_EFFECTIVE | 256/1024/2000/512 | invariant | record-format bounds | — |
-| result_guard.NON_ARTIFACT_TOOL_RESULT_MAX_BYTES | 32000 | knob | `payloads.non_artifact_tool_result_max_bytes` | E5 |
 | result_guard.ABSOLUTE_TOOL_RESULT_CEILING_BYTES | 512000 | invariant | ceiling | — |
-| result_guard.TOOL_RESULT_FINAL_BYTES (12/18/24K by class) | — | knob | `payloads.result_final_bytes_<class>` | E7 |
-| tools.TOOL_PAYLOAD_POLICIES (class budget tables) | — | knob | byte budgets per class; line caps derived (bytes/20) | E7 |
-| tools.deriveToolPayloadClass name sniffing | — | profile-field | `payloadClass` per profile; heuristic stays fallback | E7 |
+| tools.INLINE_OUTPUT_CHARS (one allowance for every model) | 30000 | knob | `payloads.inline_output_chars`; a larger result is saved and previewed (`payloads.preview_bytes`) | E7 |
+| tools.READ_DEFAULT_LINES / READ_MAX_TOKENS | 2000 / 25000 | knob | `payloads.read_default_lines`, `payloads.read_max_tokens` | E7 |
 
 ## runtime/, agent/, session/
 
@@ -216,7 +212,6 @@ knob wins over the hardcoded fallback.
 | _question_gate.MAX_QUESTION_NUDGES | 3 | knob | `agent.max_question_nudges` | E6 |
 | progress.PROGRESS_LEDGER_SCHEMA_VERSION | 1 | invariant | schema | — |
 | progress.REPEATED_TOOL_CYCLE_LIMIT | 3 | knob | `agent.repeated_tool_cycle_limit` | E6 |
-| progress.ARTIFACT_ACQUISITION_FAILURE_LIMIT (public) | 3 | knob | `agent.artifact_acquisition_failure_limit`; retire export | E6 |
 | progress.GENERAL_NO_PROGRESS_LIMIT | 12 | knob | `agent.no_progress_limit` | E6 |
 | progress.MAX_RECORDED_* / MAX_REPEATED_CYCLE_BATCHES | 64/32/8 | invariant | ledger bounds | — |
 | session/message_origin.ORIGIN_SCHEMA_VERSION | 1 | invariant | schema | — |

@@ -27,7 +27,6 @@ class Package28DispatchTests(TessCoreTestCase):
                 "TaskMonitorStop",
                 "ListMcpResources",
                 "ReadMcpResource",
-                "ReadToolArtifact",
             },
         )
         self.assertNotIn(None, tools.values())

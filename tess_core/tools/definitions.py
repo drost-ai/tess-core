@@ -36,6 +36,11 @@ class ToolDefinition:
     # Internal provenance for definitions generated from MCP discovery.  This
     # is policy input, not model-supplied identity.
     mcp: McpToolIdentity | None = None
+    # The most characters a result of this tool may carry inline; a larger
+    # result is saved and the model reads it with Read. None takes the default
+    # for every tool. 0 is for a tool that bounds its own results, as Read does
+    # by paging: it is held only to the runtime's absolute ceiling.
+    maxResultChars: int | None = None
 
     @property
     def input_schema(self) -> dict[str, Any]:

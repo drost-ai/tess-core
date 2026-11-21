@@ -12,10 +12,11 @@ import tess_core._facade as core
 from tess_core.payloads.agent_results import finalize_tool_dispatch_result
 from tess_core.shell_surface.status import build_todos_report
 from tess_core.payloads.result_guard import (
-    TOOL_RESULT_FINAL_BYTES,
     guard_tool_call_result,
     serialized_content_bytes,
 )
+
+TOOL_RESULT_FINAL_BYTES = {"small": 30_000, "medium": 30_000, "large": 30_000}  # one allowance now
 
 
 def _run_async(function):
@@ -160,89 +161,7 @@ async def test_worst_case_todo_summary_bypasses_generic_reshaping(tmp_path):
         outcome={"kind": "returned", "result": result},
     )
     assert guarded["truncated"] is False
-    assert guarded["cardinality"]["originalItemCount"] == 100
-    assert guarded["cardinality"]["returnedItemCount"] == 20
-
-
-@_run_async
-async def test_generic_byte_small_nested_json_is_structurally_bounded(tmp_path):
-    raw = json.dumps(
-        {"rows": [{"index": index, "nested": {"label": f"row-{index}"}} for index in range(140)]},
-        separators=(",", ":"),
-    )
-    assert serialized_content_bytes(raw) < TOOL_RESULT_FINAL_BYTES["small"]
-    captured = None
-
-    async def artifact_writer(values: dict) -> dict:
-        nonlocal captured
-        captured = values
-        return {
-            "artifactId": "artifact-cardinality",
-            "toolName": values["toolName"],
-            "sessionId": values["sessionId"],
-            "family": values["family"],
-            "filePath": "/tmp/cardinality.json",
-            "bytes": len(values["content"].encode()),
-            "lines": 1,
-            "contentType": values["contentType"],
-            "createdAt": "2026-01-01T00:00:00Z",
-        }
-
-    guarded = await guard_tool_call_result(
-        config=_small_config(str(tmp_path)),
-        sessionId=str(uuid.uuid4()),
-        toolName="generic_rows",
-        outcome={"kind": "returned", "result": {"content": raw}},
-        artifactWriter=artifact_writer,
-    )
-    assert guarded["truncated"] is True
-    assert guarded["cardinality"]["itemsTruncated"] is True
-    assert guarded["cardinality"]["originalItemCount"] > guarded["cardinality"]["returnedItemCount"]
-    assert captured["content"] == raw
-    payload = json.loads(guarded["result"]["content"])
-    assert payload["type"] == "structured_result_summary"
-    assert payload["artifact"]["artifactId"] == "artifact-cardinality"
-    assert payload["returnedItemCount"] <= 60
-    assert serialized_content_bytes(guarded["result"]["content"]) <= TOOL_RESULT_FINAL_BYTES["small"]
-
-
-@_run_async
-async def test_finalization_records_emits_and_types_cardinality(tmp_path):
-    emitted: list[dict] = []
-    recorded: list[dict] = []
-    completed = await finalize_tool_dispatch_result(
-        config=_small_config(str(tmp_path)),
-        sessionId=str(uuid.uuid4()),
-        assistantMessageIndex=1,
-        toolUse={"type": "tool_use", "id": "structured-call", "name": "structured_rows", "input": {}},
-        outcome={
-            "kind": "returned",
-            "result": {"content": json.dumps([{"index": index} for index in range(120)])},
-        },
-        artifactWriter=lambda values: {
-            "artifactId": "artifact-event",
-            "toolName": values["toolName"],
-            "sessionId": values["sessionId"],
-            "family": values["family"],
-            "filePath": "/tmp/event.json",
-            "bytes": len(values["content"].encode()),
-            "lines": 1,
-            "contentType": values["contentType"],
-            "createdAt": "2026-01-01T00:00:00Z",
-        },
-        record=recorded.append,
-        emit=lambda event, data: emitted.append({"event": event, "data": data}),
-    )
-    event = next(entry for entry in emitted if entry["event"] == "tool.completed")
-    assert event["data"]["original_item_count"] == completed["cardinality"]["originalItemCount"]
-    assert event["data"]["returned_item_count"] == completed["cardinality"]["returnedItemCount"]
-    assert event["data"]["items_truncated"] is True
-    assert recorded[0]["original_item_count"] == completed["cardinality"]["originalItemCount"]
-    typed = core.create_runtime_event({"event": event["event"], "data": event["data"]})
-    assert typed["kind"] == "tool.completed"
-    assert typed["payload"]["originalItemCount"] == completed["cardinality"]["originalItemCount"]
-    assert typed["payload"]["returnedItemCount"] == completed["cardinality"]["returnedItemCount"]
-    assert typed["payload"]["itemsTruncated"] is True
+    assert guarded["result"]["content"] == result["content"]  # the guard passes the tool's own summary through
 
 
 def test_legacy_todo_display_is_bounded_without_mutation(tmp_path):

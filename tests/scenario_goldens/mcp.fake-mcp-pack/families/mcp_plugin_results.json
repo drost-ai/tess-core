@@ -79,7 +79,6 @@
       "ReadMcpResource",
       "EnterWorktree",
       "ExitWorktree",
-      "ReadToolArtifact",
       "mcp__shared__plugin_tool"
     ]
   }

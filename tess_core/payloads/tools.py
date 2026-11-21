@@ -11,64 +11,22 @@ import typing as _typing
 
 from .._utils import now_iso
 from ..storage import tool_artifact_data_path, tool_artifact_meta_path, write_json_file
-from .utf8_bounds import slice_utf8_suffix as _slice_utf8_suffix
+from .utf8_bounds import slice_utf8_prefix as _slice_utf8_prefix
 
 if _typing.TYPE_CHECKING:
     from ..contracts.tools import ToolArtifactRef
 
 
-# text* line caps are backstops against pathological many-tiny-line output;
-# the byte budget is the intended binding constraint. Keep each line cap at
-# roughly textInlineBytes / 20 (short-lined text like stripped HTML averages
-# ~20 bytes/line), or short results get excerpted with budget left over and
-# the model pays artifact round trips for content that fit inline.
-TOOL_PAYLOAD_POLICIES = {
-    "small": {
-        "readDefaultLines": 140,
-        "readInlineLines": 180,
-        "readInlineBytes": 8000,
-        "globInlineItems": 80,
-        "globInlineBytes": 6000,
-        "grepInlineMatches": 60,
-        "grepInlineBytes": 8000,
-        "textInlineLines": 400,
-        "textInlineBytes": 8000,
-        "textHeadLines": 100,
-        "textTailLines": 200,
-        "artifactThresholdBytes": 6000,
-        "artifactThresholdLines": 180,
-    },
-    "medium": {
-        "readDefaultLines": 220,
-        "readInlineLines": 260,
-        "readInlineBytes": 12000,
-        "globInlineItems": 100,
-        "globInlineBytes": 8000,
-        "grepInlineMatches": 100,
-        "grepInlineBytes": 12000,
-        "textInlineLines": 600,
-        "textInlineBytes": 12000,
-        "textHeadLines": 150,
-        "textTailLines": 300,
-        "artifactThresholdBytes": 10000,
-        "artifactThresholdLines": 260,
-    },
-    "large": {
-        "readDefaultLines": 320,
-        "readInlineLines": 420,
-        "readInlineBytes": 18000,
-        "globInlineItems": 120,
-        "globInlineBytes": 10000,
-        "grepInlineMatches": 160,
-        "grepInlineBytes": 18000,
-        "textInlineLines": 900,
-        "textInlineBytes": 18000,
-        "textHeadLines": 200,
-        "textTailLines": 400,
-        "artifactThresholdBytes": 14000,
-        "artifactThresholdLines": 420,
-    },
-}
+# One policy for every model. A tool's output comes back whole up to
+# INLINE_OUTPUT_CHARS. Past that the whole output is saved to a file and the
+# model gets a short notice with the file's path and the first PREVIEW_BYTES,
+# which it reads further with Read. A file read returns up to
+# READ_DEFAULT_LINES lines and is refused, not cut, past READ_MAX_TOKENS.
+INLINE_OUTPUT_CHARS = 30_000
+PREVIEW_BYTES = 2_000
+READ_DEFAULT_LINES = 2_000
+READ_MAX_TOKENS = 25_000
+READ_BYTES_PER_TOKEN = 4
 
 DEFAULT_GLOB_EXCLUDES = [
     ".git/**",
@@ -139,41 +97,40 @@ def split_tool_text_lines(value: str) -> list[str]:
     return re.split(r"\r?\n", value)
 
 
-def _fit_lines_within_bytes(lines: list[str], max_bytes: int) -> list[str]:
-    selected: list[str] = []
-    current = ""
-    for line in lines:
-        candidate = line if not selected else f"{current}\n{line}"
-        if _byte_len(candidate) > max_bytes:
-            break
-        selected.append(line)
-        current = candidate
-    return selected
+def _format_size(byte_count: int) -> str:
+    if byte_count < 1024:
+        return f"{byte_count}B"
+    if byte_count < 1024 * 1024:
+        return f"{byte_count / 1024:.1f}KB"
+    return f"{byte_count / (1024 * 1024):.1f}MB"
 
 
+def over_inline_limit(text: str) -> bool:
+    return len(text) > inline_output_chars()
 
 
-def _head_tail_excerpt(text: str, head_lines: int, tail_lines: int, max_bytes: int) -> dict[str, Any]:
-    lines = split_tool_text_lines(text)
-    # Budget the halves jointly (head up to a third, tail the rest) so the
-    # combined excerpt fits max_bytes at any line cap; a lone half keeps the
-    # whole budget. The tail window starts after the head so overlapping
-    # windows never duplicate lines.
-    head_budget = max_bytes // 3 if head_lines and tail_lines else max_bytes
-    head = _fit_lines_within_bytes(lines[:head_lines], head_budget)
-    tail_budget = max(max_bytes - _byte_len("\n".join(head)) - (64 if head else 0), 0)
-    tail_start = max(len(lines) - tail_lines, len(head))
-    tail = _fit_lines_within_bytes(lines[tail_start:], tail_budget)
-    excerpt = "\n".join(head)
-    omitted = max(len(lines) - len(head) - len(tail), 0)
-    if tail and len(lines) > len(head):
-        separator = f"\n...[omitted {omitted} lines]...\n" if omitted else "\n...\n"
-        excerpt = f"{excerpt}{separator}{chr(10).join(tail)}".strip()
-    if not excerpt:
-        return {"text": _slice_utf8_suffix(text, max_bytes).strip(), "truncated": True, "strategy": "inline_truncated_tail"}
-    if _byte_len(excerpt) > max_bytes:
-        return {"text": _slice_utf8_suffix(excerpt, max_bytes).strip(), "truncated": True, "strategy": "inline_truncated_tail"}
-    return {"text": excerpt, "truncated": excerpt != text, "strategy": "inline_full" if excerpt == text else "inline_head_tail"}
+def inline_output_chars() -> int:
+    from ..config._knobs import knob_value
+
+    return int(knob_value("payloads.inline_output_chars"))
+
+
+def build_persisted_output(text: str, original_bytes: int, file_path: str | None) -> str:
+    """What the model sees in place of an output that was too large to return whole."""
+    from ..config._knobs import knob_value
+
+    preview_bytes = int(knob_value("payloads.preview_bytes"))
+    preview = _slice_utf8_prefix(text, preview_bytes)
+    where = (
+        f"Full output saved to: {file_path}"
+        if file_path
+        else "The full output could not be saved; only this preview is available."
+    )
+    more = "\n..." if _byte_len(preview) < _byte_len(text) or original_bytes > _byte_len(text) else ""
+    return (
+        f"<persisted-output>\nOutput too large ({_format_size(original_bytes)}). {where}\n\n"
+        f"Preview (first {_format_size(preview_bytes)}):\n{preview}{more}\n</persisted-output>"
+    )
 
 
 async def _persist_artifact(args: dict[str, Any]) -> ToolArtifactRef:
@@ -203,44 +160,24 @@ async def _persist_artifact(args: dict[str, Any]) -> ToolArtifactRef:
     return record
 
 
-def derive_tool_payload_class(config: dict[str, Any]) -> str:
-    profile = config.get("providerProfile") if isinstance(config.get("providerProfile"), dict) else {}
-    declared = profile.get("payloadClass")
-    if declared in TOOL_PAYLOAD_POLICIES:
-        # An explicit providers.yaml payloadClass beats the model-name
-        # heuristic below — names like "deepseek-v4-flash" say nothing
-        # reliable about a model's real capacity.
-        return declared
-    model = str(config.get("model", "")).lower()
-    if config.get("providerKind") == "anthropic":
-        return "large"
-    if config.get("providerKind") == "openai" and config.get("openaiBaseUrl"):
-        if any(token in model for token in ("minimax", "glm", "qwen", "llama", "mistral", "gemma", "deepseek", "phi", "mixtral", "command-r", "yi", "small", "tiny", "nano")):
-            return "small"
-        return "medium" if config.get("openaiApiMode") == "responses" else "small"
-    if "mini" in model or "spark" in model:
-        return "medium"
-    return "large"
-
-
-def get_tool_payload_policy(config: dict[str, Any]) -> dict[str, int]:
-    cls = derive_tool_payload_class(config)
-    policy = dict(TOOL_PAYLOAD_POLICIES[cls])
+def get_tool_payload_policy(config: dict[str, Any] | None = None) -> dict[str, int]:
+    """The limits tools shape their results to. They are the same for every model."""
     from ..config._knobs import knob_value
 
-    text_bytes = int(knob_value(f"payloads.text_inline_bytes_{cls}"))
-    policy.update({
-        "textInlineBytes": text_bytes,
-        # Line caps are backstops; the byte budget is the binding
-        # constraint (~20 bytes/line of short-lined text).
-        "textInlineLines": max(1, text_bytes // 20),
-        "textHeadLines": max(1, text_bytes // 80),
-        "textTailLines": max(1, text_bytes // 40),
-        "readInlineBytes": int(knob_value(f"payloads.read_inline_bytes_{cls}")),
-        "globInlineBytes": int(knob_value(f"payloads.glob_inline_bytes_{cls}")),
-        "grepInlineBytes": int(knob_value(f"payloads.grep_inline_bytes_{cls}")),
-    })
-    return policy
+    inline = inline_output_chars()
+    read_lines = int(knob_value("payloads.read_default_lines"))
+    return {
+        "readDefaultLines": read_lines,
+        "readInlineLines": read_lines,
+        "readInlineBytes": int(knob_value("payloads.read_max_tokens")) * READ_BYTES_PER_TOKEN,
+        "readMaxTokens": int(knob_value("payloads.read_max_tokens")),
+        "globInlineItems": 100,
+        "globInlineBytes": inline,
+        "grepInlineMatches": 250,
+        "grepInlineBytes": inline,
+        "textInlineBytes": inline,
+        "artifactThresholdBytes": inline,
+    }
 
 
 def get_default_glob_excludes() -> list[str]:
@@ -266,8 +203,8 @@ def filter_default_ignored_glob_matches(matches: list[str]) -> list[str]:
 
 
 async def shape_text_tool_result(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """A tool's text output as the model gets it: whole, or saved with a preview when it is too large."""
     args = {**(args or {}), **kwargs}
-    policy = get_tool_payload_policy(args["config"])
     text = args.get("text", "")
     text_bytes = _byte_len(text)
     text_lines = _count_lines(text)
@@ -276,12 +213,9 @@ async def shape_text_tool_result(args: dict[str, Any] | None = None, **kwargs: A
     source_already_truncated = bool(
         args.get("sourceTruncated") or original_bytes > text_bytes or original_lines > text_lines
     )
-    needs_truncation = bool(
-        source_already_truncated
-        or text_bytes > policy["textInlineBytes"]
-        or text_lines > policy["textInlineLines"]
-    )
-    if not needs_truncation:
+    artifact = args.get("existingArtifact")
+    artifact_unavailable = bool(args.get("artifactUnavailable"))
+    if not source_already_truncated and not over_inline_limit(text):
         return {
             "text": text,
             "view": _without_none_values({
@@ -291,30 +225,11 @@ async def shape_text_tool_result(args: dict[str, Any] | None = None, **kwargs: A
                 "originalLines": original_lines,
                 "returnedBytes": original_bytes,
                 "returnedLines": original_lines,
-                "artifact": args.get("existingArtifact"),
-                "artifactUnavailable": True if args.get("artifactUnavailable") else None,
+                "artifact": artifact,
+                "artifactUnavailable": True if artifact_unavailable else None,
             }),
         }
-    strategy = args.get("strategy") or "head"
-    if strategy == "tail":
-        excerpt = _head_tail_excerpt(text, 0, policy["textTailLines"], policy["textInlineBytes"])
-    elif strategy == "head_tail":
-        excerpt = _head_tail_excerpt(text, policy["textHeadLines"], policy["textTailLines"], policy["textInlineBytes"])
-    else:
-        lines = _fit_lines_within_bytes(split_tool_text_lines(text)[: policy["textInlineLines"]], policy["textInlineBytes"])
-        next_text = "\n".join(lines).strip()
-        excerpt = {"text": next_text, "truncated": next_text != text, "strategy": "inline_full" if next_text == text else "inline_truncated_head"}
-    artifact = args.get("existingArtifact")
-    artifact_unavailable = bool(args.get("artifactUnavailable"))
-    artifact_needed = bool(
-        not artifact
-        and args.get("persistArtifact") is not False
-        and (
-            original_bytes > policy["artifactThresholdBytes"]
-            or original_lines > policy["artifactThresholdLines"]
-        )
-    )
-    if artifact_needed:
+    if not artifact and args.get("persistArtifact") is not False:
         try:
             artifact = await _persist_artifact(
                 {
@@ -327,28 +242,17 @@ async def shape_text_tool_result(args: dict[str, Any] | None = None, **kwargs: A
             )
         except Exception:
             artifact_unavailable = True
+    shown = build_persisted_output(text, original_bytes, artifact.get("filePath") if artifact else None)
     return _without_none_values({
-        "text": excerpt["text"],
+        "text": shown,
         "view": {
-            "strategy": (
-                "inline_head_tail"
-                if source_already_truncated and excerpt["strategy"] == "inline_full"
-                else excerpt["strategy"]
-            ),
-            "truncated": source_already_truncated or excerpt["truncated"],
+            "strategy": "persisted_preview",
+            "truncated": True,
             "originalBytes": original_bytes,
             "originalLines": original_lines,
-            "returnedBytes": _byte_len(excerpt["text"]),
-            "returnedLines": _count_lines(excerpt["text"]),
+            "returnedBytes": _byte_len(shown),
+            "returnedLines": _count_lines(shown),
             "artifact": artifact,
             "artifactUnavailable": True if artifact_unavailable else None,
         },
     })
-
-
-
-
-
-
-
-

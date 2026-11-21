@@ -120,17 +120,19 @@ class ToolPayloadSearchTests(TessCoreTestCase):
             config.update({"providerKind": "openai", "openaiBaseUrl": "http://compatible.test", "openaiApiMode": "chat", "model": "small-model"})
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
-            long_output = "\n".join(f"line-{index:03} {'x' * 40}" for index in range(220)) + "\n"
+            long_output = "\n".join(f"line-{index:03} {'x' * 40}" for index in range(900)) + "\n"
 
             bash = next(tool for tool in core.create_builtin_tools() if tool.name == "Bash")
-            command = "python3 - <<'PY'\nfor index in range(220):\n    print(f\"line-{index:03} {'x' * 40}\")\nPY"
+            command = "python3 - <<'PY'\nfor index in range(900):\n    print(f\"line-{index:03} {'x' * 40}\")\nPY"
             with mock.patch.dict(os.environ, {"HOME": str(home)}):
                 bash_result = run(bash.handler({"command": command}, context))
             bash_payload = json.loads(bash_result["content"])
             self.assertFalse(bash_result.get("isError"))
             self.assertEqual(bash_payload["stderr"], "")
             self.assertNotIn("artifact", bash_payload["stderr_manifest"])
-            self.assertEqual(bash_payload["stdout_manifest"]["strategy"], "inline_head_tail")
+            self.assertEqual(bash_payload["stdout_manifest"]["strategy"], "persisted_preview")
+            self.assertTrue(bash_payload["stdout"].startswith("<persisted-output>\nOutput too large (43.9KB). Full output saved to: "))
+            self.assertIn("Preview (first 2.0KB):\nline-000 ", bash_payload["stdout"])
             self.assertTrue(bash_payload["stdout_manifest"]["truncated"])
             self.assertGreater(bash_payload["stdout_manifest"]["originalLines"], bash_payload["stdout_manifest"]["returnedLines"])
             bash_artifact = bash_payload["stdout_manifest"]["artifact"]

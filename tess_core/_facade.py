@@ -310,8 +310,8 @@ from .tasks.supervisor_parts.communication import read_task_output
 from .tasks.runtime import create_task_runtime
 from .tasks.supervisor import create_task_supervisor
 from .payloads.tools import (
-    DEFAULT_GLOB_EXCLUDES, DEFAULT_IGNORED_DIRECTORIES, TOOL_PAYLOAD_POLICIES, apply_default_glob_excludes,
-    derive_tool_payload_class, filter_default_ignored_glob_matches, get_default_glob_excludes, get_tool_payload_policy,
+    DEFAULT_GLOB_EXCLUDES, DEFAULT_IGNORED_DIRECTORIES, apply_default_glob_excludes,
+    filter_default_ignored_glob_matches, get_default_glob_excludes, get_tool_payload_policy,
     shape_text_tool_result, split_tool_text_lines,
 )
 from .tools import (
@@ -473,7 +473,7 @@ __all__ = [
     "SandboxUnavailableError", "Scope", "SeatbeltSandboxBackend", "SecretWriteAuthorization", "SerialQueue",
     "SessionRecordNotFoundError", "SessionSchemaVersionError", "SseMcpClient", "StdioMcpClient",
     "StorageTransactionError", "TERMINAL_RECONCILIATION_SCHEMA_VERSION", "TERMINAL_RECONCILIATION_STATUSES",
-    "TOOL_PAYLOAD_POLICIES", "TaskOwnershipError", "ToolDefinition", "ToolDispatchOutcome",
+    "TaskOwnershipError", "ToolDefinition", "ToolDispatchOutcome",
     "ToolResultBatchBudget", "VALID_EFFORT_LEVELS",
     "active_session_payload", "add_empty_response_continuation_nudge", "answer_task_question",
     "anthropic_cache_breakpoint_message_indices", "append_activity_section", "append_assistant_collaboration_message",
@@ -545,7 +545,7 @@ __all__ = [
     "daemon_tokens_equal", "decide_durable_checkpoint", "decode_bing_redirect_target", "dedupe_memory_candidates",
     "default_monitor_check_interval_ms", "default_monitor_heartbeat_interval_ms", "default_tool_list", "deliverQueuedTaskMessagesToSession", "deliver_queued_task_messages_to_session",
     "derive_child_agent_authority", "derive_keywords", "derive_stored_turn_outcome", "derive_tags_from_text",
-    "derive_tool_payload_class", "describe_compaction_synthesis_failure", "detect_chrome_companion_status", "detect_ide_targets",
+    "describe_compaction_synthesis_failure", "detect_chrome_companion_status", "detect_ide_targets",
     "detect_tmux_availability", "digest_expected_command", "durable_memory_id", "dynamic_context_belongs_in_messages",
     "emit_continuation_relief", "emit_provider_activity", "empty_collaboration_snapshot", "empty_compaction_result",
     "empty_relief_summary", "encode_daemon_frame", "enforce_context_headroom", "enforce_session_agent_authority",

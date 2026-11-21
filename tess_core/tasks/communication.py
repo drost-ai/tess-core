@@ -273,9 +273,8 @@ async def _bounded_message_content(content: str, session: Mapping[str, Any]) -> 
     """Clamp a drain-injected message to the comms inline allowance.
 
     The remainder must stay reachable WITHOUT re-asking the sender: the
-    full text is persisted as a tool artifact and the truncation note
-    carries the artifact id, so the recipient pages it with
-    ReadToolArtifact."""
+    full text is saved to a file and the truncation note carries its path,
+    so the recipient reads the rest with Read."""
     # Call-time import: the config package imports tasks at module load.
     from ..config._knobs import knob_value
 
@@ -298,8 +297,8 @@ async def _bounded_message_content(content: str, session: Mapping[str, Any]) -> 
             }
         )
         note = (
-            f"… [message truncated: {len(encoded):,} bytes total; read the rest with "
-            f"ReadToolArtifact artifact_id={artifact['artifactId']} offset_bytes={len(clipped.encode('utf-8'))}]"
+            f"… [message truncated: {len(encoded):,} bytes total; full message saved to: "
+            f"{artifact['filePath']} (read it with Read)]"
         )
     except Exception:
         note = f"… [message truncated: {len(encoded):,} bytes total; full text in the task mailbox record]"

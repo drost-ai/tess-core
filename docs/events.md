@@ -82,7 +82,7 @@ turn.completed
 |---|---|
 | `tool.started` | A tool call began. `data`: `name`, `tool_use_id`, `input` |
 | `tool.completed` | It ended, with its result or error |
-| `tool.result_guard`, `tool.result_budget` | A large result was budgeted or saved as an artifact |
+| `tool.result_guard` | A result was too large to return whole and was saved to a file |
 | `permission.requested` | A call needs a decision |
 | `permission.decided` | The decision, and whether a rule, the mode or a person made it |
 | `hook.completed` | A hook ran |

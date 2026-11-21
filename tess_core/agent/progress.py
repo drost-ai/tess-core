@@ -8,6 +8,7 @@ def _knob(name: str):
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -39,6 +40,7 @@ _VOLATILE_KEYS = {
     "updatedat",
 }
 _ARTIFACT_POINTER_KEYS = {"artifactid", "filepath"}
+_SAVED_OUTPUT_PATH = re.compile(r"(Full output saved to: )\S+")
 
 
 class LogicalTurnProgressLedger:
@@ -64,8 +66,6 @@ class LogicalTurnProgressLedger:
                 "consecutiveNoProgress": 0,
                 "batchOccurrences": {},
                 "recentBatchFingerprints": [],
-                "artifactOffsets": {},
-                "artifactFailures": {},
                 "lastProgressReason": None,
                 "terminalReason": None,
                 "updatedAt": now_iso(),
@@ -120,16 +120,9 @@ class LogicalTurnProgressLedger:
             self.receipt["repeatedCycleCount"] = repeated_cycle["occurrences"]
             self.receipt["lastCycleLength"] = repeated_cycle["length"]
 
-        artifact_observation = self._observe_artifact_pages(tool_uses, tool_results)
-        batch_is_novel = prior_occurrences == 0
-        progressed = batch_is_novel or artifact_observation["advanced"]
-        if progressed:
+        if prior_occurrences == 0:
             self.receipt["consecutiveNoProgress"] = 0
-            self.receipt["lastProgressReason"] = (
-                "artifact_cursor_advanced"
-                if artifact_observation["advanced"]
-                else "novel_reachable_evidence"
-            )
+            self.receipt["lastProgressReason"] = "novel_reachable_evidence"
         else:
             self.receipt["consecutiveNoProgress"] = (
                 int(self.receipt.get("consecutiveNoProgress") or 0) + 1
@@ -146,10 +139,7 @@ class LogicalTurnProgressLedger:
 
         terminal_reason: str | None = None
         diagnostic: dict[str, Any] = {}
-        if artifact_observation["failed"]:
-            terminal_reason = "artifact_output_unreachable"
-            diagnostic["artifactId"] = artifact_observation["artifactId"]
-        elif (
+        if (
             repeated_cycle is not None
             and repeated_cycle["occurrences"] >= int(_knob("agent.repeated_tool_cycle_limit"))
         ):
@@ -168,59 +158,6 @@ class LogicalTurnProgressLedger:
         self.receipt["terminalDiagnostic"] = diagnostic
         self.receipt["updatedAt"] = now_iso()
         return self._terminal_result(terminal_reason, diagnostic)
-
-    def _observe_artifact_pages(
-        self,
-        tool_uses: list[dict[str, Any]],
-        tool_results: list[dict[str, Any] | None],
-    ) -> dict[str, Any]:
-        offsets = self.receipt.setdefault("artifactOffsets", {})
-        failures = self.receipt.setdefault("artifactFailures", {})
-        advanced = False
-        failed_artifact: str | None = None
-
-        for index, tool_use in enumerate(tool_uses):
-            if tool_use.get("name") != "ReadToolArtifact":
-                continue
-            block = tool_results[index] if index < len(tool_results) else None
-            payload = _json_object(block.get("content") if isinstance(block, dict) else None)
-            input_value = tool_use.get("input")
-            tool_input = input_value if isinstance(input_value, dict) else {}
-            artifact_id = str(
-                (payload or {}).get("artifactId")
-                or tool_input.get("artifact_id")
-                or ""
-            )
-            if not artifact_id:
-                continue
-            highest = int(offsets.get(artifact_id) or 0)
-            next_offset = _safe_nonnegative_int((payload or {}).get("nextOffsetBytes"))
-            page_type = (payload or {}).get("type")
-            complete = bool((payload or {}).get("complete"))
-            page_advanced = (
-                page_type == "tool_artifact_page"
-                and next_offset is not None
-                and (
-                    next_offset > highest
-                    or (complete and artifact_id not in offsets)
-                )
-            )
-            if page_advanced:
-                offsets[artifact_id] = max(highest, int(next_offset or 0))
-                failures[artifact_id] = 0
-                advanced = True
-            else:
-                failures[artifact_id] = int(failures.get(artifact_id) or 0) + 1
-                if failures[artifact_id] >= int(_knob("agent.artifact_acquisition_failure_limit")):
-                    failed_artifact = artifact_id
-
-        _prune_mapping(offsets, MAX_RECORDED_ARTIFACTS)
-        _prune_mapping(failures, MAX_RECORDED_ARTIFACTS)
-        return {
-            "advanced": advanced,
-            "failed": failed_artifact is not None,
-            "artifactId": failed_artifact,
-        }
 
     def _terminal_result(
         self,
@@ -363,7 +300,10 @@ def _normalize(value: Any, *, parent_key: str | None = None) -> Any:
         return {"sha256": hashlib.sha256(value).hexdigest(), "bytes": len(value)}
     if isinstance(value, float):
         return round(value, 9)
-    if value is None or isinstance(value, (bool, int, str)):
+    if isinstance(value, str):
+        # A saved output gets a fresh file each time; the same output saved twice is still the same evidence.
+        return _SAVED_OUTPUT_PATH.sub(r"\1<saved>", value) if "<persisted-output>" in value else value
+    if value is None or isinstance(value, (bool, int)):
         return value
     return str(value)
 
