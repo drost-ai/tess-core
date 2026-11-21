@@ -68,6 +68,17 @@ def _parse_tool_list(cli_value: list[str] | None, settings_value: list[str] | No
         return fallback
     return _dedupe([_strip_tool_pattern(item) for item in parsed])
 
+def _resolve_tool_lists(options: dict[str, Any], settings: dict[str, Any], defaults: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """The session's ``tools``, ``allowedTools`` and ``disallowedTools``: options win over settings, then the defaults."""
+    tools = _parse_tool_list(options.get("tools"), settings.get("tools"), defaults)
+    allowed = _dedupe(_parse_tool_list(options.get("allowedTools"), settings.get("allowedTools"), tools))
+    disallowed = _dedupe(_parse_tool_list(options.get("disallowedTools"), settings.get("disallowedTools"), []))
+    if not allowed:
+        # An empty allow-list leaves nothing enabled. Say so in the list every
+        # filter reads, where empty means none rather than unrestricted.
+        tools = []
+    return tools, allowed, disallowed
+
 def _strip_tool_pattern(value: str) -> str:
     match = re.match(r"^([A-Za-z]+)(?:\(.+\))?$", value)
     return match.group(1) if match else value

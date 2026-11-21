@@ -204,7 +204,8 @@ async def capture_agent_authority(
     roots = [session["cwd"], *(config.get("allowedRoots") or [])]
     readable = sorted({await canonicalize_authority_path(root, "Agent root") for root in roots})
     sandbox, writable = _sandbox_authority(config, session, mode)
-    configured = set(config.get("tools") or [])
+    # A config with no tool list is unrestricted; an empty list is no tools.
+    configured = None if config.get("tools") is None else set(config["tools"])
     allowed = set(config.get("allowedTools") or [])
     denied = set(config.get("disallowedTools") or [])
     enabled = sorted(
@@ -212,7 +213,7 @@ async def capture_agent_authority(
             name
             for tool in tools
             if (name := _tool_name(tool))
-            and (not configured or name in configured)
+            and (configured is None or name in configured)
             and name not in denied
             and (not allowed or name in allowed)
         }

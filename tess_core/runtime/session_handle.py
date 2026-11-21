@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from ..config import filter_tools_by_policy
 from .session_options import RuntimeStopped, SessionEnded
 
 
@@ -41,7 +42,12 @@ class Session:
 
     @property
     def tool_names(self) -> list[str]:
-        return [getattr(tool, "name", None) or tool.get("name") for tool in self._live_session().bindings["tools"]]
+        """The tools a turn of this session is offered: the composed set,
+        less whatever the session's tool selection leaves out."""
+        live = self._live_session()
+        enabled = set(filter_tools_by_policy(live.config))
+        names = [getattr(tool, "name", None) or tool.get("name") for tool in live.bindings["tools"]]
+        return [name for name in names if name in enabled]
 
     def subscribe(self, listener: Callable[[dict[str, Any]], Any]) -> Callable[[], None]:
         """Receive this session's event envelopes, in addition to the runtime listener.

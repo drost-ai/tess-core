@@ -100,17 +100,21 @@ def runtime_path_graph_id(paths: RuntimePaths) -> str:
 
 
 def augment_config_tools(config: dict[str, Any], runtimeToolNames: list[str]) -> None:
+    """Add the tools the runtime composed (agents, MCP, host tools) to a
+    session's lists. They join a list left at the defaults; a list the
+    session chose stays as chosen, and an empty choice is no tools."""
+    unset = "tools" not in config
     tools = config.setdefault("tools", [])
     allowed = config.setdefault("allowedTools", [])
     defaults = set(get_default_tool_list())
-    default_allow = (
-        len(tools) == len(defaults)
-        and len(allowed) == len(defaults)
-        and all(tool in defaults for tool in tools)
-        and all(tool in defaults for tool in allowed)
-    )
+
+    def is_default(names: list[str]) -> bool:
+        return len(names) == len(defaults) and all(name in defaults for name in names)
+
+    default_tools = unset or is_default(tools)
+    default_allow = is_default(tools) and is_default(allowed)
     for name in runtimeToolNames:
-        if name not in tools:
+        if default_tools and name not in tools:
             tools.append(name)
         if default_allow and name not in allowed:
             allowed.append(name)

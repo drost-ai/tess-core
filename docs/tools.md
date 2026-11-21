@@ -87,11 +87,25 @@ When the runtime's scheduler is running, sessions also get `ScheduleCreate`,
 
 ## Choosing tools
 
-Narrow a session to the tools it needs:
+Narrow a session to the tools it needs, for one turn or for the whole session:
 
 ```python
 await session.run_turn("Review this diff.", tools=["Read", "Grep", "Glob"])   # one turn
+
+SessionOptions(extra={"tools": ["Read", "Grep", "Glob"]})                     # the session
 ```
+
+For a session there are three lists, each of tool names:
+
+| Key | Effect |
+|---|---|
+| `tools` | The only tools the session has. Built-in, host, MCP and plugin tools not named here are left out. |
+| `allowedTools` | Narrows the session's tools to these names. |
+| `disallowedTools` | Removes these names and keeps everything else. |
+
+An empty `tools` or `allowedTools` list means no tools at all. `session.tool_names` reports
+what the session ends up with. See [Embedding](embedding.md#choosing-a-sessions-tools) for
+running a session on your own tools only.
 
 On the command line, `--tools`, `--allowed-tools` and `--disallowed-tools` do the same.
 Permission rules can deny a tool outright for a whole session.

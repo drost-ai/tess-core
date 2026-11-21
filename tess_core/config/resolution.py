@@ -39,7 +39,7 @@ from .parsing import (
     _parse_inline_agents,
     _parse_json_schema,
     _parse_setting_sources,
-    _parse_tool_list,
+    _resolve_tool_lists,
     _resolve_api_key_from_helper,
 )
 from .prompts import build_default_system_prompt, default_tool_list
@@ -395,9 +395,7 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
         f"config:{selected_name}",
     )
 
-    tools = _parse_tool_list(options.get("tools"), merged_settings.get("tools"), default_tool_list())
-    allowed_tools = _dedupe(_parse_tool_list(options.get("allowedTools"), merged_settings.get("allowedTools"), tools))
-    disallowed_tools = _dedupe(_parse_tool_list(options.get("disallowedTools"), merged_settings.get("disallowedTools"), []))
+    tools, allowed_tools, disallowed_tools = _resolve_tool_lists(options, merged_settings, default_tool_list())
     plugin_dirs = [resolve_maybe_relative(cwd, item) for item in options.get("pluginDir", [])]
     allowed_roots = _dedupe([cwd, *[resolve_maybe_relative(cwd, item) for item in options.get("addDir", [])]])
 

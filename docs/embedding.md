@@ -70,6 +70,7 @@ The most used fields:
 | `system_prompt` | Replaces the base system prompt. |
 | `context_provider` | `async (session_id) -> str`: text added to the system prompt for each turn, never stored in the conversation. |
 | `host_tools` | Tools implemented by your application. |
+| `extra` | Further configuration by key, such as the session's [tool selection](#choosing-a-sessions-tools). |
 | `mcp_servers`, `strict_mcp_config` | Session MCP servers; strict mode ignores servers configured elsewhere. |
 | `settings` | A settings file (JSON or YAML) for this session, e.g. permission rules. |
 | `execution_budget` | A shared ceiling on model and tool calls across turns. |
@@ -107,7 +108,7 @@ Other calls on a session:
 
 | Call | Purpose |
 |---|---|
-| `session.id`, `.model`, `.permission_mode`, `.message_count`, `.tool_names` | Read-only state |
+| `session.id`, `.model`, `.permission_mode`, `.message_count`, `.tool_names` | Read-only state. `tool_names` is the tools a turn is offered. |
 | `session.busy`, `session.turns()` | Whether a turn is running, and the queue |
 | `await session.cancel_turn(turn_id)` | Cancel one turn |
 | `session.subscribe(fn)` | Receive this session's events; returns an unsubscribe function |
@@ -187,6 +188,36 @@ orders = ToolDefinition(
 - Host tools are subject to the session's allow and deny rules like any other tool.
 
 See [Tools](tools.md) for the built-in set.
+
+### Choosing a session's tools
+
+A session starts with every built-in tool plus your own. To change that, pass tool names
+in `extra` when the session is set up:
+
+```python
+SessionOptions(
+    host_tools=(orders, workspace),
+    extra={"tools": ["Orders", "Workspace"]},          # only these; no built-in tools
+)
+
+SessionOptions(
+    host_tools=(orders,),
+    extra={"disallowedTools": ["Bash", "Write", "Edit"]},   # everything except these
+)
+```
+
+`tools` names the only tools the session has, so list your host tools and any MCP tools
+you want alongside the built-in ones you keep. `allowedTools` narrows the same way, and
+`disallowedTools` removes names and keeps the rest. An empty `tools` list gives a session
+with no tools.
+
+Use the first form when your tools run somewhere other than the machine the runtime is
+on, such as a remote sandbox: with the built-in file, shell and web tools left out, the
+model can only act through the tools you supply.
+
+The lists decide what the model is offered, and a tool that is left out cannot be
+called. `session.tool_names` shows the result. To narrow a single turn instead, pass
+`tools=` to `run_turn`.
 
 ## Runtime status
 
