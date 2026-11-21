@@ -119,8 +119,11 @@ async def prepare_runtime_session_components(args: Mapping[str, Any]) -> dict[st
 
         tools = compose_tools()
         slash_commands = _dedupe_slash_commands(plugins.get("commands") or [])
+        # Which tool lists the session left at the defaults: read once, here,
+        # before the runtime's tools join them, and reused on every refresh.
+        kept_default_lists = None
         if authority is None:
-            factories["augment_config_tools"](
+            kept_default_lists = factories["augment_config_tools"](
                 config, [_tool_name(tool) for tool in tools if _tool_name(tool)]
             )
 
@@ -134,7 +137,7 @@ async def prepare_runtime_session_components(args: Mapping[str, Any]) -> dict[st
                 components["tools"] = tools
                 if authority is None:
                     factories["augment_config_tools"](
-                        config, [_tool_name(tool) for tool in tools if _tool_name(tool)]
+                        config, [_tool_name(tool) for tool in tools if _tool_name(tool)], kept_default_lists
                     )
             return {**result, "tools": tools if result.get("changed") else None}
 

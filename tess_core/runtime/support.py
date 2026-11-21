@@ -99,25 +99,34 @@ def runtime_path_graph_id(paths: RuntimePaths) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
-def augment_config_tools(config: dict[str, Any], runtimeToolNames: list[str]) -> None:
+def augment_config_tools(
+    config: dict[str, Any], runtimeToolNames: list[str], kept: tuple[bool, bool] | None = None
+) -> tuple[bool, bool]:
     """Add the tools the runtime composed (agents, MCP, host tools) to a
     session's lists. They join a list left at the defaults; a list the
-    session chose stays as chosen, and an empty choice is no tools."""
+    session chose stays as chosen, and an empty choice is no tools.
+
+    Returns which lists were left at the defaults, as (tools, allowedTools).
+    That can only be read off the lists before anything is added to them, so
+    a session passes the first call's answer back as ``kept`` when its tools
+    change later."""
     unset = "tools" not in config
     tools = config.setdefault("tools", [])
     allowed = config.setdefault("allowedTools", [])
-    defaults = set(get_default_tool_list())
+    if kept is None:
+        defaults = set(get_default_tool_list())
 
-    def is_default(names: list[str]) -> bool:
-        return len(names) == len(defaults) and all(name in defaults for name in names)
+        def is_default(names: list[str]) -> bool:
+            return len(names) == len(defaults) and all(name in defaults for name in names)
 
-    default_tools = unset or is_default(tools)
-    default_allow = is_default(tools) and is_default(allowed)
+        kept = (unset or is_default(tools), is_default(tools) and is_default(allowed))
+    default_tools, default_allow = kept
     for name in runtimeToolNames:
         if default_tools and name not in tools:
             tools.append(name)
         if default_allow and name not in allowed:
             allowed.append(name)
+    return kept
 
 
 def task_snapshot_from_state(getState: Callable[[], dict[str, Any]]) -> dict[str, Any]:

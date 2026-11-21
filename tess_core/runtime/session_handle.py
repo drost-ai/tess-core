@@ -42,11 +42,11 @@ class Session:
 
     @property
     def tool_names(self) -> list[str]:
-        """The tools a turn of this session is offered: the composed set,
-        less whatever the session's tool selection leaves out."""
+        """The tools a turn of this session is offered: the composed set as
+        it stands now, less whatever the session's tool selection leaves out."""
         live = self._live_session()
         enabled = set(filter_tools_by_policy(live.config))
-        names = [getattr(tool, "name", None) or tool.get("name") for tool in live.bindings["tools"]]
+        names = [getattr(tool, "name", None) or tool.get("name") for tool in live.components["tools"]]
         return [name for name in names if name in enabled]
 
     def subscribe(self, listener: Callable[[dict[str, Any]], Any]) -> Callable[[], None]:
