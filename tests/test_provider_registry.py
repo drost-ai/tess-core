@@ -54,6 +54,24 @@ class ProviderRegistryTests(TessCoreTestCase):
         finally:
             os.chdir(previous_cwd)
 
+    def test_the_efforts_a_profiles_model_takes_are_listed_for_a_host_to_offer(self):
+        def profile(kind, model, **more):
+            return {"kind": kind, "defaultModel": model, "auth": {"kind": "none"}, **more}
+
+        registry = ProviderRegistry.from_document({"schema_version": 1, "providerProfiles": {
+            "gpt": profile("openai", "gpt-5.6-sol"), "older": profile("openai", "gpt-5.3-codex-spark"),
+            "claude": profile("anthropic", "claude-fable-5-2", reasoningEffort="medium"), "local": profile("openai", "qwen3-coder")}})
+        # OpenAI's top effort is xhigh ("max" is not one of its own); the default is the provider's.
+        self.assertEqual(registry.effort_levels("gpt"), {"levels": ["low", "medium", "high", "xhigh"], "default": "xhigh"})
+        self.assertEqual(registry.effort_levels("older"), {"levels": ["low", "medium", "high"], "default": "high"})
+        # A profile's own effort is its default; the ladder ends at max.
+        self.assertEqual(registry.effort_levels("claude"), {"levels": ["low", "medium", "high", "xhigh", "max"], "default": "medium"})
+        # A model that takes no effort offers none; and another model on the same profile is asked about by name.
+        self.assertEqual(registry.effort_levels("local"), {"levels": [], "default": None})
+        self.assertEqual(registry.effort_levels("local", model="gpt-5.4")["levels"], ["low", "medium", "high", "xhigh"])
+        with self.assertRaises(ProviderRegistryError):
+            registry.effort_levels("nobody")
+
     def test_mixed_case_identifiers_preserve_exact_lookup(self):
         self.path.write_text(REGISTRY.replace("  custom:", "  Model-27B:"))
         registry = ProviderRegistry(self.path)

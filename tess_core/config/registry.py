@@ -12,8 +12,12 @@ from pathlib import Path
 from typing import Any
 
 from ._yaml import parse_yaml_subset
-from .providers import resolve_provider_profile
+from .defaults import get_default_effort_for_provider
+from .providers import normalize_effort_for_model, resolve_provider_profile
 from .shared import PROVIDER_KINDS
+
+
+_EFFORT_LADDER = ("low", "medium", "high", "xhigh", "max")
 
 
 class ProviderRegistryError(ValueError):
@@ -177,6 +181,16 @@ class ProviderRegistry:
             return resolve_provider_profile(name, copy.deepcopy(record), {"model": model})
         except (ValueError, TypeError, KeyError, AttributeError):
             raise ProviderRegistryError(f"Invalid configuration for provider profile '{name}'") from None
+
+    def effort_levels(self, name: str, *, model: str | None = None) -> dict[str, Any]:
+        """The reasoning efforts a profile's model takes, least first, and the one it runs at
+        when a session names none: ``{"levels": [...], "default": ...}``. A model that takes no
+        effort has no levels. For a host that lets its owner pick an effort."""
+        profile = self.resolve_profile(name, model=model)
+        kind, chosen = profile["kind"], str(model or profile.get("defaultModel") or "")
+        levels = [level for level in _EFFORT_LADDER if normalize_effort_for_model(kind, chosen, level) == level]
+        default = normalize_effort_for_model(kind, chosen, profile.get("effortLevel") or profile.get("reasoningEffort") or get_default_effort_for_provider(kind))
+        return {"levels": levels, "default": default if default in levels else None}
 
     def resolve_auth(self, name: str, *, environment: Mapping[str, str] | None = None, codex_auth_path: str | Path | None = None) -> dict[str, Any]:
         """Return transport config fields, reading only the declared envVar.

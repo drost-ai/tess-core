@@ -350,6 +350,11 @@ session. The options are read when a session is opened, so close an open session
 (`runtime.sessions.close(session_id)`); its next turn reopens it on the new profile, with
 its conversation intact. The session stays there afterwards, with or without the flag.
 
+To offer the owner a reasoning effort for that choice, ask the registry which ones the
+model takes: `registry.effort_levels("gpt")` returns
+`{"levels": ["low", "medium", "high", "xhigh"], "default": "xhigh"}`, least first, with the
+effort a session runs at when it names none. A model that takes no effort has no levels.
+
 Compaction can use its own model: set `compactionProviderProfile` in settings to a cheaper
 profile for summarising long conversations.
 
