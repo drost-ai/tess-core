@@ -282,10 +282,9 @@ class SessionManager:
             # A session reopened after an idle unload reads its credentials again: it gets back
             # the ones it was opened with when the environment no longer has them.
             overrides["providerAuthEnvironment"] = SessionCredentialEnvironment(self._credentials.setdefault(session_id, {}))
-            if record is not None and record.get("providerProfileName"):
-                # An existing session keeps the profile and model it is bound
-                # to (its turns resolve the session's own first); the opener's
-                # selection binds new sessions. Resolve that profile's credentials.
+            if record is not None and record.get("providerProfileName") and not options.rebind_provider:
+                # An existing session keeps the profile and model it is bound to, unless the
+                # host moves it (rebind_provider); the opener's selection binds new sessions.
                 overrides["provider"] = record["providerProfileName"]
                 if record.get("model"):
                     overrides["model"] = record["model"]
@@ -297,6 +296,8 @@ class SessionManager:
             adjusted = await maybe_await(options.adjust_config(config))
             if isinstance(adjusted, dict):
                 config = adjusted
+        if record is not None and options.rebind(record, config):
+            await persist_session(record, config, force=True)  # the host moved this session to another profile or model
         launch = {"cwd": cwd, "originalCwd": cwd}
         if record is None:
             record = await resolve_session({"sessionId": session_id}, config, launch)

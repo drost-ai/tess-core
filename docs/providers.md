@@ -344,6 +344,12 @@ def options_for(session_id, reason):
 A session keeps the profile and model it was created with. Reopening it later does not
 silently move it to a different model.
 
+To move a session on purpose, because its owner chose another model for it, return
+`SessionOptions(provider=..., model=..., effort=..., rebind_provider=True)` for that
+session. The options are read when a session is opened, so close an open session first
+(`runtime.sessions.close(session_id)`); its next turn reopens it on the new profile, with
+its conversation intact. The session stays there afterwards, with or without the flag.
+
 Compaction can use its own model: set `compactionProviderProfile` in settings to a cheaper
 profile for summarising long conversations.
 

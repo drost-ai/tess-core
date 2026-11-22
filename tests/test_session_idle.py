@@ -192,6 +192,72 @@ class SessionIdleTests(TessCoreTestCase):
             os.environ.pop(variable, None)
             self.restore_home(root, previous)
 
+    def test_a_session_moves_to_another_profile_only_when_the_host_says_so(self):
+        """A session keeps the profile it was opened with when the host's default changes; a host
+        whose owner chose another model for that session says so, and the session is moved."""
+        root, home, workspace, previous = self.temp_context()
+        variable = "TESS_CORE_REBIND_TEST_KEY"
+        try:
+            os.environ[variable] = "a-key"
+
+            def profile(model):
+                return {"kind": "openai", "apiMode": "chat_completions", "baseUrl": "http://127.0.0.1:9/v1",
+                        "defaultModel": model, "auth": {"kind": "custom_bearer", "envVar": variable}}
+
+            registry = ProviderRegistry.from_document({"schema_version": 1, "providerProfiles": {"first": profile("gpt-5.4"), "second": profile("gpt-5.4-mini")}})
+            wanted = {"options": SessionOptions(provider="first")}
+
+            async def scenario():
+                from tess_core.storage import load_session
+
+                listener = Listener()
+                runtime = await _start(home, workspace, listener, provider_registry=registry, session_options=lambda sid, reason: wanted["options"])
+
+                async def bound(handle):
+                    record = runtime.sessions.live(handle.id).record
+                    stored = await load_session(handle.id)
+                    self.assertEqual((stored["providerProfileName"], stored["model"]), (record["providerProfileName"], record["model"]))
+                    return record["providerProfileName"], record["model"], handle.provider_profile["model"]
+
+                try:
+                    handle = await runtime.sessions.open()
+                    await handle.run_turn("hello", provider_override=_provider())
+                    self.assertEqual(await bound(handle), ("first", "gpt-5.4", "gpt-5.4"))
+
+                    # The host's selection changed: the session stays where it is.
+                    wanted["options"] = SessionOptions(provider="second")
+                    await runtime.sessions.close(handle.id)
+                    await handle.run_turn("still here", provider_override=_provider())
+                    self.assertEqual(await bound(handle), ("first", "gpt-5.4", "gpt-5.4"))
+
+                    # The owner chose the other model for this session: it is moved, and its history comes with it.
+                    wanted["options"] = SessionOptions(provider="second", rebind_provider=True)
+                    await runtime.sessions.close(handle.id)
+                    result = await handle.run_turn("moved", provider_override=_provider())
+                    self.assertEqual(result["stopReason"], "end_turn")
+                    self.assertEqual(await bound(handle), ("second", "gpt-5.4-mini", "gpt-5.4-mini"))
+                    self.assertEqual(sum(message.get("role") == "user" for message in runtime.sessions.live(handle.id).record["messages"]), 3)
+
+                    # And it stays moved when the host stops saying so.
+                    wanted["options"] = SessionOptions(provider="first")
+                    await runtime.sessions.close(handle.id)
+                    await handle.run_turn("settled", provider_override=_provider())
+                    self.assertEqual(await bound(handle), ("second", "gpt-5.4-mini", "gpt-5.4-mini"))
+
+                    # Back again, with a model and an effort named.
+                    wanted["options"] = SessionOptions(provider="first", model="gpt-5.4", effort="high", rebind_provider=True)
+                    await runtime.sessions.close(handle.id)
+                    await handle.run_turn("back", provider_override=_provider())
+                    self.assertEqual(await bound(handle), ("first", "gpt-5.4", "gpt-5.4"))
+                    self.assertEqual(runtime.sessions.live(handle.id).record["effort"], "high")
+                finally:
+                    await runtime.stop()
+
+            run(scenario())
+        finally:
+            os.environ.pop(variable, None)
+            self.restore_home(root, previous)
+
     def test_a_session_with_a_live_child_still_closes(self):
         root, home, workspace, previous = self.temp_context()
         try:

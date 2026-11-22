@@ -48,6 +48,23 @@ class SessionOptions:
     extra: dict[str, Any] = field(default_factory=dict)
     provider_registry: Any = None
     provider_auth_path: str | None = None
+    # An existing session keeps the provider profile and model it is bound to,
+    # whatever ``provider`` and ``model`` say here: a change of the host's
+    # default never moves a conversation. True makes this open's provider,
+    # model and effort the session's from now on, for a host whose owner
+    # chose another model for this one session. It is read when the session
+    # is opened, so close an open session to apply it.
+    rebind_provider: bool = False
+
+    def rebind(self, record: dict[str, Any], config: dict[str, Any]) -> bool:
+        """With ``rebind_provider``, make an existing session's record follow
+        the configuration just resolved for it, so its turns resolve the new
+        profile and model. True when anything changed."""
+        bound = {key: config.get(key) for key in ("provider", "providerProfileName", "model", "effort")}
+        if not self.rebind_provider or all(record.get(key) == value for key, value in bound.items()):
+            return False
+        record.update(bound)
+        return True
 
     def config_overrides(self, runtime_home: str) -> dict[str, Any]:
         overrides: dict[str, Any] = {"runtimeHome": runtime_home}

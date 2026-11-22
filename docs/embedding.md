@@ -75,6 +75,7 @@ The most used fields:
 | `settings` | A settings file (JSON or YAML) for this session, e.g. permission rules. |
 | `execution_budget` | A shared ceiling on model and tool calls across turns. |
 | `stream_provider_messages` | Also emit the provider's raw stream frames as `provider.stream_event`. Text deltas arrive as `message.assistant.partial` either way. |
+| `rebind_provider` | Move an existing session to this `provider`, `model` and `effort`. Without it an existing session keeps what it was opened with. See [Providers](providers.md). |
 | `provider_override` | Replace the model transport, for tests. See [Testing](testing.md). |
 
 Returning `Unavailable(reason, retry=True)` leaves pending work on disk and asks the
