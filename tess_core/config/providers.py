@@ -11,8 +11,11 @@ import re
 from typing import Any
 
 from .._utils import clone
-from ..providers.google.thinking import google_thinking_levels, resolve_google_thinking_level
 from ..providers.openai import is_codex_base_url
+from .effort import (  # noqa: F401 - the effort rules live in their own module and are imported from here
+    is_openai_compatible_service, model_supports_effort, model_supports_max_effort, model_supports_xhigh_effort,
+    normalize_effort_for_model, profile_declares_effort, resolve_request_effort,
+)
 from .defaults import (
     list_provider_profiles_for_kind,
     normalize_effort_level,
@@ -195,72 +198,6 @@ def resolve_provider_for_model_selection(provider: str | None, model: str | None
 
 def ensure_provider_for_model_selection(provider: str | None, model: str | None, fallback: str = DEFAULT_PROVIDER) -> str:
     return resolve_provider_for_model_selection(infer_provider_for_model(model) or provider, model) or fallback
-
-def model_supports_effort(provider: str, model: str) -> bool:
-    normalized = model.strip().lower()
-    if provider == "anthropic":
-        return (
-            "fable-5" in normalized
-            or "mythos-5" in normalized
-            or "opus-5" in normalized
-            or "sonnet-5" in normalized
-            or "opus-4-" in normalized
-            or "sonnet-4-" in normalized
-        )
-    if provider == "google":
-        return bool(google_thinking_levels(normalized))
-    return normalized.startswith("gpt-5.4") or normalized.startswith("gpt-5")
-
-def model_supports_max_effort(provider: str, model: str) -> bool:
-    if provider != "anthropic":
-        return False
-    normalized = model.strip().lower()
-    return (
-        "fable-5" in normalized
-        or "mythos-5" in normalized
-        or "opus-5" in normalized
-        or "sonnet-5" in normalized
-        or "opus-4-" in normalized
-        or "sonnet-4-6" in normalized
-    )
-
-def model_supports_xhigh_effort(provider: str, model: str) -> bool:
-    normalized = model.strip().lower()
-    if provider == "anthropic":
-        # xhigh arrived with Opus 4.7; the 5-family carries the full ladder.
-        return (
-            "fable-5" in normalized
-            or "mythos-5" in normalized
-            or "opus-5" in normalized
-            or "sonnet-5" in normalized
-            or "opus-4-7" in normalized
-            or "opus-4-8" in normalized
-        )
-    if provider == "google":
-        return "xhigh" in google_thinking_levels(normalized)
-    # xhigh arrived with gpt-5.4; later minors (5.5, 5.6, …) keep it.
-    match = re.match(r"gpt-5\.(\d+)", normalized)
-    return bool(match and int(match.group(1)) >= 4)
-
-def normalize_effort_for_model(provider: str, model: str, effort: str | None) -> str | None:
-    if not effort or not model_supports_effort(provider, model):
-        return None
-    if provider == "anthropic":
-        if effort == "xhigh" and not model_supports_xhigh_effort(provider, model):
-            return "high"
-        if effort == "max" and not model_supports_max_effort(provider, model):
-            return "high"
-        return effort
-    if provider == "openai":
-        if effort == "max":
-            return "xhigh" if model_supports_xhigh_effort(provider, model) else "high"
-        if effort == "xhigh" and not model_supports_xhigh_effort(provider, model):
-            return "high"
-        return effort
-    if provider == "google":
-        # The effort a Gemini model is asked for is one of its own thinking levels.
-        return resolve_google_thinking_level(model, effort)
-    return None
 
 def normalize_model_name(inputModel: str, providerHint: str | None = None) -> str:
     raw = inputModel.strip()

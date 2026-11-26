@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from ..config.providers import profile_declares_effort
 from ..providers.anthropic import send_anthropic_messages_request
 from ..providers.errors import ProviderRequestError, is_provider_request_error
 from .._utils import now_iso
@@ -109,6 +110,7 @@ def _create_provider(
                     config=resolved,
                     request=request,
                     requestOptions=(resolved.get("providerProfile") or {}).get("requestOptions") or {},
+                    reasoningEffortEnabled=profile_declares_effort(resolved.get("providerProfile"), named=bool(resolved.get("effortNamed"))),
                     runtime=provider_runtime,
                     clientFactory=runtime.get("openaiClientFactory") or resolved.get("openaiClientFactory"),
                     turnSession=provider_turn_session,

@@ -6,7 +6,7 @@ import hashlib
 import json
 
 import re
-from ..config import normalize_effort_for_model
+from ..config.providers import resolve_request_effort
 from ..context.continuation import build_continuation_context
 from ..context.token_accounting import (
     measure_request_input_tokens,
@@ -101,7 +101,7 @@ async def prepare_provider_request(args: dict[str, Any]) -> dict[str, Any]:
         )
         request = {
             "model": active_model,
-            "effort": normalize_effort_for_model(config["provider"], active_model, session.get("effort") or config.get("effort")),
+            "effort": resolve_request_effort(config, active_model, session.get("effort") or config.get("effort")),
             "sessionId": session["id"],
             "system": system,
             "messages": request_context["messages"],

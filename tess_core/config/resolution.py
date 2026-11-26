@@ -22,7 +22,6 @@ from ..storage import (
     resolve_runtime_home,
 )
 from .defaults import (
-    get_default_effort_for_provider,
     get_default_model_for_provider,
     normalize_effort_level,
     normalize_openai_api_mode_setting,
@@ -31,6 +30,7 @@ from .defaults import (
     normalize_tui_screen_mode,
 )
 from ._knobs import configure_knobs
+from .effort import resolve_session_effort
 from .parsing import (
     _dedupe,
     _load_mcp_config,
@@ -458,7 +458,7 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
         "compactionVerificationModel": verification["model"],
         "compactionVerificationEffort": verification["effort"],
         "compactionVerificationProviderProfile": compaction_verification_provider_profile,
-        "effort": normalize_effort_level(options.get("effort") or os.environ.get("TESS_EFFORT_LEVEL") or os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") or selected_profile.get("effortLevel") or merged_settings.get("effortLevel")) or get_default_effort_for_provider(resolved_provider),
+        **resolve_session_effort(options, selected_profile, merged_settings, resolved_provider),
         "assistantName": assistant_name,
         "assistantDescription": assistant_description,
         "systemPrompt": system_prompt,

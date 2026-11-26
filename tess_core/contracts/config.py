@@ -208,6 +208,7 @@ class ResolvedConfig(_resolved_config_required, total=False):
     googleApiKey: RuntimeSecretValue | None
     googleBaseUrl: str | None
     effort: str
+    effortNamed: bool
     assistantName: str
     assistantDescription: str
     durableMemory: DurableMemorySettings

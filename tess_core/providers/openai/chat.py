@@ -100,10 +100,13 @@ async def send_openai_chat_completions_request(args: dict[str, Any] | None = Non
             completions = get_value(chat, "completions") if chat else None
             if not completions:
                 raise RuntimeError("OpenAI Chat Completions client is unavailable.")
+            # What the profile declared about effort decides; when it said nothing, only
+            # OpenAI's own API is sent one.
+            effort_declared = args.get("reasoningEffortEnabled")
             params = build_chat_completions_create_params(
                 args["request"],
                 {
-                    "includeReasoningEffort": supports_openai_chat_completions_reasoning_effort(base_url),
+                    "includeReasoningEffort": effort_declared if isinstance(effort_declared, bool) else supports_openai_chat_completions_reasoning_effort(base_url),
                     "includeStore": not base_url or supports_openai_chat_completions_reasoning_effort(base_url),
                     "requestOptions": open_ai_prompt_cache_request_options(
                         mode="chat_completions",

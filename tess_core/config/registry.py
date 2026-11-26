@@ -13,7 +13,7 @@ from typing import Any
 
 from ._yaml import parse_yaml_subset
 from .defaults import get_default_effort_for_provider
-from .providers import normalize_effort_for_model, resolve_provider_profile
+from .providers import is_openai_compatible_service, normalize_effort_for_model, profile_declares_effort, resolve_provider_profile
 from .shared import PROVIDER_KINDS
 
 
@@ -188,8 +188,9 @@ class ProviderRegistry:
         effort has no levels. For a host that lets its owner pick an effort."""
         profile = self.resolve_profile(name, model=model)
         kind, chosen = profile["kind"], str(model or profile.get("defaultModel") or "")
-        levels = [level for level in _EFFORT_LADDER if normalize_effort_for_model(kind, chosen, level) == level]
-        default = normalize_effort_for_model(kind, chosen, profile.get("effortLevel") or profile.get("reasoningEffort") or get_default_effort_for_provider(kind))
+        said = {"declared": profile_declares_effort(profile), "compatible": is_openai_compatible_service(profile)}
+        levels = [level for level in _EFFORT_LADDER if normalize_effort_for_model(kind, chosen, level, **said) == level]
+        default = normalize_effort_for_model(kind, chosen, profile.get("effortLevel") or profile.get("reasoningEffort") or get_default_effort_for_provider(kind), **said)
         return {"levels": levels, "default": default if default in levels else None}
 
     def resolve_auth(self, name: str, *, environment: Mapping[str, str] | None = None, codex_auth_path: str | Path | None = None) -> dict[str, Any]:

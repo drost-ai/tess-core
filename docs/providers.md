@@ -70,7 +70,8 @@ SessionOptions(provider="gpt", model="another-model", effort="low")
 | `defaultModel` | The model used when a session does not name one. |
 | `baseUrl` | The endpoint, for anything other than the provider's own. |
 | `auth` | Where the credential comes from. Required. |
-| `reasoningEffort` | Default reasoning effort for models that support it. On a `google` profile it is the model's thinking level. |
+| `reasoningEffort` | The reasoning effort sessions on this profile run at, unless a session names its own. See [Reasoning effort](#reasoning-effort). |
+| `reasoningEffortEnabled` | For `openai`: `false` never sends an effort, `true` sends one even when none is named. |
 | `openAiChatReasoningSummary` | For `openai`: ask for reasoning summaries (`auto`, `concise` or `detailed`). |
 | `anthropicThinkingDisplay` | For `anthropic`: how thinking is returned (`auto`, `summarized` or `hidden`). |
 | `maxContextLength`, `maxOutputTokens` | Limits used for token accounting and compaction. |
@@ -118,6 +119,31 @@ in memory only, per session, until the session ends or the runtime stops.
 For hosts that manage credentials for their users, `auth` may instead hold a
 `credentialRef`: an opaque reference to a secret in the operating system keychain or an
 encrypted file. See [Permissions and security](security.md#managed-credentials).
+
+## Reasoning effort
+
+`reasoningEffort` in a profile is the effort its sessions run at. A session names its own
+with `SessionOptions(effort=...)`. The levels are `low`, `medium`, `high`, `xhigh` and `max`.
+
+An effort that a profile or a session names is sent to the model, whatever the model is
+called:
+
+| Profile | What is sent |
+|---|---|
+| `openai`, on OpenAI's own API or a Codex sign-in | The named level. OpenAI has no `max`, so `max` is sent as `xhigh`. Models before GPT-5.4 take `high` at most. |
+| `openai`, with any other `baseUrl` | The named level, unchanged: `reasoning_effort` on Chat Completions, `reasoning.effort` on Responses. The service decides which levels it takes, and a request it rejects fails with the service's own error. |
+| `anthropic` | The named level, for Claude models; an older one is asked for the highest it has. Other models on an Anthropic-compatible service are sent none. |
+| `google` | The model's nearest thinking level. See [Google Gemini](#google-gemini). |
+
+When nobody names an effort, an OpenAI or Claude model the runtime knows by name runs at
+the provider's default, and nothing is sent to any other service.
+
+`reasoningEffortEnabled` overrides this on an `openai` profile. Set it to `false` for a
+server that rejects the parameter: no effort is sent, named or not. Set it to `true` to
+send one without naming it, which is the provider's default, `xhigh`.
+
+Compaction's own requests are not covered: they carry an effort only for models the
+runtime knows by name.
 
 ## Provider samples
 
